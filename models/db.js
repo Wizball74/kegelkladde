@@ -101,6 +101,12 @@ if (!attendanceColumns.includes("kranz")) {
 if (!attendanceColumns.includes("pudel")) {
   db.exec("ALTER TABLE attendance ADD COLUMN pudel INTEGER NOT NULL DEFAULT 0");
 }
+if (!attendanceColumns.includes("carryover")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN carryover REAL NOT NULL DEFAULT 0");
+}
+if (!attendanceColumns.includes("paid")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN paid REAL NOT NULL DEFAULT 0");
+}
 
 // Create indexes for performance
 db.exec(`

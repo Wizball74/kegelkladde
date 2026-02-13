@@ -28,7 +28,7 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
   const attendanceRows = selectedGameday
     ? db
       .prepare(
-        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel
+        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid
          FROM attendance
          WHERE gameday_id = ?`
       )
@@ -63,13 +63,50 @@ router.post("/kegelkladde/gamedays", requireAuth, requireAdmin, verifyCsrf, (req
     .run(matchDate, note || null, req.session.userId);
 
   const members = getOrderedMembers();
+
+  // Vorherigen Spieltag ermitteln für Übertrag
+  const prevDay = db.prepare(
+    `SELECT id FROM gamedays WHERE match_date < ? ORDER BY match_date DESC, id DESC LIMIT 1`
+  ).get(matchDate);
+
+  const prevRestMap = new Map();
+  if (prevDay) {
+    const prevRows = db.prepare(
+      `SELECT user_id, present, contribution, penalties, pudel, alle9, kranz, triclops, carryover, paid
+       FROM attendance WHERE gameday_id = ?`
+    ).all(prevDay.id);
+
+    // Totals for 9er/Kranz/Triclops cost calculation
+    let totalAlle9 = 0, totalKranz = 0, totalTriclops = 0;
+    for (const r of prevRows) {
+      if (r.present) {
+        totalAlle9 += r.alle9;
+        totalKranz += r.kranz;
+        totalTriclops += r.triclops;
+      }
+    }
+
+    for (const r of prevRows) {
+      if (r.present) {
+        const pudelCost = r.pudel * 0.10;
+        const alle9Cost = (totalAlle9 - r.alle9) * 0.10;
+        const kranzCost = (totalKranz - r.kranz) * 0.10;
+        const triclopsCost = (totalTriclops - r.triclops) * 0.10;
+        const toPay = r.contribution + r.penalties + pudelCost + alle9Cost + kranzCost + triclopsCost + (r.carryover || 0);
+        const rest = Math.round((toPay - (r.paid || 0)) * 100) / 100;
+        prevRestMap.set(r.user_id, rest);
+      }
+    }
+  }
+
   const insertAttendance = db.prepare(
-    "INSERT OR IGNORE INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0)"
+    "INSERT OR IGNORE INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid) VALUES (?, ?, 1, 0, 0, ?, 0, 0, 0, ?, 0)"
   );
 
   const trx = db.transaction(() => {
     for (const m of members) {
-      insertAttendance.run(result.lastInsertRowid, m.id);
+      const carryover = prevRestMap.get(m.id) || 0;
+      insertAttendance.run(result.lastInsertRowid, m.id, DEFAULT_CONTRIBUTION_EUR, carryover);
     }
   });
   trx();
@@ -97,8 +134,8 @@ router.post("/kegelkladde/attendance", requireAuth, requireAdmin, verifyCsrf, (r
 
   const members = getOrderedMembers();
   const upsert = db.prepare(
-    `INSERT INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(gameday_id, user_id)
      DO UPDATE SET
        present = excluded.present,
@@ -107,27 +144,23 @@ router.post("/kegelkladde/attendance", requireAuth, requireAdmin, verifyCsrf, (r
        contribution = excluded.contribution,
        alle9 = excluded.alle9,
        kranz = excluded.kranz,
-       pudel = excluded.pudel`
+       pudel = excluded.pudel,
+       carryover = excluded.carryover,
+       paid = excluded.paid`
   );
 
   const trx = db.transaction(() => {
     for (const m of members) {
       const present = req.body[`present_${m.id}`] ? 1 : 0;
       const triclops = Math.max(0, Math.min(99, Number.parseInt(req.body[`triclops_${m.id}`], 10) || 0));
-      const penalties = Math.max(0, Math.min(999, Number.parseInt(req.body[`penalties_${m.id}`], 10) || 0));
-      const contributionRaw = Number.parseFloat(String(req.body[`contribution_${m.id}`] || "").replace(",", "."));
-      const contribution = present
-        ? (
-          Number.isFinite(contributionRaw) && contributionRaw > 0
-            ? contributionRaw
-            : DEFAULT_CONTRIBUTION_EUR
-        )
-        : 0;
-      const roundedContribution = Math.max(0, Math.min(9999, Math.round(contribution * 100) / 100));
+      const penalties = Math.max(0, Math.min(999, Math.round((Number.parseFloat(req.body[`penalties_${m.id}`]) || 0) * 100) / 100));
+      const roundedContribution = DEFAULT_CONTRIBUTION_EUR;
       const alle9 = Math.max(0, Math.min(999, Number.parseInt(req.body[`alle9_${m.id}`], 10) || 0));
       const kranz = Math.max(0, Math.min(999, Number.parseInt(req.body[`kranz_${m.id}`], 10) || 0));
       const pudel = Math.max(0, Math.min(999, Number.parseInt(req.body[`pudel_${m.id}`], 10) || 0));
-      upsert.run(gamedayId, m.id, present, triclops, penalties, roundedContribution, alle9, kranz, pudel);
+      const carryover = Math.round((Number.parseFloat(req.body[`carryover_${m.id}`]) || 0) * 100) / 100;
+      const paid = Math.max(0, Math.round((Number.parseFloat(req.body[`paid_${m.id}`]) || 0) * 100) / 100);
+      upsert.run(gamedayId, m.id, present, triclops, penalties, roundedContribution, alle9, kranz, pudel, carryover, paid);
     }
   });
   trx();

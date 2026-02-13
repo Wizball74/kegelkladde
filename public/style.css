@@ -539,11 +539,9 @@ textarea:focus {
 }
 
 .kladde-table {
-  width: max-content;
-  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .kladde-table th,
@@ -553,7 +551,7 @@ textarea:focus {
   text-align: center;
   border-right: 1px solid #eee;
   white-space: nowrap;
-  min-width: 80px;
+  overflow: hidden;
 }
 
 .kladde-table th:last-child,
@@ -563,14 +561,7 @@ textarea:focus {
 
 .kladde-table th:first-child,
 .kladde-table td:first-child {
-  min-width: 50px;
-  width: 50px;
-}
-
-.kladde-table th:nth-child(2),
-.kladde-table td:nth-child(2) {
-  text-align: left;
-  min-width: 100px;
+  /*text-align: left;*/
 }
 
 .kladde-table thead tr:first-child th {
@@ -617,27 +608,35 @@ textarea:focus {
 }
 
 .present-toggle input {
-  appearance: none;
+  position: absolute;
   width: 0;
   height: 0;
-  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.present-toggle span {
-  font-size: 1.5rem;
-  opacity: 0.2;
+.present-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  opacity: 0.15;
   transition: all var(--transition);
-  filter: grayscale(1);
 }
 
-.present-toggle input:checked + span {
+.present-toggle input:checked + .present-icon {
   opacity: 1;
   transform: scale(1.15);
-  filter: none;
 }
 
-.present-toggle:hover span {
+.present-toggle:hover .present-icon {
   opacity: 0.6;
+}
+
+.present-icon-sm {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: middle;
 }
 
 /* Input variants */
@@ -667,6 +666,26 @@ textarea:focus {
   font-weight: 700;
 }
 
+.money-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.mini-number.no-spin {
+  width: 45px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .mini-number {
   width: 60px;
   padding: 0.2rem 0.3rem;
@@ -689,24 +708,24 @@ textarea:focus {
 /* Marker controls */
 .marker-controls {
   display: grid;
-  grid-template-columns: 24px 1fr 24px;
-  gap: 0.25rem;
+  grid-template-columns: 10px 73px 18px;
+  gap: 2px;
   align-items: center;
 }
 
 .name-col {
-  text-align: left;
+  text-align: left !important;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .mark-btn {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   line-height: 1;
-  border-radius: var(--radius-sm);
-  font-size: 1rem;
+  border-radius: 50%;
+  font-size: 0.7rem;
   font-weight: 700;
   padding: 0;
 }
@@ -716,29 +735,76 @@ textarea:focus {
 }
 
 .mark-dec {
-  width: 20px;
-  height: 24px;
-  border-radius: 0;
-  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
   font-size: 0;
+  opacity: 0.4;
+}
+
+.mark-dec:hover {
+  opacity: 1;
 }
 
 .marker-strip {
-  min-height: 22px;
+  min-height: 18px;
+  width: 73px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 2px 4px;
+  border-radius: 4px;
+  padding: 1px 3px;
   background: #fff;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-align: left;
   overflow: hidden;
-  letter-spacing: 0.02rem;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
 }
 
-.marker-kranz {
-  letter-spacing: 0.08rem;
+.tally-break {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.marker-cost {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--error);
+  font-weight: 600;
+  text-align: center;
+  min-height: 0.85em;
+}
+
+/* Inactive rows (not present) */
+.row-inactive td {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.row-inactive .marker-controls,
+.row-inactive .marker-cost,
+.row-inactive .money-inline,
+.row-inactive [data-topay],
+.row-inactive [data-rest] {
+  display: none;
+}
+
+.tally-five {
+  position: relative;
+  display: inline-block;
+  letter-spacing: 0.5px;
+}
+
+.tally-five::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: 50%;
+  height: 1.5px;
+  background: currentColor;
+  transform: rotate(-25deg);
 }
 
 .header-icon {

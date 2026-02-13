@@ -115,11 +115,77 @@ if (orderList && orderForm && memberOrderInput) {
   });
 }
 
+// Cost recalculation for 9er/Kranz/Triclops
+function formatEuroCost(value) {
+  return value.toFixed(2).replace(".", ",");
+}
+
+function recalcCosts() {
+  const rows = document.querySelectorAll(".kladde-table tbody tr");
+  let totalAlle9 = 0, totalKranz = 0, totalTriclops = 0;
+
+  rows.forEach((row) => {
+    const cb = row.querySelector("[data-present]");
+    if (cb && cb.checked) {
+      totalAlle9 += Number(row.querySelector('[data-marker-input="alle9"]')?.value || 0);
+      totalKranz += Number(row.querySelector('[data-marker-input="kranz"]')?.value || 0);
+      totalTriclops += Number(row.querySelector('[data-marker-input="triclops"]')?.value || 0);
+    }
+  });
+
+  const totals = { alle9: totalAlle9, kranz: totalKranz, triclops: totalTriclops };
+
+  rows.forEach((row) => {
+    const cb = row.querySelector("[data-present]");
+    const isPresent = cb && cb.checked;
+
+    // Pudel: Spieler zahlt selbst 0,10€ pro Pudel
+    const myPudel = Number(row.querySelector('[data-marker-input="pudel"]')?.value || 0);
+    const costPudel = isPresent ? myPudel * 0.10 : 0;
+    const pudelEl = row.querySelector('[data-cost-type="pudel"]');
+    if (pudelEl) pudelEl.textContent = costPudel > 0 ? formatEuroCost(costPudel) + " €" : "";
+
+    // 9er/Kranz/Triclops: alle anderen Anwesenden zahlen 0,10€
+    let costOthers = 0;
+    ["alle9", "kranz", "triclops"].forEach((type) => {
+      const myVal = Number(row.querySelector(`[data-marker-input="${type}"]`)?.value || 0);
+      const cost = isPresent ? (totals[type] - myVal) * 0.10 : 0;
+      costOthers += cost;
+      const el = row.querySelector(`[data-cost-type="${type}"]`);
+      if (el) el.textContent = cost > 0 ? formatEuroCost(cost) + " €" : "";
+    });
+
+    // Zu zahlen / Rest berechnen
+    const contribution = isPresent ? 4.00 : 0;
+    const penalties = Number(row.querySelector('[name^="penalties_"]')?.value || 0);
+    const carryover = Number(row.querySelector("[data-carryover]")?.value || 0);
+    const paid = Number(row.querySelector("[data-paid]")?.value || 0);
+    const toPay = isPresent ? contribution + penalties + costPudel + costOthers + carryover : carryover;
+    const rest = toPay - paid;
+
+    const toPayEl = row.querySelector("[data-topay]");
+    if (toPayEl) toPayEl.textContent = formatEuroCost(toPay) + " €";
+
+    const restEl = row.querySelector("[data-rest]");
+    if (restEl) {
+      restEl.textContent = formatEuroCost(rest) + " €";
+      restEl.style.color = rest > 0 ? "var(--error)" : rest < 0 ? "var(--success)" : "";
+    }
+  });
+}
+
 // Marker controls for alle9 and kranz
-function renderMarkers(displayEl, value, target) {
+function renderMarkers(displayEl, value) {
   const safe = Math.max(0, Math.min(999, value || 0));
-  const marker = target === "kranz" ? "│" : "●";
-  displayEl.textContent = marker.repeat(Math.min(safe, 15));
+  const fives = Math.floor(safe / 5);
+  const rest = safe % 5;
+  let html = "";
+  for (let i = 0; i < fives; i++) {
+    html += '<span class="tally-five">||||</span>';
+    if ((i + 1) % 4 === 0 && (i + 1 < fives || rest > 0)) html += '<span class="tally-break"></span>';
+  }
+  if (rest > 0) html += "|".repeat(rest);
+  displayEl.innerHTML = html;
 }
 
 document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
@@ -138,6 +204,7 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
     const safe = Math.max(0, Math.min(999, next));
     input.value = String(safe);
     renderMarkers(display, safe, target);
+    recalcCosts();
   });
 });
 
@@ -204,14 +271,16 @@ document.querySelectorAll('input[type="number"]').forEach((input) => {
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      const step = Number(input.step) || 1;
+      const stepAttr = input.getAttribute("step") || "1";
+      const decimals = (stepAttr.split(".")[1] || "").length;
+      const step = Number(stepAttr) || 1;
       const min = Number(input.min) || 0;
       const max = Number(input.max) || 999;
       const current = Number(input.value) || 0;
 
       let next = e.key === "ArrowUp" ? current + step : current - step;
       next = Math.max(min, Math.min(max, next));
-      input.value = next;
+      input.value = decimals > 0 ? next.toFixed(decimals) : next;
       input.dispatchEvent(new Event("input", { bubbles: true }));
     }
   });
@@ -254,8 +323,29 @@ document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
   });
 });
 
-// Initialize server-side flash messages as toasts
+// Toggle row inputs based on attendance checkbox
+document.querySelectorAll("[data-present]").forEach((cb) => {
+  const row = cb.closest("tr");
+  if (!row) return;
+  row.style.opacity = cb.checked ? "" : "0.3";
+  cb.addEventListener("change", () => {
+    row.style.opacity = cb.checked ? "" : "0.3";
+    row.classList.toggle("row-inactive", !cb.checked);
+    row.querySelectorAll("[data-field], [data-field-btn]").forEach((el) => {
+      el.disabled = !cb.checked;
+    });
+    recalcCosts();
+  });
+});
+
+// Recalc on any number input change (Strafen, Übertrag, Gezahlt)
+document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
+  input.addEventListener("input", () => recalcCosts());
+});
+
+// Initialize server-side flash messages as toasts and cost display
 document.addEventListener("DOMContentLoaded", () => {
+  recalcCosts();
   const flashData = document.getElementById("flashData");
   if (flashData) {
     try {

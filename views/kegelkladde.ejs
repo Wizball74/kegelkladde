@@ -1,6 +1,18 @@
 <%- include("partials/top") %>
 <%
   const formatEuro = (value) => Number(value || 0).toFixed(2).replace(".", ",");
+  const renderTally = (count) => {
+    const safe = Math.min(count, 99);
+    const fives = Math.floor(safe / 5);
+    const rest = safe % 5;
+    let html = '';
+    for (let i = 0; i < fives; i++) {
+      html += '<span class="tally-five">||||</span>';
+      if ((i + 1) % 4 === 0 && (i + 1 < fives || rest > 0)) html += '<span class="tally-break"></span>';
+    }
+    if (rest > 0) html += '|'.repeat(rest);
+    return html;
+  };
 %>
 <section class="card fade-in">
   <div class="section-head">
@@ -67,67 +79,138 @@
       <% } %>
     </div>
 
+    <%
+      let totalAlle9Present = 0, totalKranzPresent = 0, totalTriclopsPresent = 0;
+      members.forEach((m) => {
+        const h = attendanceMap.get(m.id) || { present: 0, alle9: 0, kranz: 0, triclops: 0 };
+        if (h.present) {
+          totalAlle9Present += Number(h.alle9 || 0);
+          totalKranzPresent += Number(h.kranz || 0);
+          totalTriclopsPresent += Number(h.triclops || 0);
+        }
+      });
+    %>
+
     <!-- Desktop table view -->
     <div class="table-shell desktop-only">
       <form method="post" action="/kegelkladde/attendance">
         <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
         <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
         <table class="kladde-table">
+          <colgroup>
+            <col style="width: 110px;" /><!-- Name -->
+            <col style="width: 44px;" /><!-- Anwesenheit -->
+            <col style="width: 70px;" /><!-- Beitrag -->
+            <col style="width: 52px;" /><!-- Strafen -->
+            <col style="width: 120px;" /><!-- Pudel -->
+            <col style="width: 120px;" /><!-- 9er -->
+            <col style="width: 120px;" /><!-- Kranz -->
+            <col style="width: 120px;" /><!-- Triclops -->
+            <col style="width: 70px;" /><!-- Übertrag -->
+            <col style="width: 70px;" /><!-- Zu zahlen -->
+            <col style="width: 70px;" /><!-- Gezahlt -->
+            <col style="width: 70px;" /><!-- Rest -->
+          </colgroup>
           <thead>
             <tr>
-              <th><span class="head-label">Nr.</span></th>
               <th><span class="head-label">Name</span></th>
-              <th><span class="head-label">Da?</span></th>
+              <th><span class="head-label">Anwesenheitfür </span></th>
               <th><span class="head-label">Beitrag</span></th>
               <th><span class="head-label">Strafen</span></th>
               <th><span class="head-label">Pudel</span></th>
               <th title="Alle 9"><span class="head-label">9er</span></th>
               <th title="Kranz"><span class="head-label">Kranz</span></th>
               <th><span class="head-label">Triclops</span></th>
+              <th><span class="head-label">Übertrag</span></th>
+              <th><span class="head-label">Zu zahlen</span></th>
+              <th><span class="head-label">Gezahlt</span></th>
+              <th><span class="head-label">Rest</span></th>
             </tr>
           </thead>
           <tbody>
             <% members.forEach((member, i) => {
-              const hit = attendanceMap.get(member.id) || { present: 0, penalties: 0, contribution: 0, pudel: 0, alle9: 0, kranz: 0, triclops: 0 };
+              const hit = attendanceMap.get(member.id) || { present: 0, penalties: 0, contribution: 0, pudel: 0, alle9: 0, kranz: 0, triclops: 0, carryover: 0, paid: 0 };
+              const pudel = Number(hit.pudel || 0);
               const alle9 = Number(hit.alle9 || 0);
               const kranz = Number(hit.kranz || 0);
+              const triclops = Number(hit.triclops || 0);
               const isEditable = isAdmin && !selectedGameday.settled;
+              const canEdit = isEditable && hit.present;
             %>
-              <tr>
-                <td><%= i + 1 %></td>
+              <tr data-member-id="<%= member.id %>" class="<%= hit.present ? '' : 'row-inactive' %>">
                 <td class="name-col"><%= member.display_name %></td>
                 <td>
                   <label class="present-toggle" title="Anwesend">
-                    <input type="checkbox" name="present_<%= member.id %>" <%= hit.present ? "checked" : "" %> <%= isEditable ? "" : "disabled" %> />
-                    <span>🐑</span>
+                    <input type="checkbox" name="present_<%= member.id %>" <%= hit.present ? "checked" : "" %> <%= isEditable ? "" : "disabled" %> data-present />
+                    <img src="/sheep.png" alt="Anwesend" class="present-icon" />
                   </label>
                 </td>
                 <td>
-                  <% if (!isEditable) { %>
-                    <span class="money-text"><%= formatEuro(hit.contribution || 0) %> €</span>
-                  <% } else { %>
-                    <input type="text" inputmode="decimal" value="<%= formatEuro(hit.contribution || 0) %>" name="contribution_<%= member.id %>" class="money-input" />
-                  <% } %>
+                  <span class="money-text"><%= formatEuro(hit.contribution || 0) %> €</span>
                 </td>
-                <td><input type="number" min="0" max="999" value="<%= hit.penalties || 0 %>" name="penalties_<%= member.id %>" class="mini-number" <%= isEditable ? "" : "disabled" %> /></td>
-                <td><input type="number" min="0" max="999" value="<%= hit.pudel || 0 %>" name="pudel_<%= member.id %>" class="mini-number" <%= isEditable ? "" : "disabled" %> /></td>
+                <td><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= Number(hit.penalties || 0).toFixed(2) %>" name="penalties_<%= member.id %>" class="mini-number no-spin" <%= canEdit ? "" : "disabled" %> data-field />&euro;</span></td>
                 <td>
                   <div class="marker-controls">
-                    <input type="hidden" name="alle9_<%= member.id %>" value="<%= alle9 %>" data-marker-input="alle9" <%= isEditable ? "" : "disabled" %> />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="alle9" data-op="dec" aria-label="Alle 9 verringern" <%= isEditable ? "" : "disabled" %>></button>
-                    <span class="marker-strip" data-marker-display="alle9"><%= "●".repeat(Math.min(alle9, 15)) %></span>
-                    <button type="button" class="mark-btn" data-mark-target="alle9" data-op="inc" <%= isEditable ? "" : "disabled" %>>+</button>
+                    <input type="hidden" name="pudel_<%= member.id %>" value="<%= pudel %>" data-marker-input="pudel" <%= canEdit ? "" : "disabled" %> data-field />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="pudel" data-op="dec" aria-label="Pudel verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <span class="marker-strip" data-marker-display="pudel"><%- renderTally(pudel) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="pudel" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
                   </div>
+                  <% const costPudel = hit.present ? pudel * 0.10 : 0; %>
+                  <span class="marker-cost" data-cost-type="pudel"><%= costPudel > 0 ? formatEuro(costPudel) + ' €' : '' %></span>
                 </td>
                 <td>
                   <div class="marker-controls">
-                    <input type="hidden" name="kranz_<%= member.id %>" value="<%= kranz %>" data-marker-input="kranz" <%= isEditable ? "" : "disabled" %> />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="kranz" data-op="dec" aria-label="Kranz verringern" <%= isEditable ? "" : "disabled" %>></button>
-                    <span class="marker-strip marker-kranz" data-marker-display="kranz"><%= "│".repeat(Math.min(kranz, 15)) %></span>
-                    <button type="button" class="mark-btn" data-mark-target="kranz" data-op="inc" <%= isEditable ? "" : "disabled" %>>+</button>
+                    <input type="hidden" name="alle9_<%= member.id %>" value="<%= alle9 %>" data-marker-input="alle9" <%= canEdit ? "" : "disabled" %> data-field />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="alle9" data-op="dec" aria-label="Alle 9 verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <span class="marker-strip" data-marker-display="alle9"><%- renderTally(alle9) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="alle9" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
                   </div>
+                  <% const costAlle9 = hit.present ? (totalAlle9Present - alle9) * 0.10 : 0; %>
+                  <span class="marker-cost" data-cost-type="alle9"><%= costAlle9 > 0 ? formatEuro(costAlle9) + ' €' : '' %></span>
                 </td>
-                <td><input type="number" min="0" max="99" value="<%= hit.triclops || 0 %>" name="triclops_<%= member.id %>" class="mini-number" <%= isEditable ? "" : "disabled" %> /></td>
+                <td>
+                  <div class="marker-controls">
+                    <input type="hidden" name="kranz_<%= member.id %>" value="<%= kranz %>" data-marker-input="kranz" <%= canEdit ? "" : "disabled" %> data-field />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="kranz" data-op="dec" aria-label="Kranz verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <span class="marker-strip" data-marker-display="kranz"><%- renderTally(kranz) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="kranz" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
+                  </div>
+                  <% const costKranz = hit.present ? (totalKranzPresent - kranz) * 0.10 : 0; %>
+                  <span class="marker-cost" data-cost-type="kranz"><%= costKranz > 0 ? formatEuro(costKranz) + ' €' : '' %></span>
+                </td>
+                <td>
+                  <div class="marker-controls">
+                    <input type="hidden" name="triclops_<%= member.id %>" value="<%= triclops %>" data-marker-input="triclops" <%= canEdit ? "" : "disabled" %> data-field />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="triclops" data-op="dec" aria-label="Triclops verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <span class="marker-strip" data-marker-display="triclops"><%- renderTally(triclops) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="triclops" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
+                  </div>
+                  <% const costTriclops = hit.present ? (totalTriclopsPresent - triclops) * 0.10 : 0; %>
+                  <span class="marker-cost" data-cost-type="triclops"><%= costTriclops > 0 ? formatEuro(costTriclops) + ' €' : '' %></span>
+                </td>
+                <%
+                  const carryover = Number(hit.carryover || 0);
+                  const paid = Number(hit.paid || 0);
+                  const pudelCostCalc = hit.present ? pudel * 0.10 : 0;
+                  const alle9CostCalc = hit.present ? (totalAlle9Present - alle9) * 0.10 : 0;
+                  const kranzCostCalc = hit.present ? (totalKranzPresent - kranz) * 0.10 : 0;
+                  const triclopsCostCalc = hit.present ? (totalTriclopsPresent - triclops) * 0.10 : 0;
+                  const toPay = hit.present ? (hit.contribution || 0) + (hit.penalties || 0) + pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + carryover : carryover;
+                  const rest = toPay - paid;
+                %>
+                <td>
+                  <span class="money-inline"><input type="number" max="999" step="0.10" value="<%= carryover.toFixed(2) %>" name="carryover_<%= member.id %>" class="mini-number no-spin" <%= canEdit ? "" : "disabled" %> data-field data-carryover />&euro;</span>
+                </td>
+                <td>
+                  <span class="money-text" data-topay><%= formatEuro(toPay) %> &euro;</span>
+                </td>
+                <td>
+                  <span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= paid.toFixed(2) %>" name="paid_<%= member.id %>" class="mini-number no-spin" <%= canEdit ? "" : "disabled" %> data-field data-paid />&euro;</span>
+                </td>
+                <td>
+                  <span class="money-text" data-rest><%= formatEuro(rest) %> &euro;</span>
+                </td>
               </tr>
             <% }) %>
           </tbody>
@@ -148,10 +231,10 @@
           <% if (selectedGameday.note) { %><p><%= selectedGameday.note %></p><% } %>
           <ul>
             <% members.forEach((member) => {
-              const hit = attendanceMap.get(member.id) || { present: 0, penalties: 0, contribution: 0, pudel: 0, alle9: 0, kranz: 0, triclops: 0 };
+              const hit = attendanceMap.get(member.id) || { present: 0, penalties: 0, contribution: 0, pudel: 0, alle9: 0, kranz: 0, triclops: 0, carryover: 0, paid: 0 };
             %>
               <li>
-                <span><%= member.display_name %> <%= hit.present ? "🐑" : "" %></span>
+                <span><%= member.display_name %> <% if (hit.present) { %><img src="/sheep.png" alt="Anwesend" class="present-icon-sm" /><% } %></span>
                 <span>
                   <%= formatEuro(hit.contribution || 0) %>€
                   <% if (hit.penalties) { %> | S:<%= hit.penalties %><% } %>

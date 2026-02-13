@@ -1,0 +1,27 @@
+<%- include("partials/top") %>
+<section class="card narrow fade-in">
+  <div class="section-head" style="text-align: center;">
+    <h1>Erstkonfiguration</h1>
+    <p class="subtle">Lege den ersten Administrator-Account für das Vereinsportal an.</p>
+  </div>
+
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+
+  <form method="post" action="/setup/create" class="form-grid">
+    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+    <label>Benutzername
+      <input name="username" required maxlength="40" autocomplete="username" autofocus placeholder="admin" />
+    </label>
+    <label>Passwort (min. 8 Zeichen)
+      <input type="password" name="password" required minlength="8" autocomplete="new-password" />
+    </label>
+    <label>Vorname
+      <input name="firstName" required maxlength="60" placeholder="Max" />
+    </label>
+    <label>Nachname (optional)
+      <input name="lastName" maxlength="60" placeholder="Mustermann" />
+    </label>
+    <button type="submit">Admin erstellen</button>
+  </form>
+</section>
+<%- include("partials/bottom") %>

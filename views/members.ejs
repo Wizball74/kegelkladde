@@ -1,0 +1,181 @@
+<%- include("partials/top") %>
+<section class="card fade-in">
+  <div class="section-head">
+    <h1>Mitglieder</h1>
+    <p class="subtle">Vereinsmitglieder verwalten und Profile bearbeiten.</p>
+  </div>
+
+  <div class="split-grid">
+    <section>
+      <h2>Mitgliederliste</h2>
+      <ul class="member-list">
+        <% members.forEach((m) => { %>
+          <li>
+            <strong>
+              <%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %>
+              <% if (m.is_guest) { %><span class="badge badge-muted">Gast</span><% } %>
+            </strong>
+            <small><%= m.role === 'admin' ? 'Administrator' : 'Benutzer' %></small>
+            <% if (isAdmin || currentUser.id === m.id) { %>
+              <% if (m.email) { %><span><%= m.email %></span><% } %>
+              <% if (m.address) { %><span><%= m.address %></span><% } %>
+              <% if (m.phones && m.phones.length) { %><span><%= m.phones.join(" | ") %></span><% } %>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Mein Profil</h2>
+      <form method="post" action="/members/profile" class="form-grid">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <label>Vorname
+          <input name="firstName" required maxlength="60" value="<%= current.first_name %>" />
+        </label>
+        <label>Nachname
+          <input name="lastName" maxlength="60" value="<%= current.last_name %>" />
+        </label>
+        <label>Adresse (optional)
+          <input name="address" maxlength="200" value="<%= current.address %>" />
+        </label>
+        <label>E-Mail (optional)
+          <input type="email" name="email" maxlength="120" value="<%= current.email %>" />
+        </label>
+        <label>Telefone (optional, 1-3, per Komma)
+          <input name="phones" maxlength="120" value="<%= (current.phones || []).join(", ") %>" />
+        </label>
+        <button type="submit">Profil speichern</button>
+      </form>
+
+      <h2 style="margin-top: 2rem;">Passwort ändern</h2>
+      <form method="post" action="/members/change-password" class="form-grid">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <label>Aktuelles Passwort
+          <input type="password" name="currentPassword" required autocomplete="current-password" />
+        </label>
+        <label>Neues Passwort (min. 8 Zeichen)
+          <input type="password" name="newPassword" required minlength="8" autocomplete="new-password" />
+        </label>
+        <label>Neues Passwort bestätigen
+          <input type="password" name="confirmPassword" required minlength="8" autocomplete="new-password" />
+        </label>
+        <button type="submit">Passwort ändern</button>
+      </form>
+    </section>
+  </div>
+
+  <% if (isAdmin) { %>
+    <section class="admin-box">
+      <h2>Mitglied bearbeiten</h2>
+      <% if (editError) { %><p class="error"><%= editError %></p><% } %>
+      <form method="get" action="/members" class="inline-form">
+        <label>Mitglied auswählen
+          <select name="editUserId" onchange="this.form.submit()">
+            <% members.forEach((m) => { %>
+              <option value="<%= m.id %>" <%= editableMember && editableMember.id === m.id ? "selected" : "" %>>
+                <%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %> (<%= m.username %>)
+              </option>
+            <% }) %>
+          </select>
+        </label>
+      </form>
+
+      <% if (editableMember) { %>
+        <form method="post" action="/members/admin-update" class="form-grid" id="editForm-<%= editableMember.id %>">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <input type="hidden" name="memberId" value="<%= editableMember.id %>" />
+          <label>Benutzername
+            <input name="username" required maxlength="40" value="<%= editableMember.username %>" />
+          </label>
+          <label>Rolle
+            <select name="role">
+              <option value="user" <%= editableMember.role === "user" ? "selected" : "" %>>Benutzer</option>
+              <option value="admin" <%= editableMember.role === "admin" ? "selected" : "" %>>Administrator</option>
+            </select>
+          </label>
+          <label>Vorname
+            <input name="firstName" required maxlength="60" value="<%= editableMember.first_name %>" />
+          </label>
+          <label>Nachname
+            <input name="lastName" maxlength="60" value="<%= editableMember.last_name %>" />
+          </label>
+          <label>Adresse (optional)
+            <input name="address" maxlength="200" value="<%= editableMember.address %>" />
+          </label>
+          <label>E-Mail (optional)
+            <input type="email" name="email" maxlength="120" value="<%= editableMember.email %>" />
+          </label>
+          <label>Telefone (optional, 1-3, per Komma)
+            <input name="phones" maxlength="120" value="<%= (editableMember.phones || []).join(", ") %>" />
+          </label>
+        </form>
+
+        <div class="member-actions">
+          <button type="submit" form="editForm-<%= editableMember.id %>">Mitglied speichern</button>
+
+          <form method="post" action="/members/reset-password" class="inline-row">
+            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+            <input type="hidden" name="memberId" value="<%= editableMember.id %>" />
+            <input type="password" name="newPassword" required minlength="8" placeholder="Neues Passwort" />
+            <button type="submit" class="btn-secondary">Passwort zurücksetzen</button>
+          </form>
+
+          <% if (editableMember.id !== currentUser.id) { %>
+            <form method="post" action="/members/delete" data-confirm="Mitglied <%= editableMember.first_name %> wirklich löschen? Alle zugehörigen Daten werden entfernt!">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="memberId" value="<%= editableMember.id %>" />
+              <button type="submit" class="btn-danger">Mitglied löschen</button>
+            </form>
+          <% } %>
+        </div>
+      <% } %>
+
+      <h2>Neues Mitglied anlegen</h2>
+      <form method="post" action="/members/create" class="form-grid">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <div class="form-row-2">
+          <label>Benutzername
+            <input name="username" placeholder="Benutzername" required maxlength="40" autocomplete="off" />
+          </label>
+          <label>Start-Passwort
+            <input type="password" name="password" placeholder="min. 8 Zeichen" required minlength="8" autocomplete="new-password" />
+          </label>
+        </div>
+        <div class="form-row-2">
+          <label>Vorname
+            <input name="firstName" placeholder="Vorname" required maxlength="60" />
+          </label>
+          <label>Nachname (optional)
+            <input name="lastName" placeholder="Nachname" maxlength="60" />
+          </label>
+        </div>
+        <div class="form-row-2">
+          <label>Rolle
+            <select name="role">
+              <option value="user">Benutzer</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </label>
+          <div class="form-row-btn">
+            <button type="submit">Anlegen</button>
+          </div>
+        </div>
+      </form>
+
+      <h2>Gast anlegen</h2>
+      <p class="subtle">Gäste können sich nicht einloggen, erscheinen aber in der Kegelkladde.</p>
+      <form method="post" action="/members/create-guest" class="inline-form">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <label>Gast Vorname
+          <input name="firstName" placeholder="Vorname" required maxlength="60" />
+        </label>
+        <label>Gast Nachname (optional)
+          <input name="lastName" placeholder="Nachname" maxlength="60" />
+        </label>
+        <button type="submit">Gast hinzufügen</button>
+      </form>
+    </section>
+  <% } %>
+</section>
+<%- include("partials/bottom") %>

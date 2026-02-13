@@ -1,0 +1,211 @@
+<%- include("partials/top") %>
+<%
+  const formatEuro = (value) => Number(value || 0).toFixed(2).replace(".", ",");
+%>
+<section class="card fade-in">
+  <div class="section-head">
+    <h1>Kegelkladde</h1>
+    <p class="subtle">Spieltage verwalten und Ergebnisse eintragen.</p>
+  </div>
+
+  <% if (isAdmin) { %>
+    <form method="post" action="/kegelkladde/gamedays" class="inline-form">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <label>Neuer Spieltag
+        <input type="date" name="matchDate" required />
+      </label>
+      <label>Notiz (optional)
+        <input name="note" maxlength="120" placeholder="z. B. Faschingsrunde" />
+      </label>
+      <button type="submit">Spieltag anlegen</button>
+    </form>
+  <% } %>
+
+  <% if (hasGamedays) { %>
+    <form method="get" action="/kegelkladde" class="inline-form">
+      <label>Spieltag auswählen
+        <select name="gamedayId" onchange="this.form.submit()">
+          <% gamedays.forEach((day) => { %>
+            <option value="<%= day.id %>" <%= selectedGameday && selectedGameday.id === day.id ? "selected" : "" %>>
+              <%= day.match_date %><%= day.note ? ` - ${day.note}` : "" %><%= day.settled ? " (abgerechnet)" : "" %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+    </form>
+
+    <div class="settle-row">
+      <p>
+        Status:
+        <% if (selectedGameday.settled) { %>
+          <span class="badge badge-success">Abgerechnet</span>
+        <% } else { %>
+          <span class="badge badge-warning">Offen</span>
+        <% } %>
+      </p>
+      <% if (isAdmin) { %>
+        <div class="settle-actions">
+          <% if (selectedGameday.settled) { %>
+            <form method="post" action="/kegelkladde/unsettle">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <button type="submit" class="btn-secondary btn-sm">Wieder öffnen</button>
+            </form>
+          <% } else { %>
+            <form method="post" action="/kegelkladde/settle" data-confirm="Spieltag wirklich abrechnen und sperren?">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <button type="submit" class="btn-sm">Abrechnen</button>
+            </form>
+          <% } %>
+          <form method="post" action="/kegelkladde/delete" data-confirm="Spieltag wirklich löschen? Alle Daten gehen verloren!">
+            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+            <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+            <button type="submit" class="btn-danger btn-sm">Löschen</button>
+          </form>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Desktop table view -->
+    <div class="table-shell desktop-only">
+      <form method="post" action="/kegelkladde/attendance">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+        <table class="kladde-table">
+          <thead>
+            <tr>
+              <th><span class="head-label">Nr.</span></th>
+              <th><span class="head-label">Name</span></th>
+              <th><span class="head-label">Da?</span></th>
+              <th><span class="head-label">Beitrag</span></th>
+              <th><span class="head-label">Strafen</span></th>
+              <th><span class="head-label">Pudel</span></th>
+              <th title="Alle 9"><span class="head-label">9er</span></th>
+              <th title="Kranz"><span class="head-label">Kranz</span></th>
+              <th><span class="head-label">Triclops</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% members.forEach((member, i) => {
+              const hit = attendanceMap.get(member.id) || { present: 0, penalties: 0, contribution: 0, pudel: 0, alle9: 0, kranz: 0, triclops: 0 };
+              const alle9 = Number(hit.alle9 || 0);
+              const kranz = Number(hit.kranz || 0);
+              const isEditable = isAdmin && !selectedGameday.settled;
+            %>
+              <tr>
+                <td><%= i + 1 %></td>
+                <td class="name-col"><%= member.display_name %></td>
+                <td>
+                  <label class="present-toggle" title="Anwesend">
+                    <input type="checkbox" name="present_<%= member.id %>" <%= hit.present ? "checked" : "" %> <%= isEditable ? "" : "disabled" %> />
+                    <span>🐑</span>
+                  </label>
+                </td>
+                <td>
+                  <% if (!isEditable) { %>
+                    <span class="money-text"><%= formatEuro(hit.contribution || 0) %> €</span>
+                  <% } else { %>
+                    <input type="text" inputmode="decimal" value="<%= formatEuro(hit.contribution || 0) %>" name="contribution_<%= member.id %>" class="money-input" />
+                  <% } %>
+                </td>
+                <td><input type="number" min="0" max="999" value="<%= hit.penalties || 0 %>" name="penalties_<%= member.id %>" class="mini-number" <%= isEditable ? "" : "disabled" %> /></td>
+                <td><input type="number" min="0" max="999" value="<%= hit.pudel || 0 %>" name="pudel_<%= member.id %>" class="mini-number" <%= isEditable ? "" : "disabled" %> /></td>
+                <td>
+                  <div class="marker-controls">
+                    <input type="hidden" name="alle9_<%= member.id %>" value="<%= alle9 %>" data-marker-input="alle9" <%= isEditable ? "" : "disabled" %> />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="alle9" data-op="dec" aria-label="Alle 9 verringern" <%= isEditable ? "" : "disabled" %>></button>
+                    <span class="marker-strip" data-marker-display="alle9"><%= "●".repeat(Math.min(alle9, 15)) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="alle9" data-op="inc" <%= isEditable ? "" : "disabled" %>>+</button>
+                  </div>
+                </td>
+                <td>
+                  <div class="marker-controls">
+                    <input type="hidden" name="kranz_<%= member.id %>" value="<%= kranz %>" data-marker-input="kranz" <%= isEditable ? "" : "disabled" %> />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="kranz" data-op="dec" aria-label="Kranz verringern" <%= isEditable ? "" : "disabled" %>></button>
+                    <span class="marker-strip marker-kranz" data-marker-display="kranz"><%= "│".repeat(Math.min(kranz, 15)) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="kranz" data-op="inc" <%= isEditable ? "" : "disabled" %>>+</button>
+                  </div>
+                </td>
+                <td><input type="number" min="0" max="99" value="<%= hit.triclops || 0 %>" name="triclops_<%= member.id %>" class="mini-number" <%= isEditable ? "" : "disabled" %> /></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+        <% if (isAdmin && !selectedGameday.settled) { %>
+          <div style="margin-top: 1rem;">
+            <button type="submit">Kladde speichern</button>
+          </div>
+        <% } %>
+      </form>
+    </div>
+
+    <!-- Mobile card view -->
+    <div class="mobile-only gameday-cards">
+      <% if (selectedGameday) { %>
+        <article class="gameday-card">
+          <h3><%= selectedGameday.match_date %></h3>
+          <% if (selectedGameday.note) { %><p><%= selectedGameday.note %></p><% } %>
+          <ul>
+            <% members.forEach((member) => {
+              const hit = attendanceMap.get(member.id) || { present: 0, penalties: 0, contribution: 0, pudel: 0, alle9: 0, kranz: 0, triclops: 0 };
+            %>
+              <li>
+                <span><%= member.display_name %> <%= hit.present ? "🐑" : "" %></span>
+                <span>
+                  <%= formatEuro(hit.contribution || 0) %>€
+                  <% if (hit.penalties) { %> | S:<%= hit.penalties %><% } %>
+                  <% if (hit.pudel) { %> | P:<%= hit.pudel %><% } %>
+                  <% if (hit.alle9) { %> | 9:<%= hit.alle9 %><% } %>
+                  <% if (hit.kranz) { %> | K:<%= hit.kranz %><% } %>
+                  <% if (hit.triclops) { %> | T:<%= hit.triclops %><% } %>
+                </span>
+              </li>
+            <% }) %>
+          </ul>
+        </article>
+        <% if (isAdmin && !selectedGameday.settled) { %>
+          <p class="subtle" style="text-align: center; margin-top: 1rem;">
+            Für Bearbeitung bitte Desktop-Ansicht verwenden oder Bildschirm drehen.
+          </p>
+        <% } %>
+      <% } %>
+    </div>
+  <% } else { %>
+    <div class="empty-state">
+      <div class="empty-state-icon">📋</div>
+      <p>Noch kein Spieltag vorhanden.</p>
+      <% if (isAdmin) { %>
+        <p>Lege oben einen neuen Spieltag an.</p>
+      <% } %>
+    </div>
+  <% } %>
+</section>
+
+<% if (isAdmin && hasGamedays) { %>
+  <section class="card fade-in" style="margin-top: 1rem;">
+    <h2>Mitglieder-Reihenfolge</h2>
+    <p class="subtle">Ändere die Spalten-Reihenfolge in der Tabelle.</p>
+
+    <div class="order-box">
+      <form method="post" action="/kegelkladde/member-order" id="orderForm">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <input type="hidden" name="memberOrder" id="memberOrder" value="" />
+        <ul class="order-list" id="orderList">
+          <% members.forEach((member) => { %>
+            <li data-id="<%= member.id %>">
+              <span><%= member.display_name %></span>
+              <span>
+                <button type="button" class="move-up btn-sm btn-secondary">↑</button>
+                <button type="button" class="move-down btn-sm btn-secondary">↓</button>
+              </span>
+            </li>
+          <% }) %>
+        </ul>
+        <button type="submit">Reihenfolge speichern</button>
+      </form>
+    </div>
+  </section>
+<% } %>
+
+<%- include("partials/bottom") %>

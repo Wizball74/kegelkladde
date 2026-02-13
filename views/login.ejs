@@ -1,0 +1,21 @@
+<%- include("partials/top") %>
+<section class="card narrow fade-in">
+  <div class="section-head" style="text-align: center;">
+    <h1>Willkommen</h1>
+    <p class="subtle">Melde dich mit deinen Vereinszugangsdaten an.</p>
+  </div>
+
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+
+  <form method="post" action="/login" class="form-grid">
+    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+    <label>Benutzername
+      <input name="username" required maxlength="40" autocomplete="username" autofocus />
+    </label>
+    <label>Passwort
+      <input type="password" name="password" required autocomplete="current-password" />
+    </label>
+    <button type="submit">Einloggen</button>
+  </form>
+</section>
+<%- include("partials/bottom") %>

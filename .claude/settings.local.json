@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(timeout 5 node:*)",
+      "Bash(node -e:*)",
+      "Bash(node --check:*)",
+      "Bash(npm start)",
+      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" status)",
+      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" diff --staged)",
+      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" diff)",
+      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" log --oneline -5)",
+      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" log -1 --format=\"%ci\")"
+    ]
+  }
+}

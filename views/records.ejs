@@ -1,0 +1,66 @@
+<%- include("partials/top") %>
+<section class="card fade-in">
+  <div class="section-head">
+    <h1><%= pageTitle %></h1>
+    <p class="subtle">
+      <% if (section === 'rangliste') { %>
+        Bestenlisten und Rekorde des Vereins.
+      <% } else { %>
+        Lustige und kuriose Begebenheiten aus dem Vereinsleben.
+      <% } %>
+    </p>
+  </div>
+
+  <% if (entries.length > 0) { %>
+    <div class="records-table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Rekord</th>
+            <th>Rekordhalter</th>
+            <% if (isAdmin) { %><th class="actions"></th><% } %>
+          </tr>
+        </thead>
+        <tbody>
+          <% entries.forEach((entry) => { %>
+            <tr>
+              <td><%= entry.title %></td>
+              <td><%= entry.holder %></td>
+              <% if (isAdmin) { %>
+                <td class="actions">
+                  <form method="post" action="/records/delete" data-confirm="Eintrag wirklich löschen?">
+                    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                    <input type="hidden" name="recordId" value="<%= entry.id %>" />
+                    <input type="hidden" name="section" value="<%= section %>" />
+                    <button type="submit" class="btn-danger btn-sm">×</button>
+                  </form>
+                </td>
+              <% } %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %>
+    <div class="empty-state">
+      <div class="empty-state-icon">📊</div>
+      <p>Noch keine Einträge vorhanden.</p>
+    </div>
+  <% } %>
+
+  <% if (isAdmin) { %>
+    <h2>Neuer Eintrag</h2>
+    <form method="post" action="/records/add" class="inline-form">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <input type="hidden" name="section" value="<%= section %>" />
+      <label>Rekord / Titel
+        <input name="record" placeholder="z. B. Höchste Punktzahl" required maxlength="120" />
+      </label>
+      <label>Rekordhalter
+        <input name="holder" placeholder="z. B. Max Mustermann" required maxlength="120" />
+      </label>
+      <button type="submit">Eintrag speichern</button>
+    </form>
+  <% } %>
+</section>
+<%- include("partials/bottom") %>

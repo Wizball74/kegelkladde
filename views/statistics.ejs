@@ -1,0 +1,163 @@
+<%- include("partials/top") %>
+<%
+  const formatEuro = (value) => Number(value || 0).toFixed(2).replace(".", ",");
+%>
+<section class="card fade-in">
+  <div class="section-head">
+    <h1>Statistik</h1>
+    <p class="subtle">Übersicht über alle Vereinsaktivitäten und Bestenlisten.</p>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value"><%= totalGamedays %></div>
+      <div class="stat-label">Spieltage</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= settledGamedays %></div>
+      <div class="stat-label">Abgerechnet</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= formatEuro(totalContributions) %> €</div>
+      <div class="stat-label">Beiträge</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= totalPenalties %></div>
+      <div class="stat-label">Strafen</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= memberCount %></div>
+      <div class="stat-label">Mitglieder</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= guestCount %></div>
+      <div class="stat-label">Gäste</div>
+    </div>
+  </div>
+
+  <!-- Leaderboards -->
+  <div class="split-grid">
+    <% if (topAttendance.length > 0) { %>
+      <div class="leaderboard">
+        <div class="leaderboard-header">🏆 Meiste Teilnahmen</div>
+        <% topAttendance.forEach((item, i) => { %>
+          <div class="leaderboard-item">
+            <span class="leaderboard-rank"><%= i + 1 %></span>
+            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+            <span class="leaderboard-value"><%= item.games %> Spiele</span>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% if (topContributors.length > 0) { %>
+      <div class="leaderboard">
+        <div class="leaderboard-header">💰 Höchste Beiträge</div>
+        <% topContributors.forEach((item, i) => { %>
+          <div class="leaderboard-item">
+            <span class="leaderboard-rank"><%= i + 1 %></span>
+            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+            <span class="leaderboard-value"><%= formatEuro(item.total) %> €</span>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% if (topAlle9.length > 0) { %>
+      <div class="leaderboard">
+        <div class="leaderboard-header">🎯 Meiste Alle-9</div>
+        <% topAlle9.forEach((item, i) => { %>
+          <div class="leaderboard-item">
+            <span class="leaderboard-rank"><%= i + 1 %></span>
+            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+            <span class="leaderboard-value"><%= item.total %>×</span>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% if (topKranz.length > 0) { %>
+      <div class="leaderboard">
+        <div class="leaderboard-header">👑 Meiste Kränze</div>
+        <% topKranz.forEach((item, i) => { %>
+          <div class="leaderboard-item">
+            <span class="leaderboard-rank"><%= i + 1 %></span>
+            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+            <span class="leaderboard-value"><%= item.total %>×</span>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% if (mostPudel.length > 0) { %>
+      <div class="leaderboard">
+        <div class="leaderboard-header">🐩 Meiste Pudel</div>
+        <% mostPudel.forEach((item, i) => { %>
+          <div class="leaderboard-item">
+            <span class="leaderboard-rank"><%= i + 1 %></span>
+            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+            <span class="leaderboard-value"><%= item.total %>×</span>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (monthlySummary.length > 0) { %>
+    <h2 style="margin-top: 2rem;">Monatsübersicht <%= currentYear %></h2>
+    <div class="records-table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Monat</th>
+            <th>Spieltage</th>
+            <th>Beiträge</th>
+            <th>Strafen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% monthlySummary.forEach((month) => { %>
+            <tr>
+              <td><%= month.monthName %></td>
+              <td><%= month.gamedays %></td>
+              <td><%= formatEuro(month.contributions) %> €</td>
+              <td><%= month.penalties %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <% if (recentGamedays.length > 0) { %>
+    <h2 style="margin-top: 2rem;">Letzte Spieltage</h2>
+    <div class="records-table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Notiz</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% recentGamedays.forEach((day) => { %>
+            <tr>
+              <td><a href="/kegelkladde?gamedayId=<%= day.id %>"><%= day.match_date %></a></td>
+              <td><%= day.note || '-' %></td>
+              <td>
+                <% if (day.settled) { %>
+                  <span class="badge badge-success">Abgerechnet</span>
+                <% } else { %>
+                  <span class="badge badge-warning">Offen</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+<%- include("partials/bottom") %>

@@ -23,16 +23,26 @@
         </thead>
         <tbody>
           <% entries.forEach((entry) => { %>
-            <tr>
-              <td><%= entry.title %></td>
-              <td><%= entry.holder %></td>
+            <tr data-record-id="<%= entry.id %>">
+              <td class="record-title"><%= entry.title %></td>
+              <td class="record-holder"><%= entry.holder %></td>
               <% if (isAdmin) { %>
                 <td class="actions">
-                  <form method="post" action="/records/delete" data-confirm="Eintrag wirklich löschen?">
+                  <div class="action-btns">
+                    <button type="button" class="btn-edit btn-sm" title="Bearbeiten">✎</button>
+                    <form method="post" action="/records/delete" data-confirm="Eintrag wirklich löschen?">
+                      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                      <input type="hidden" name="recordId" value="<%= entry.id %>" />
+                      <input type="hidden" name="section" value="<%= section %>" />
+                      <button type="submit" class="btn-danger btn-sm">×</button>
+                    </form>
+                  </div>
+                  <form method="post" action="/records/edit" class="edit-form" style="display:none">
                     <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
                     <input type="hidden" name="recordId" value="<%= entry.id %>" />
                     <input type="hidden" name="section" value="<%= section %>" />
-                    <button type="submit" class="btn-danger btn-sm">×</button>
+                    <input type="hidden" name="record" class="edit-title-val" />
+                    <input type="hidden" name="holder" class="edit-holder-val" />
                   </form>
                 </td>
               <% } %>

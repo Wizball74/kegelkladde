@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { db, encrypt, decrypt, logAudit } = require("../models/db");
+const { db, encrypt, decrypt, logAudit, getOrderedMembers, withDisplayNames } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize, parsePhones } = require("../utils/helpers");
 
@@ -29,8 +29,11 @@ router.get("/members", requireAuth, (req, res) => {
     : null;
   const editError = sanitize(req.query.editError, 140);
 
+  const orderedMembers = withDisplayNames(getOrderedMembers());
+
   res.render("members", {
     members,
+    orderedMembers,
     current,
     error: null,
     editableMember,

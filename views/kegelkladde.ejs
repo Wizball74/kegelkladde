@@ -20,31 +20,111 @@
     <p class="subtle">Spieltage verwalten und Ergebnisse eintragen.</p>
   </div>
 
-  <% if (isAdmin) { %>
-    <form method="post" action="/kegelkladde/gamedays" class="inline-form">
-      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-      <label>Neuer Spieltag
-        <input type="date" name="matchDate" required />
-      </label>
-      <label>Notiz (optional)
-        <input name="note" maxlength="120" placeholder="z. B. Faschingsrunde" />
-      </label>
-      <button type="submit">Spieltag anlegen</button>
-    </form>
-  <% } %>
+  <%
+    // Datum-Formatierung DD.MM.YYYY
+    const formatDateDE = (isoStr) => {
+      const [y, m, d] = isoStr.split("-");
+      return `${d}.${m}.${y}`;
+    };
+  %>
 
-  <% if (hasGamedays) { %>
-    <form method="get" action="/kegelkladde" class="inline-form">
-      <label>Spieltag auswählen
-        <select name="gamedayId" onchange="this.form.submit()">
-          <% gamedays.forEach((day) => { %>
-            <option value="<%= day.id %>" <%= selectedGameday && selectedGameday.id === day.id ? "selected" : "" %>>
-              <%= day.match_date %><%= day.note ? ` - ${day.note}` : "" %><%= day.settled ? " (abgerechnet)" : "" %>
-            </option>
+  <nav class="gameday-nav" id="gamedayNav">
+    <button type="button" class="btn-secondary btn-sm" id="btnPrev" title="Vorheriger Spieltag">&laquo; Zurück</button>
+    <select id="gamedaySelect">
+      <% gamedays.forEach((day) => { %>
+        <option value="<%= day.id %>" <%= selectedGameday && selectedGameday.id === day.id && !isNext ? "selected" : "" %>>
+          <%= formatDateDE(day.match_date) %><%= day.note ? ` - ${day.note}` : "" %><%= day.settled ? " (abger.)" : "" %>
+        </option>
+      <% }) %>
+      <option value="next" <%= isNext || (!selectedGameday && !hasGamedays) ? "selected" : "" %>>
+        Nächster Spieltag (<%= formatDateDE(nextDate) %>)
+      </option>
+    </select>
+    <button type="button" class="btn-secondary btn-sm" id="btnNext" title="Nächster Spieltag">Weiter &raquo;</button>
+  </nav>
+
+  <% if (isNext || (!selectedGameday && !hasGamedays)) { %>
+    <!-- Nächster Spieltag: Vorschau + Starten -->
+    <% if (isAdmin) { %>
+      <div class="start-gameday-bar">
+        <form method="post" action="/kegelkladde/gamedays" class="start-gameday-form" id="startGamedayForm">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <label>Datum
+            <input type="date" name="matchDate" value="<%= nextDate %>" required />
+          </label>
+          <label>Notiz (optional)
+            <input name="note" maxlength="120" placeholder="z. B. Faschingsrunde" />
+          </label>
+          <button type="submit">Spieltag starten</button>
+        </form>
+      </div>
+    <% } %>
+
+    <!-- Leere Kladde-Vorschau -->
+    <div class="table-shell desktop-only">
+      <table class="kladde-table kladde-preview">
+        <colgroup>
+          <col style="width: 110px;" />
+          <col style="width: 44px;" />
+          <col style="width: 70px;" />
+          <col style="width: 52px;" />
+          <col style="width: 120px;" />
+          <col style="width: 120px;" />
+          <col style="width: 120px;" />
+          <col style="width: 120px;" />
+          <col style="width: 70px;" />
+          <col style="width: 70px;" />
+          <col style="width: 70px;" />
+          <col style="width: 70px;" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th><span class="head-label">Name</span></th>
+            <th><span class="head-label">Anwesend</span></th>
+            <th><span class="head-label">Beitrag</span></th>
+            <th><span class="head-label">Strafen</span></th>
+            <th><span class="head-label">Pudel</span></th>
+            <th><span class="head-label">9er</span></th>
+            <th><span class="head-label">Kranz</span></th>
+            <th><span class="head-label">Triclops</span></th>
+            <th><span class="head-label">Übertrag</span></th>
+            <th><span class="head-label">Zu zahlen</span></th>
+            <th><span class="head-label">Gezahlt</span></th>
+            <th><span class="head-label">Rest</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% members.forEach((member) => { %>
+            <tr>
+              <td class="name-col"><%= member.display_name %></td>
+              <td>
+                <label class="present-toggle">
+                  <input type="checkbox" checked disabled />
+                  <img src="/sheep.png" alt="Anwesend" class="present-icon" />
+                </label>
+              </td>
+              <td><span class="money-text"><%= formatEuro(4) %> &euro;</span></td>
+              <td><span class="money-text">0,00 &euro;</span></td>
+              <td><span class="money-text preview-dash">&mdash;</span></td>
+              <td><span class="money-text preview-dash">&mdash;</span></td>
+              <td><span class="money-text preview-dash">&mdash;</span></td>
+              <td><span class="money-text preview-dash">&mdash;</span></td>
+              <td><span class="money-text">0,00 &euro;</span></td>
+              <td><span class="money-text">4,00 &euro;</span></td>
+              <td><span class="money-text">0,00 &euro;</span></td>
+              <td><span class="money-text">4,00 &euro;</span></td>
+            </tr>
           <% }) %>
-        </select>
-      </label>
-    </form>
+        </tbody>
+      </table>
+    </div>
+    <div class="mobile-only">
+      <p class="subtle" style="text-align: center; padding: 2rem 0;">
+        <% if (isAdmin) { %>Spieltag starten, um die Kladde zu bearbeiten.<% } else { %>Noch kein Spieltag gestartet.<% } %>
+      </p>
+    </div>
+
+  <% } else if (selectedGameday) { %>
 
     <div class="settle-row">
       <p>
@@ -227,7 +307,7 @@
     <div class="mobile-only gameday-cards">
       <% if (selectedGameday) { %>
         <article class="gameday-card">
-          <h3><%= selectedGameday.match_date %></h3>
+          <h3><%= formatDateDE(selectedGameday.match_date) %></h3>
           <% if (selectedGameday.note) { %><p><%= selectedGameday.note %></p><% } %>
           <ul>
             <% members.forEach((member) => {
@@ -236,7 +316,7 @@
               <li>
                 <span><%= member.display_name %> <% if (hit.present) { %><img src="/sheep.png" alt="Anwesend" class="present-icon-sm" /><% } %></span>
                 <span>
-                  <%= formatEuro(hit.contribution || 0) %>€
+                  <%= formatEuro(hit.contribution || 0) %>&euro;
                   <% if (hit.penalties) { %> | S:<%= hit.penalties %><% } %>
                   <% if (hit.pudel) { %> | P:<%= hit.pudel %><% } %>
                   <% if (hit.alle9) { %> | 9:<%= hit.alle9 %><% } %>
@@ -254,41 +334,7 @@
         <% } %>
       <% } %>
     </div>
-  <% } else { %>
-    <div class="empty-state">
-      <div class="empty-state-icon">📋</div>
-      <p>Noch kein Spieltag vorhanden.</p>
-      <% if (isAdmin) { %>
-        <p>Lege oben einen neuen Spieltag an.</p>
-      <% } %>
-    </div>
   <% } %>
 </section>
-
-<% if (isAdmin && hasGamedays) { %>
-  <section class="card fade-in" style="margin-top: 1rem;">
-    <h2>Mitglieder-Reihenfolge</h2>
-    <p class="subtle">Ändere die Spalten-Reihenfolge in der Tabelle.</p>
-
-    <div class="order-box">
-      <form method="post" action="/kegelkladde/member-order" id="orderForm">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <input type="hidden" name="memberOrder" id="memberOrder" value="" />
-        <ul class="order-list" id="orderList">
-          <% members.forEach((member) => { %>
-            <li data-id="<%= member.id %>">
-              <span><%= member.display_name %></span>
-              <span>
-                <button type="button" class="move-up btn-sm btn-secondary">↑</button>
-                <button type="button" class="move-down btn-sm btn-secondary">↓</button>
-              </span>
-            </li>
-          <% }) %>
-        </ul>
-        <button type="submit">Reihenfolge speichern</button>
-      </form>
-    </div>
-  </section>
-<% } %>
 
 <%- include("partials/bottom") %>

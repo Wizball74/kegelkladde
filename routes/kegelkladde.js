@@ -16,14 +16,32 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
     .prepare(
       `SELECT id, match_date, note, settled
        FROM gamedays
-       ORDER BY match_date DESC, id DESC`
+       ORDER BY match_date ASC, id ASC`
     )
     .all();
 
-  const requestedDayId = Number.parseInt(req.query.gamedayId, 10);
-  const selectedGameday = Number.isInteger(requestedDayId)
-    ? gamedays.find((g) => g.id === requestedDayId) || gamedays[0]
-    : gamedays[0];
+  // Nächsten Spieltag berechnen (letztes Datum + 14 Tage, oder 2026-02-20)
+  let nextDate;
+  if (gamedays.length > 0) {
+    const lastDate = new Date(gamedays[gamedays.length - 1].match_date);
+    lastDate.setDate(lastDate.getDate() + 14);
+    nextDate = lastDate.toISOString().slice(0, 10);
+  } else {
+    nextDate = "2026-02-20";
+  }
+
+  const gamedayIdParam = req.query.gamedayId;
+  const isNext = gamedayIdParam === "next";
+  const requestedDayId = Number.parseInt(gamedayIdParam, 10);
+
+  let selectedGameday = null;
+  if (isNext) {
+    selectedGameday = null; // "Nächster Spieltag"-Ansicht
+  } else if (Number.isInteger(requestedDayId)) {
+    selectedGameday = gamedays.find((g) => g.id === requestedDayId) || gamedays[gamedays.length - 1] || null;
+  } else {
+    selectedGameday = gamedays[gamedays.length - 1] || null;
+  }
 
   const attendanceRows = selectedGameday
     ? db
@@ -45,7 +63,9 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
     gamedays,
     selectedGameday,
     attendanceMap,
-    hasGamedays: gamedays.length > 0
+    hasGamedays: gamedays.length > 0,
+    nextDate,
+    isNext
   });
 });
 
@@ -239,7 +259,7 @@ router.post("/kegelkladde/member-order", requireAuth, requireAdmin, verifyCsrf, 
   ).run(JSON.stringify(uniqueValid));
 
   req.session.flash = { type: "success", message: "Reihenfolge gespeichert." };
-  res.redirect("/kegelkladde");
+  res.redirect("/members");
 });
 
 module.exports = router;

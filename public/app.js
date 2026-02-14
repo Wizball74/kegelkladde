@@ -88,6 +88,45 @@ document.querySelectorAll("[data-confirm]").forEach((form) => {
   });
 });
 
+// Gameday navigation (Prev/Next + Dropdown)
+const gamedaySelect = document.getElementById("gamedaySelect");
+const btnPrev = document.getElementById("btnPrev");
+const btnNext = document.getElementById("btnNext");
+
+if (gamedaySelect) {
+  function updateNavButtons() {
+    if (btnPrev) btnPrev.disabled = gamedaySelect.selectedIndex === 0;
+    if (btnNext) btnNext.disabled = gamedaySelect.selectedIndex === gamedaySelect.options.length - 1;
+  }
+
+  function navigateToSelected() {
+    const val = gamedaySelect.value;
+    window.location = "/kegelkladde?gamedayId=" + encodeURIComponent(val);
+  }
+
+  gamedaySelect.addEventListener("change", navigateToSelected);
+
+  if (btnPrev) {
+    btnPrev.addEventListener("click", () => {
+      if (gamedaySelect.selectedIndex > 0) {
+        gamedaySelect.selectedIndex--;
+        navigateToSelected();
+      }
+    });
+  }
+
+  if (btnNext) {
+    btnNext.addEventListener("click", () => {
+      if (gamedaySelect.selectedIndex < gamedaySelect.options.length - 1) {
+        gamedaySelect.selectedIndex++;
+        navigateToSelected();
+      }
+    });
+  }
+
+  updateNavButtons();
+}
+
 // Member order drag and drop
 const orderList = document.getElementById("orderList");
 const orderForm = document.getElementById("orderForm");
@@ -341,6 +380,83 @@ document.querySelectorAll("[data-present]").forEach((cb) => {
 // Recalc on any number input change (Strafen, Übertrag, Gezahlt)
 document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
   input.addEventListener("input", () => recalcCosts());
+});
+
+// Inline-Edit für Rekorde/Kurioses
+document.querySelectorAll(".btn-edit").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const row = btn.closest("tr");
+    if (row.classList.contains("editing")) return;
+
+    const titleCell = row.querySelector(".record-title");
+    const holderCell = row.querySelector(".record-holder");
+    const actionsCell = row.querySelector(".actions");
+    const actionBtns = actionsCell.querySelector(".action-btns");
+    const editForm = actionsCell.querySelector(".edit-form");
+
+    const origTitle = titleCell.textContent.trim();
+    const origHolder = holderCell.textContent.trim();
+
+    row.classList.add("editing");
+
+    titleCell.innerHTML = `<input type="text" class="edit-input" value="${origTitle.replace(/"/g, "&quot;")}" maxlength="120" />`;
+    holderCell.innerHTML = `<input type="text" class="edit-input" value="${origHolder.replace(/"/g, "&quot;")}" maxlength="120" />`;
+
+    actionBtns.style.display = "none";
+    editForm.style.display = "";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "btn-save btn-sm";
+    saveBtn.textContent = "✓";
+    saveBtn.title = "Speichern";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn-cancel btn-sm";
+    cancelBtn.textContent = "✗";
+    cancelBtn.title = "Abbrechen";
+
+    const editBtns = document.createElement("div");
+    editBtns.className = "action-btns edit-active-btns";
+    editBtns.appendChild(saveBtn);
+    editBtns.appendChild(cancelBtn);
+    actionsCell.appendChild(editBtns);
+
+    titleCell.querySelector("input").focus();
+
+    function doSave() {
+      const newTitle = titleCell.querySelector("input").value.trim();
+      const newHolder = holderCell.querySelector("input").value.trim();
+      if (!newTitle || !newHolder) {
+        showToast("Beide Felder müssen ausgefüllt sein.", "error");
+        return;
+      }
+      editForm.querySelector(".edit-title-val").value = newTitle;
+      editForm.querySelector(".edit-holder-val").value = newHolder;
+      editForm.submit();
+    }
+
+    function doCancel() {
+      row.classList.remove("editing");
+      titleCell.textContent = origTitle;
+      holderCell.textContent = origHolder;
+      actionBtns.style.display = "";
+      editForm.style.display = "none";
+      editBtns.remove();
+    }
+
+    saveBtn.addEventListener("click", doSave);
+    cancelBtn.addEventListener("click", doCancel);
+
+    // Enter = Speichern, Escape = Abbrechen
+    row.querySelectorAll(".edit-input").forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); doSave(); }
+        if (e.key === "Escape") { doCancel(); }
+      });
+    });
+  });
 });
 
 // Initialize server-side flash messages as toasts and cost display

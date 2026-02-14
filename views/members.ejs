@@ -175,6 +175,27 @@
         </label>
         <button type="submit">Gast hinzufügen</button>
       </form>
+
+      <h2>Mitglieder-Reihenfolge</h2>
+      <p class="subtle">Ändere die Spalten-Reihenfolge in der Kegelkladde-Tabelle.</p>
+      <div class="order-box">
+        <form method="post" action="/kegelkladde/member-order" id="orderForm">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <input type="hidden" name="memberOrder" id="memberOrder" value="" />
+          <ul class="order-list" id="orderList">
+            <% orderedMembers.forEach((member) => { %>
+              <li data-id="<%= member.id %>">
+                <span><%= member.display_name %></span>
+                <span>
+                  <button type="button" class="move-up btn-sm btn-secondary">&uarr;</button>
+                  <button type="button" class="move-down btn-sm btn-secondary">&darr;</button>
+                </span>
+              </li>
+            <% }) %>
+          </ul>
+          <button type="submit">Reihenfolge speichern</button>
+        </form>
+      </div>
     </section>
   <% } %>
 </section>

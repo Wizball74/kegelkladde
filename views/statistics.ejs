@@ -8,156 +8,199 @@
     <p class="subtle">Übersicht über alle Vereinsaktivitäten und Bestenlisten.</p>
   </div>
 
-  <!-- Summary stats -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-value"><%= totalGamedays %></div>
-      <div class="stat-label">Spieltage</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value"><%= settledGamedays %></div>
-      <div class="stat-label">Abgerechnet</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value"><%= formatEuro(totalContributions) %> €</div>
-      <div class="stat-label">Beiträge</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value"><%= totalPenalties %></div>
-      <div class="stat-label">Strafen</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value"><%= memberCount %></div>
-      <div class="stat-label">Mitglieder</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value"><%= guestCount %></div>
-      <div class="stat-label">Gäste</div>
-    </div>
-  </div>
+  <!-- Tabs -->
+  <nav class="tab-nav">
+    <button type="button" class="tab-btn active" data-tab="neuner-kraenze">Neuner / Kränze</button>
+    <button type="button" class="tab-btn" data-tab="allgemein">Allgemein</button>
+  </nav>
 
-  <!-- Leaderboards -->
-  <div class="split-grid">
-    <% if (topAttendance.length > 0) { %>
-      <div class="leaderboard">
-        <div class="leaderboard-header">🏆 Meiste Teilnahmen</div>
-        <% topAttendance.forEach((item, i) => { %>
-          <div class="leaderboard-item">
-            <span class="leaderboard-rank"><%= i + 1 %></span>
-            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-            <span class="leaderboard-value"><%= item.games %> Spiele</span>
-          </div>
-        <% }) %>
+  <!-- Tab: Neuner / Kränze -->
+  <div class="tab-panel active" id="tab-neuner-kraenze">
+    <% if (neunerKraenze.length > 0) { %>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>9er</th>
+              <th>&#8709; / Abend</th>
+              <th>Kränze</th>
+              <th>&#8709; / Abend</th>
+              <th>Spieltage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% neunerKraenze.forEach((item) => { %>
+              <tr>
+                <td><%= item.first_name %> <%= item.last_name || '' %></td>
+                <td><%= item.total_alle9 %></td>
+                <td><%= item.avg_alle9.toFixed(2).replace(".", ",") %></td>
+                <td><%= item.total_kranz %></td>
+                <td><%= item.avg_kranz.toFixed(2).replace(".", ",") %></td>
+                <td><%= item.games %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
       </div>
-    <% } %>
-
-    <% if (topContributors.length > 0) { %>
-      <div class="leaderboard">
-        <div class="leaderboard-header">💰 Höchste Beiträge</div>
-        <% topContributors.forEach((item, i) => { %>
-          <div class="leaderboard-item">
-            <span class="leaderboard-rank"><%= i + 1 %></span>
-            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-            <span class="leaderboard-value"><%= formatEuro(item.total) %> €</span>
-          </div>
-        <% }) %>
-      </div>
-    <% } %>
-
-    <% if (topAlle9.length > 0) { %>
-      <div class="leaderboard">
-        <div class="leaderboard-header">🎯 Meiste Alle-9</div>
-        <% topAlle9.forEach((item, i) => { %>
-          <div class="leaderboard-item">
-            <span class="leaderboard-rank"><%= i + 1 %></span>
-            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-            <span class="leaderboard-value"><%= item.total %>×</span>
-          </div>
-        <% }) %>
-      </div>
-    <% } %>
-
-    <% if (topKranz.length > 0) { %>
-      <div class="leaderboard">
-        <div class="leaderboard-header">👑 Meiste Kränze</div>
-        <% topKranz.forEach((item, i) => { %>
-          <div class="leaderboard-item">
-            <span class="leaderboard-rank"><%= i + 1 %></span>
-            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-            <span class="leaderboard-value"><%= item.total %>×</span>
-          </div>
-        <% }) %>
-      </div>
-    <% } %>
-
-    <% if (mostPudel.length > 0) { %>
-      <div class="leaderboard">
-        <div class="leaderboard-header">🐩 Meiste Pudel</div>
-        <% mostPudel.forEach((item, i) => { %>
-          <div class="leaderboard-item">
-            <span class="leaderboard-rank"><%= i + 1 %></span>
-            <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-            <span class="leaderboard-value"><%= item.total %>×</span>
-          </div>
-        <% }) %>
-      </div>
+    <% } else { %>
+      <p class="subtle" style="text-align: center; padding: 2rem 0;">Noch keine Daten vorhanden.</p>
     <% } %>
   </div>
 
-  <% if (monthlySummary.length > 0) { %>
-    <h2 style="margin-top: 2rem;">Monatsübersicht <%= currentYear %></h2>
-    <div class="records-table-wrap">
-      <table class="records-table">
-        <thead>
-          <tr>
-            <th>Monat</th>
-            <th>Spieltage</th>
-            <th>Beiträge</th>
-            <th>Strafen</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% monthlySummary.forEach((month) => { %>
-            <tr>
-              <td><%= month.monthName %></td>
-              <td><%= month.gamedays %></td>
-              <td><%= formatEuro(month.contributions) %> €</td>
-              <td><%= month.penalties %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+  <!-- Tab: Allgemein -->
+  <div class="tab-panel" id="tab-allgemein">
+    <!-- Summary stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value"><%= totalGamedays %></div>
+        <div class="stat-label">Spieltage</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= settledGamedays %></div>
+        <div class="stat-label">Abgerechnet</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= formatEuro(totalContributions) %> €</div>
+        <div class="stat-label">Beiträge</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= totalPenalties %></div>
+        <div class="stat-label">Strafen</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= memberCount %></div>
+        <div class="stat-label">Mitglieder</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= guestCount %></div>
+        <div class="stat-label">Gäste</div>
+      </div>
     </div>
-  <% } %>
 
-  <% if (recentGamedays.length > 0) { %>
-    <h2 style="margin-top: 2rem;">Letzte Spieltage</h2>
-    <div class="records-table-wrap">
-      <table class="records-table">
-        <thead>
-          <tr>
-            <th>Datum</th>
-            <th>Notiz</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% recentGamedays.forEach((day) => { %>
-            <tr>
-              <td><a href="/kegelkladde?gamedayId=<%= day.id %>"><%= day.match_date %></a></td>
-              <td><%= day.note || '-' %></td>
-              <td>
-                <% if (day.settled) { %>
-                  <span class="badge badge-success">Abgerechnet</span>
-                <% } else { %>
-                  <span class="badge badge-warning">Offen</span>
-                <% } %>
-              </td>
-            </tr>
+    <!-- Leaderboards -->
+    <div class="split-grid">
+      <% if (topAttendance.length > 0) { %>
+        <div class="leaderboard">
+          <div class="leaderboard-header">Meiste Teilnahmen</div>
+          <% topAttendance.forEach((item, i) => { %>
+            <div class="leaderboard-item">
+              <span class="leaderboard-rank"><%= i + 1 %></span>
+              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-value"><%= item.games %> Spiele</span>
+            </div>
           <% }) %>
-        </tbody>
-      </table>
+        </div>
+      <% } %>
+
+      <% if (topContributors.length > 0) { %>
+        <div class="leaderboard">
+          <div class="leaderboard-header">Höchste Beiträge</div>
+          <% topContributors.forEach((item, i) => { %>
+            <div class="leaderboard-item">
+              <span class="leaderboard-rank"><%= i + 1 %></span>
+              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-value"><%= formatEuro(item.total) %> €</span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (topAlle9.length > 0) { %>
+        <div class="leaderboard">
+          <div class="leaderboard-header">Meiste Alle-9</div>
+          <% topAlle9.forEach((item, i) => { %>
+            <div class="leaderboard-item">
+              <span class="leaderboard-rank"><%= i + 1 %></span>
+              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-value"><%= item.total %>×</span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (topKranz.length > 0) { %>
+        <div class="leaderboard">
+          <div class="leaderboard-header">Meiste Kränze</div>
+          <% topKranz.forEach((item, i) => { %>
+            <div class="leaderboard-item">
+              <span class="leaderboard-rank"><%= i + 1 %></span>
+              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-value"><%= item.total %>×</span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (mostPudel.length > 0) { %>
+        <div class="leaderboard">
+          <div class="leaderboard-header">Meiste Pudel</div>
+          <% mostPudel.forEach((item, i) => { %>
+            <div class="leaderboard-item">
+              <span class="leaderboard-rank"><%= i + 1 %></span>
+              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-value"><%= item.total %>×</span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
     </div>
-  <% } %>
+
+    <% if (monthlySummary.length > 0) { %>
+      <h2 style="margin-top: 2rem;">Monatsübersicht <%= currentYear %></h2>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Monat</th>
+              <th>Spieltage</th>
+              <th>Beiträge</th>
+              <th>Strafen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% monthlySummary.forEach((month) => { %>
+              <tr>
+                <td><%= month.monthName %></td>
+                <td><%= month.gamedays %></td>
+                <td><%= formatEuro(month.contributions) %> €</td>
+                <td><%= month.penalties %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+
+    <% if (recentGamedays.length > 0) { %>
+      <h2 style="margin-top: 2rem;">Letzte Spieltage</h2>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Notiz</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% recentGamedays.forEach((day) => { %>
+              <tr>
+                <td><a href="/kegelkladde?gamedayId=<%= day.id %>"><%= day.match_date %></a></td>
+                <td><%= day.note || '-' %></td>
+                <td>
+                  <% if (day.settled) { %>
+                    <span class="badge badge-success">Abgerechnet</span>
+                  <% } else { %>
+                    <span class="badge badge-warning">Offen</span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
 </section>
 <%- include("partials/bottom") %>

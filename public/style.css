@@ -564,7 +564,7 @@ textarea:focus {
 }
 
 .kladde-table thead tr:first-child th {
-  background: linear-gradient(to bottom, #f8f5eb, #efe9d4);
+  background: linear-gradient(to bottom, #efe9d4, #cfcfcf);
   border-bottom: 2px solid #d4cebb;
   height: 70px;
   vertical-align: bottom;
@@ -578,11 +578,11 @@ textarea:focus {
 }
 
 .kladde-table tbody tr:nth-child(even) {
-  background: #fcfbf8;
+  background: #cfcfcf;
 }
 
 .kladde-table tbody tr:nth-child(even):hover {
-  background: #f5f4ef;
+  background: #d3d3d3;
 }
 
 .head-label {
@@ -591,11 +591,61 @@ textarea:focus {
   justify-content: center;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
   color: var(--muted);
+}
+
+/* Game columns (V+A, Monte, etc.) */
+.game-col {
+  background: #e8f0e8 !important;
+}
+
+.kladde-table thead th.game-col {
+  background: linear-gradient(to bottom, #d4e8d4, #b8cfb8) !important;
+  border-bottom: 2px solid #b0c8a8;
+}
+
+.kladde-table tbody tr:nth-child(even) td.game-col {
+  background: #c8d8c8 !important;
+}
+
+.game-col-input {
+  width: 45px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.game-col-input::-webkit-outer-spin-button,
+.game-col-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.custom-game-header-input {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  background: transparent;
+  padding: 0.2rem;
+  width: 1.6em;
+  text-align: center;
+  cursor: text;
+}
+
+.custom-game-header-input::placeholder {
+  color: var(--line);
+  font-style: italic;
+}
+
+.custom-game-header-input:focus {
+  border-color: var(--accent);
+  background: #fff;
 }
 
 /* Present toggle */
@@ -855,6 +905,44 @@ textarea:focus {
 .member-list span {
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+/* Tabs */
+.tab-nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.tab-btn:hover {
+  color: var(--ink);
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
 }
 
 /* Records table */

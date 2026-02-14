@@ -100,6 +100,21 @@ router.get("/statistik", requireAuth, (req, res) => {
     monthName: monthNames[parseInt(m.month, 10) - 1]
   }));
 
+  // Per-member 9er/Kranz stats with averages
+  const neunerKraenze = db.prepare(`
+    SELECT u.first_name, u.last_name,
+      COALESCE(SUM(a.alle9), 0) as total_alle9,
+      COALESCE(SUM(a.kranz), 0) as total_kranz,
+      COUNT(*) as games,
+      ROUND(CAST(COALESCE(SUM(a.alle9), 0) AS REAL) / COUNT(*), 2) as avg_alle9,
+      ROUND(CAST(COALESCE(SUM(a.kranz), 0) AS REAL) / COUNT(*), 2) as avg_kranz
+    FROM attendance a
+    JOIN users u ON a.user_id = u.id
+    WHERE a.present = 1
+    GROUP BY a.user_id
+    ORDER BY total_alle9 + total_kranz DESC
+  `).all();
+
   res.render("statistics", {
     totalGamedays,
     settledGamedays,
@@ -114,7 +129,8 @@ router.get("/statistik", requireAuth, (req, res) => {
     mostPudel,
     recentGamedays,
     monthlySummary: formattedMonthlySummary,
-    currentYear
+    currentYear,
+    neunerKraenze
   });
 });
 

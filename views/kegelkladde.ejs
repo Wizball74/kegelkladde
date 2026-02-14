@@ -72,8 +72,10 @@
           <col style="width: 120px;" />
           <col style="width: 120px;" />
           <col style="width: 120px;" />
-          <col style="width: 70px;" />
-          <col style="width: 70px;" />
+          <col style="width: 52px;" />
+          <col style="width: 52px;" />
+          <col style="width: 52px;" />
+          <col style="width: 52px;" />
           <col style="width: 70px;" />
           <col style="width: 70px;" />
         </colgroup>
@@ -83,14 +85,16 @@
             <th><span class="head-label">Anwesend</span></th>
             <th><span class="head-label">Beitrag</span></th>
             <th><span class="head-label">Strafen</span></th>
-            <th><span class="head-label">Pudel</span></th>
             <th><span class="head-label">9er</span></th>
             <th><span class="head-label">Kranz</span></th>
             <th><span class="head-label">Triclops</span></th>
+            <th><span class="head-label">Pudel</span></th>
+            <th class="game-col"><span class="head-label">V+A</span></th>
+            <th class="game-col"><span class="head-label">Monte</span></th>
+            <th class="game-col"><span class="head-label">Aussteigen</span></th>
+            <th class="game-col"><span class="head-label">6-Tage</span></th>
             <th><span class="head-label">Übertrag</span></th>
             <th><span class="head-label">Zu zahlen</span></th>
-            <th><span class="head-label">Gezahlt</span></th>
-            <th><span class="head-label">Rest</span></th>
           </tr>
         </thead>
         <tbody>
@@ -109,8 +113,10 @@
               <td><span class="money-text preview-dash">&mdash;</span></td>
               <td><span class="money-text preview-dash">&mdash;</span></td>
               <td><span class="money-text preview-dash">&mdash;</span></td>
-              <td><span class="money-text">0,00 &euro;</span></td>
-              <td><span class="money-text">4,00 &euro;</span></td>
+              <td class="game-col"><span class="money-text">0,00 &euro;</span></td>
+              <td class="game-col"><span class="money-text">0,00 &euro;</span></td>
+              <td class="game-col"><span class="money-text">0,00 &euro;</span></td>
+              <td class="game-col"><span class="money-text">0,00 &euro;</span></td>
               <td><span class="money-text">0,00 &euro;</span></td>
               <td><span class="money-text">4,00 &euro;</span></td>
             </tr>
@@ -143,12 +149,6 @@
               <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
               <button type="submit" class="btn-secondary btn-sm">Wieder öffnen</button>
             </form>
-          <% } else { %>
-            <form method="post" action="/kegelkladde/settle" data-confirm="Spieltag wirklich abrechnen und sperren?">
-              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
-              <button type="submit" class="btn-sm">Abrechnen</button>
-            </form>
           <% } %>
           <form method="post" action="/kegelkladde/delete" data-confirm="Spieltag wirklich löschen? Alle Daten gehen verloren!">
             <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
@@ -172,39 +172,60 @@
     %>
 
     <!-- Desktop table view -->
-    <div class="table-shell desktop-only">
-      <form method="post" action="/kegelkladde/attendance">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+    <div class="table-shell desktop-only" id="kladdeData" data-csrf="<%= csrfToken %>" data-gameday-id="<%= selectedGameday.id %>" data-settled="<%= selectedGameday.settled ? '1' : '0' %>">
         <table class="kladde-table">
           <colgroup>
             <col style="width: 110px;" /><!-- Name -->
             <col style="width: 44px;" /><!-- Anwesenheit -->
             <col style="width: 70px;" /><!-- Beitrag -->
             <col style="width: 52px;" /><!-- Strafen -->
-            <col style="width: 120px;" /><!-- Pudel -->
             <col style="width: 120px;" /><!-- 9er -->
             <col style="width: 120px;" /><!-- Kranz -->
             <col style="width: 120px;" /><!-- Triclops -->
+            <col style="width: 120px;" /><!-- Pudel -->
+            <col style="width: 52px;" /><!-- V+A -->
+            <col style="width: 52px;" /><!-- Monte -->
+            <col style="width: 52px;" /><!-- Aussteigen -->
+            <col style="width: 52px;" /><!-- 6-Tage -->
+            <% customGames.forEach(() => { %>
+            <col style="width: 52px;" />
+            <% }) %>
+            <% if (isAdmin && !selectedGameday.settled) { %>
+            <col style="width: 52px;" /><!-- Neue Spalte -->
+            <% } %>
             <col style="width: 70px;" /><!-- Übertrag -->
             <col style="width: 70px;" /><!-- Zu zahlen -->
+            <% if (selectedGameday.settled) { %>
             <col style="width: 70px;" /><!-- Gezahlt -->
             <col style="width: 70px;" /><!-- Rest -->
+            <% } %>
           </colgroup>
           <thead>
             <tr>
               <th><span class="head-label">Name</span></th>
-              <th><span class="head-label">Anwesenheitfür </span></th>
+              <th><span class="head-label">Anwesend</span></th>
               <th><span class="head-label">Beitrag</span></th>
               <th><span class="head-label">Strafen</span></th>
-              <th><span class="head-label">Pudel</span></th>
               <th title="Alle 9"><span class="head-label">9er</span></th>
               <th title="Kranz"><span class="head-label">Kranz</span></th>
               <th><span class="head-label">Triclops</span></th>
+              <th><span class="head-label">Pudel</span></th>
+              <th class="game-col"><span class="head-label">V+A</span></th>
+              <th class="game-col"><span class="head-label">Monte</span></th>
+              <th class="game-col"><span class="head-label">Aussteigen</span></th>
+              <th class="game-col"><span class="head-label">6-Tage</span></th>
+              <% customGames.forEach((cg) => { %>
+              <th class="game-col"><span class="head-label"><%= cg.name %></span></th>
+              <% }) %>
+              <% if (isAdmin && !selectedGameday.settled) { %>
+              <th class="game-col"><input type="text" class="custom-game-header-input" placeholder="Spiel..." data-new-game-header /></th>
+              <% } %>
               <th><span class="head-label">Übertrag</span></th>
               <th><span class="head-label">Zu zahlen</span></th>
+              <% if (selectedGameday.settled) { %>
               <th><span class="head-label">Gezahlt</span></th>
               <th><span class="head-label">Rest</span></th>
+              <% } %>
             </tr>
           </thead>
           <tbody>
@@ -229,16 +250,6 @@
                   <span class="money-text"><%= formatEuro(hit.contribution || 0) %> €</span>
                 </td>
                 <td><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= Number(hit.penalties || 0).toFixed(2) %>" name="penalties_<%= member.id %>" class="mini-number no-spin" <%= canEdit ? "" : "disabled" %> data-field />&euro;</span></td>
-                <td>
-                  <div class="marker-controls">
-                    <input type="hidden" name="pudel_<%= member.id %>" value="<%= pudel %>" data-marker-input="pudel" <%= canEdit ? "" : "disabled" %> data-field />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="pudel" data-op="dec" aria-label="Pudel verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
-                    <span class="marker-strip" data-marker-display="pudel"><%- renderTally(pudel) %></span>
-                    <button type="button" class="mark-btn" data-mark-target="pudel" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
-                  </div>
-                  <% const costPudel = hit.present ? pudel * 0.10 : 0; %>
-                  <span class="marker-cost" data-cost-type="pudel"><%= costPudel > 0 ? formatEuro(costPudel) + ' €' : '' %></span>
-                </td>
                 <td>
                   <div class="marker-controls">
                     <input type="hidden" name="alle9_<%= member.id %>" value="<%= alle9 %>" data-marker-input="alle9" <%= canEdit ? "" : "disabled" %> data-field />
@@ -269,6 +280,34 @@
                   <% const costTriclops = hit.present ? (totalTriclopsPresent - triclops) * 0.10 : 0; %>
                   <span class="marker-cost" data-cost-type="triclops"><%= costTriclops > 0 ? formatEuro(costTriclops) + ' €' : '' %></span>
                 </td>
+                <td>
+                  <div class="marker-controls">
+                    <input type="hidden" name="pudel_<%= member.id %>" value="<%= pudel %>" data-marker-input="pudel" <%= canEdit ? "" : "disabled" %> data-field />
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="pudel" data-op="dec" aria-label="Pudel verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <span class="marker-strip" data-marker-display="pudel"><%- renderTally(pudel) %></span>
+                    <button type="button" class="mark-btn" data-mark-target="pudel" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
+                  </div>
+                  <% const costPudel = hit.present ? pudel * 0.10 : 0; %>
+                  <span class="marker-cost" data-cost-type="pudel"><%= costPudel > 0 ? formatEuro(costPudel) + ' €' : '' %></span>
+                </td>
+                <%
+                  const vaVal = Number(hit.va || 0);
+                  const monteVal = Number(hit.monte || 0);
+                  const aussteigenVal = Number(hit.aussteigen || 0);
+                  const sechsTageVal = Number(hit.sechs_tage || 0);
+                %>
+                <td class="game-col"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= vaVal.toFixed(2) %>" name="va_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
+                <td class="game-col"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= monteVal.toFixed(2) %>" name="monte_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
+                <td class="game-col"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= aussteigenVal.toFixed(2) %>" name="aussteigen_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
+                <td class="game-col"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= sechsTageVal.toFixed(2) %>" name="sechs_tage_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
+                <% customGames.forEach((cg) => {
+                  const cgVal = Number(customGameValues.get(member.id + '_' + cg.id) || 0);
+                %>
+                <td class="game-col"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= cgVal.toFixed(2) %>" data-custom-game-id="<%= cg.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-custom-game-field />&euro;</span></td>
+                <% }) %>
+                <% if (isAdmin && !selectedGameday.settled) { %>
+                <td class="game-col"></td>
+                <% } %>
                 <%
                   const carryover = Number(hit.carryover || 0);
                   const paid = Number(hit.paid || 0);
@@ -276,31 +315,43 @@
                   const alle9CostCalc = hit.present ? (totalAlle9Present - alle9) * 0.10 : 0;
                   const kranzCostCalc = hit.present ? (totalKranzPresent - kranz) * 0.10 : 0;
                   const triclopsCostCalc = hit.present ? (totalTriclopsPresent - triclops) * 0.10 : 0;
-                  const toPay = hit.present ? (hit.contribution || 0) + (hit.penalties || 0) + pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + carryover : carryover;
+                  const gameCosts = hit.present ? vaVal + monteVal + aussteigenVal + sechsTageVal : 0;
+                  let customGameTotal = 0;
+                  if (hit.present) {
+                    customGames.forEach((cg) => {
+                      customGameTotal += Number(customGameValues.get(member.id + '_' + cg.id) || 0);
+                    });
+                  }
+                  const toPay = hit.present ? (hit.contribution || 0) + (hit.penalties || 0) + pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + gameCosts + customGameTotal + carryover : carryover;
                   const rest = toPay - paid;
                 %>
                 <td>
-                  <span class="money-inline"><input type="number" max="999" step="0.10" value="<%= carryover.toFixed(2) %>" name="carryover_<%= member.id %>" class="mini-number no-spin" <%= canEdit ? "" : "disabled" %> data-field data-carryover />&euro;</span>
+                  <span class="money-text" data-carryover data-value="<%= carryover %>"><%= formatEuro(carryover) %> &euro;</span>
                 </td>
                 <td>
                   <span class="money-text" data-topay><%= formatEuro(toPay) %> &euro;</span>
                 </td>
+                <% if (selectedGameday.settled) { %>
                 <td>
-                  <span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= paid.toFixed(2) %>" name="paid_<%= member.id %>" class="mini-number no-spin" <%= canEdit ? "" : "disabled" %> data-field data-paid />&euro;</span>
+                  <span class="money-text" data-paid data-value="<%= paid %>"><%= formatEuro(paid) %> &euro;</span>
                 </td>
                 <td>
                   <span class="money-text" data-rest><%= formatEuro(rest) %> &euro;</span>
                 </td>
+                <% } %>
               </tr>
             <% }) %>
           </tbody>
         </table>
         <% if (isAdmin && !selectedGameday.settled) { %>
           <div style="margin-top: 1rem;">
-            <button type="submit">Kladde speichern</button>
+            <form method="post" action="/kegelkladde/settle" data-confirm="Spieltag wirklich abschließen?">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <button type="submit">Spieltag abschließen</button>
+            </form>
           </div>
         <% } %>
-      </form>
     </div>
 
     <!-- Mobile card view -->

@@ -107,6 +107,40 @@ if (!attendanceColumns.includes("carryover")) {
 if (!attendanceColumns.includes("paid")) {
   db.exec("ALTER TABLE attendance ADD COLUMN paid REAL NOT NULL DEFAULT 0");
 }
+if (!attendanceColumns.includes("va")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN va REAL NOT NULL DEFAULT 0");
+}
+if (!attendanceColumns.includes("monte")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN monte REAL NOT NULL DEFAULT 0");
+}
+if (!attendanceColumns.includes("aussteigen")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN aussteigen REAL NOT NULL DEFAULT 0");
+}
+if (!attendanceColumns.includes("sechs_tage")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN sechs_tage REAL NOT NULL DEFAULT 0");
+}
+
+// Custom games tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS custom_games (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gameday_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS custom_game_values (
+    gameday_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    custom_game_id INTEGER NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY(gameday_id, user_id, custom_game_id),
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(custom_game_id) REFERENCES custom_games(id) ON DELETE CASCADE
+  );
+`);
 
 // Create indexes for performance
 db.exec(`

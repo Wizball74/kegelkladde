@@ -194,12 +194,29 @@ function recalcCosts() {
       if (el) el.textContent = cost > 0 ? formatEuroCost(cost) + " €" : "";
     });
 
+    // Game fields (V+A, Monte, Aussteigen, 6-Tage)
+    const va = Number(row.querySelector('[name^="va_"]')?.value || 0);
+    const monte = Number(row.querySelector('[name^="monte_"]')?.value || 0);
+    const aussteigen = Number(row.querySelector('[name^="aussteigen_"]')?.value || 0);
+    const sechs_tage = Number(row.querySelector('[name^="sechs_tage_"]')?.value || 0);
+    const gameCosts = isPresent ? va + monte + aussteigen + sechs_tage : 0;
+
+    // Custom game fields
+    let customGameTotal = 0;
+    if (isPresent) {
+      row.querySelectorAll("[data-custom-game-field]").forEach((input) => {
+        customGameTotal += Number(input.value || 0);
+      });
+    }
+
     // Zu zahlen / Rest berechnen
     const contribution = isPresent ? 4.00 : 0;
     const penalties = Number(row.querySelector('[name^="penalties_"]')?.value || 0);
-    const carryover = Number(row.querySelector("[data-carryover]")?.value || 0);
-    const paid = Number(row.querySelector("[data-paid]")?.value || 0);
-    const toPay = isPresent ? contribution + penalties + costPudel + costOthers + carryover : carryover;
+    const carryoverEl = row.querySelector("[data-carryover]");
+    const carryover = Number(carryoverEl?.dataset.value || carryoverEl?.value || 0);
+    const paidEl = row.querySelector("[data-paid]");
+    const paid = Number(paidEl?.dataset.value || paidEl?.value || 0);
+    const toPay = isPresent ? contribution + penalties + costPudel + costOthers + gameCosts + customGameTotal + carryover : carryover;
     const rest = toPay - paid;
 
     const toPayEl = row.querySelector("[data-topay]");
@@ -244,6 +261,8 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
     input.value = String(safe);
     renderMarkers(display, safe, target);
     recalcCosts();
+    const row = controlsEl.closest("tr");
+    if (row) autoSaveRow(row);
   });
 });
 
@@ -374,12 +393,138 @@ document.querySelectorAll("[data-present]").forEach((cb) => {
       el.disabled = !cb.checked;
     });
     recalcCosts();
+    autoSaveRow(row);
   });
 });
 
-// Recalc on any number input change (Strafen, Übertrag, Gezahlt)
+// Recalc on any number input change (Strafen)
 document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
   input.addEventListener("input", () => recalcCosts());
+});
+
+// Auto-save attendance row via AJAX
+const kladdeData = document.getElementById("kladdeData");
+const kladdeSettled = kladdeData?.dataset.settled === "1";
+
+function autoSaveRow(row) {
+  if (!kladdeData || kladdeSettled) return;
+
+  const csrfToken = kladdeData.dataset.csrf;
+  const gamedayId = kladdeData.dataset.gamedayId;
+  const memberId = row.dataset.memberId;
+
+  if (!csrfToken || !gamedayId || !memberId) return;
+
+  const present = row.querySelector("[data-present]")?.checked ? 1 : 0;
+  const penalties = row.querySelector(`[name="penalties_${memberId}"]`)?.value || 0;
+  const pudel = row.querySelector('[data-marker-input="pudel"]')?.value || 0;
+  const alle9 = row.querySelector('[data-marker-input="alle9"]')?.value || 0;
+  const kranz = row.querySelector('[data-marker-input="kranz"]')?.value || 0;
+  const triclops = row.querySelector('[data-marker-input="triclops"]')?.value || 0;
+  const va = row.querySelector(`[name="va_${memberId}"]`)?.value || 0;
+  const monte = row.querySelector(`[name="monte_${memberId}"]`)?.value || 0;
+  const aussteigen = row.querySelector(`[name="aussteigen_${memberId}"]`)?.value || 0;
+  const sechs_tage = row.querySelector(`[name="sechs_tage_${memberId}"]`)?.value || 0;
+
+  showSaving();
+
+  fetch("/kegelkladde/attendance-auto", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      csrfToken, gamedayId, memberId,
+      present, penalties, pudel, alle9, kranz, triclops,
+      va, monte, aussteigen, sechs_tage
+    })
+  })
+  .then((r) => r.json())
+  .then((data) => {
+    if (data.ok) {
+      showSaved();
+    } else {
+      showToast(data.error || "Fehler beim Speichern", "error");
+    }
+  })
+  .catch(() => showToast("Fehler beim Speichern", "error"));
+}
+
+// Trigger auto-save on blur for number inputs
+document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
+  input.addEventListener("change", () => {
+    const row = input.closest("tr");
+    if (row) autoSaveRow(row);
+  });
+});
+
+// Game field inputs: recalc + auto-save
+document.querySelectorAll(".kladde-table [data-game-field]").forEach((input) => {
+  input.addEventListener("input", () => recalcCosts());
+  input.addEventListener("change", () => {
+    const row = input.closest("tr");
+    if (row) autoSaveRow(row);
+  });
+});
+
+// Custom game value inputs: recalc + AJAX save
+document.querySelectorAll(".kladde-table [data-custom-game-field]").forEach((input) => {
+  input.addEventListener("input", () => recalcCosts());
+  input.addEventListener("change", () => {
+    recalcCosts();
+    if (!kladdeData || kladdeSettled) return;
+    const row = input.closest("tr");
+    if (!row) return;
+    const csrfToken = kladdeData.dataset.csrf;
+    const gamedayId = kladdeData.dataset.gamedayId;
+    const memberId = row.dataset.memberId;
+    const customGameId = input.dataset.customGameId;
+    const amount = input.value || 0;
+
+    showSaving();
+    fetch("/kegelkladde/custom-game-value", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrfToken, gamedayId, memberId, customGameId, amount })
+    })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.ok) showSaved();
+      else showToast(data.error || "Fehler beim Speichern", "error");
+    })
+    .catch(() => showToast("Fehler beim Speichern", "error"));
+  });
+});
+
+// New custom game column: header input blur
+document.querySelectorAll("[data-new-game-header]").forEach((input) => {
+  input.addEventListener("blur", () => {
+    const name = input.value.trim();
+    if (!name || !kladdeData) return;
+
+    const csrfToken = kladdeData.dataset.csrf;
+    const gamedayId = kladdeData.dataset.gamedayId;
+
+    fetch("/kegelkladde/custom-game", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrfToken, gamedayId, name })
+    })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        showToast(data.error || "Fehler", "error");
+      }
+    })
+    .catch(() => showToast("Fehler beim Anlegen", "error"));
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+    }
+  });
 });
 
 // Inline-Edit für Rekorde/Kurioses
@@ -456,6 +601,18 @@ document.querySelectorAll(".btn-edit").forEach((btn) => {
         if (e.key === "Escape") { doCancel(); }
       });
     });
+  });
+});
+
+// Tab switching
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.tab;
+    btn.closest(".tab-nav").querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    btn.closest("section").querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    const panel = document.getElementById("tab-" + target);
+    if (panel) panel.classList.add("active");
   });
 });
 

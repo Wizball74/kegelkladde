@@ -10,7 +10,26 @@
       "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" diff --staged)",
       "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" diff)",
       "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" log --oneline -5)",
-      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" log -1 --format=\"%ci\")"
+      "Bash(git -C \"C:\\\\Daten\\\\GIT\\\\kegelkladde\" log -1 --format=\"%ci\")",
+      "Bash(npm run dev:*)",
+      "Bash(cmd /c \"npm run dev\")",
+      "Bash(cmd /c:*)",
+      "Bash(where:*)",
+      "Bash(powershell -Command \"Get-Command node -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source; node --version\")",
+      "Bash(powershell -Command:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(nvm install:*)",
+      "Bash(cmd.exe /c \"nvm install 22\")",
+      "Bash(cmd.exe /c \"nvm version\")",
+      "Bash(cmd.exe /c \"nvm list && node -v\")",
+      "Bash(node --watch:*)",
+      "Bash(nvm list:*)",
+      "Bash(nvm use:*)",
+      "Bash(copy:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh auth:*)"
     ]
   }
 }

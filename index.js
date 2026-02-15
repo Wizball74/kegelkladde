@@ -37,7 +37,7 @@ app.use(
     secret: process.env.SESSION_SECRET || "dev-only-fallback-change-me",
     proxy: true,
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true,
     cookie: {
       httpOnly: true,
       sameSite: "lax",

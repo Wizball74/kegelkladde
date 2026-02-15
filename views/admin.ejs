@@ -1,0 +1,135 @@
+<%- include("partials/top") %>
+<%
+  const formatDateDE = (isoStr) => {
+    if (!isoStr) return "";
+    const [y, m, d] = isoStr.split("-");
+    return `${d}.${m}.${y}`;
+  };
+  const today = new Date().toISOString().slice(0, 10);
+%>
+<section class="card fade-in">
+  <div class="section-head">
+    <h1>Einstellungen</h1>
+    <p class="subtle">Kassenstand, Ausgaben und Anfangswerte verwalten.</p>
+  </div>
+
+  <div class="tab-nav">
+    <button type="button" class="tab-btn active" data-tab="kasse">Kasse</button>
+    <button type="button" class="tab-btn" data-tab="anfangswerte">Anfangswerte</button>
+  </div>
+
+  <!-- Tab: Kasse -->
+  <div id="tab-kasse" class="tab-panel active">
+
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem;">
+      <div class="stat-card">
+        <div class="stat-value"><%= formatEuro(kassenstand) %> &euro;</div>
+        <div class="stat-label">Kassenstand</div>
+      </div>
+    </div>
+
+    <h2>IST-Kassenstand (Startwert)</h2>
+    <p class="subtle">Einmalig den tatsächlichen Kassenstand eingeben, ab dem gerechnet wird.</p>
+    <form method="post" action="/admin/kassenstand" class="inline-form" style="margin-bottom: 2rem;">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <label>Startwert (&euro;)
+        <input type="number" name="kassenstandStart" step="0.01" value="<%= kassenstandStart.toFixed(2) %>" required />
+      </label>
+      <button type="submit">Startwert speichern</button>
+    </form>
+
+    <h2>Ausgabe hinzufügen</h2>
+    <form method="post" action="/admin/expenses" class="inline-form" style="margin-bottom: 2rem;">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <label>Betrag (&euro;)
+        <input type="number" name="amount" step="0.01" min="0.01" required />
+      </label>
+      <label>Beschreibung
+        <input type="text" name="description" maxlength="200" required placeholder="z. B. Kugeln polieren" />
+      </label>
+      <label>Datum
+        <input type="date" name="expense_date" value="<%= today %>" required />
+      </label>
+      <button type="submit">Ausgabe speichern</button>
+    </form>
+
+    <% if (expenses.length > 0) { %>
+      <h2>Ausgaben</h2>
+      <div class="records-table-wrap">
+        <table class="records-table" id="expensesTable">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Beschreibung</th>
+              <th>Betrag</th>
+              <th class="actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% expenses.forEach((exp) => { %>
+              <tr data-expense-id="<%= exp.id %>">
+                <td class="expense-date"><%= formatDateDE(exp.expense_date) %></td>
+                <td class="expense-desc"><%= exp.description %></td>
+                <td class="expense-amount"><%= formatEuro(exp.amount) %> &euro;</td>
+                <td class="actions">
+                  <div class="action-btns">
+                    <button type="button" class="btn-edit btn-sm btn-expense-edit" title="Bearbeiten">&#x270E;</button>
+                    <form method="post" action="/admin/expenses/delete" data-confirm="Ausgabe wirklich löschen?">
+                      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                      <input type="hidden" name="expenseId" value="<%= exp.id %>" />
+                      <button type="submit" class="btn-danger btn-sm">&times;</button>
+                    </form>
+                  </div>
+                  <form method="post" action="/admin/expenses/edit" class="edit-form" style="display:none">
+                    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                    <input type="hidden" name="expenseId" value="<%= exp.id %>" />
+                    <input type="hidden" name="amount" class="edit-amount-val" />
+                    <input type="hidden" name="description" class="edit-desc-val" />
+                    <input type="hidden" name="expense_date" class="edit-date-val" />
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p class="subtle">Noch keine Ausgaben erfasst.</p>
+    <% } %>
+  </div>
+
+  <!-- Tab: Anfangswerte -->
+  <div id="tab-anfangswerte" class="tab-panel">
+    <p class="subtle">Anfangswerte, die vor dem ersten erfassten Spieltag gelten. Der Übertrag wird nur für neue Spieltage verwendet, wenn kein vorheriger Spieltag existiert.</p>
+    <form method="post" action="/admin/initial-values">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>9er</th>
+              <th>Kränze</th>
+              <th>Übertrag (&euro;)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% members.forEach((m) => {
+              const iv = initialMap.get(m.id) || { initial_alle9: 0, initial_kranz: 0, initial_carryover: 0 };
+            %>
+              <tr>
+                <td><%= m.display_name %></td>
+                <td><input type="number" name="initial_alle9_<%= m.id %>" min="0" value="<%= iv.initial_alle9 %>" class="mini-number" style="width:60px" /></td>
+                <td><input type="number" name="initial_kranz_<%= m.id %>" min="0" value="<%= iv.initial_kranz %>" class="mini-number" style="width:60px" /></td>
+                <td><input type="number" name="initial_carryover_<%= m.id %>" step="0.01" value="<%= iv.initial_carryover.toFixed(2) %>" class="mini-number no-spin" style="width:70px" /></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <button type="submit" style="margin-top: 1rem;">Anfangswerte speichern</button>
+    </form>
+  </div>
+
+</section>
+<%- include("partials/bottom") %>

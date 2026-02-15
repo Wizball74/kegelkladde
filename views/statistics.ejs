@@ -91,8 +91,8 @@
         <div class="stat-label">Abgerechnet</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value"><%= formatEuro(totalContributions) %> €</div>
-        <div class="stat-label">Beiträge</div>
+        <div class="stat-value"><%= formatEuro(totalPaid) %> €</div>
+        <div class="stat-label">Zahlungen</div>
       </div>
       <div class="stat-card">
         <div class="stat-value"><%= totalPenalties %></div>
@@ -123,40 +123,14 @@
         </div>
       <% } %>
 
-      <% if (topContributors.length > 0) { %>
+      <% if (topPayers.length > 0) { %>
         <div class="leaderboard">
-          <div class="leaderboard-header">Höchste Beiträge</div>
-          <% topContributors.forEach((item, i) => { %>
+          <div class="leaderboard-header">Summe Zahlungen</div>
+          <% topPayers.forEach((item, i) => { %>
             <div class="leaderboard-item">
               <span class="leaderboard-rank"><%= i + 1 %></span>
               <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
               <span class="leaderboard-value"><%= formatEuro(item.total) %> €</span>
-            </div>
-          <% }) %>
-        </div>
-      <% } %>
-
-      <% if (topAlle9.length > 0) { %>
-        <div class="leaderboard">
-          <div class="leaderboard-header">Meiste Alle-9</div>
-          <% topAlle9.forEach((item, i) => { %>
-            <div class="leaderboard-item">
-              <span class="leaderboard-rank"><%= i + 1 %></span>
-              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-              <span class="leaderboard-value"><%= item.total %>×</span>
-            </div>
-          <% }) %>
-        </div>
-      <% } %>
-
-      <% if (topKranz.length > 0) { %>
-        <div class="leaderboard">
-          <div class="leaderboard-header">Meiste Kränze</div>
-          <% topKranz.forEach((item, i) => { %>
-            <div class="leaderboard-item">
-              <span class="leaderboard-rank"><%= i + 1 %></span>
-              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
-              <span class="leaderboard-value"><%= item.total %>×</span>
             </div>
           <% }) %>
         </div>
@@ -219,7 +193,7 @@
                 <td><a href="/kegelkladde?gamedayId=<%= day.id %>"><%= day.match_date %></a></td>
                 <td><%= day.note || '-' %></td>
                 <%
-                  const sLabels = ['Noch nicht begonnen', 'Gut Holz!', 'Abrechnung', 'Archiv'];
+                  const sLabels = ['Noch nicht begonnen', 'Spieltag läuft - gut Holz!', 'Abrechnung', 'Archiv'];
                   const sBadges = ['badge-muted', 'badge-warning', 'badge-info', 'badge-success'];
                 %>
                 <td>

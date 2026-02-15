@@ -29,7 +29,20 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(curl:*)",
+      "Bash(sqlite3:*)",
+      "Bash(netstat:*)",
+      "Bash(ss:*)",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :3000 | findstr LISTENING\")",
+      "Bash(cmd.exe /c \"for /f \"\"tokens=5\"\" %a in \\(''netstat -ano ^| findstr :3000 ^| findstr ABHÖREN''\\) do taskkill /PID %a /F\")",
+      "Bash(cmd.exe /c \"for /f \"\"tokens=5\"\" %a in \\(''netstat -ano ^| findstr :3000 ^| findstr LISTENING''\\) do taskkill /PID %a /F\")",
+      "Bash(cmd.exe /c \"taskkill /IM node.exe /F\")",
+      "Bash(cmd.exe /c \"netstat -ano | findstr 3000\")",
+      "Bash(powershell.exe -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object OwningProcess,State\")",
+      "Bash(powershell.exe -Command \"Stop-Process -Id 3764 -Force\")",
+      "WebSearch",
+      "Bash(timeout 8 node:*)"
     ]
   }
 }

@@ -84,6 +84,9 @@ const gamedayColumns = db.prepare("PRAGMA table_info(gamedays)").all().map((c) =
 if (!gamedayColumns.includes("settled")) {
   db.exec("ALTER TABLE gamedays ADD COLUMN settled INTEGER NOT NULL DEFAULT 0");
 }
+if (!gamedayColumns.includes("lane_cost")) {
+  db.exec("ALTER TABLE gamedays ADD COLUMN lane_cost REAL NOT NULL DEFAULT 0");
+}
 
 // Migration tracking
 db.exec(`CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
@@ -151,7 +154,43 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(custom_game_id) REFERENCES custom_games(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    amount REAL NOT NULL,
+    description TEXT NOT NULL,
+    expense_date TEXT NOT NULL,
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS member_initial_values (
+    user_id INTEGER PRIMARY KEY,
+    initial_alle9 INTEGER NOT NULL DEFAULT 0,
+    initial_kranz INTEGER NOT NULL DEFAULT 0,
+    initial_carryover REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS gameday_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gameday_id INTEGER NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('cost', 'income')),
+    name TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE
+  );
 `);
+
+// Migration: alte gameday_costs Tabelle entfernen falls vorhanden
+db.exec("DROP TABLE IF EXISTS gameday_costs");
 
 // Create indexes for performance
 db.exec(`
@@ -162,6 +201,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_records_section ON records(section);
   CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date DESC);
 `);
 
 // Encryption functions
@@ -268,11 +308,51 @@ function logAudit(userId, action, targetType = null, targetId = null, details = 
   }
 }
 
+// Kassenstand berechnen
+function getKassenstand() {
+  const details = getKassenstandDetails();
+  return details.kassenstand;
+}
+
+function getKassenstandDetails() {
+  const startRow = db.prepare("SELECT value FROM settings WHERE key = 'kassenstand_start'").get();
+  const start = Number(startRow?.value || 0);
+  const totalPaid = db.prepare("SELECT COALESCE(SUM(paid), 0) as total FROM attendance").get().total;
+  const totalIncome = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM gameday_entries WHERE type = 'income'").get().total;
+  const totalCosts = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM gameday_entries WHERE type = 'cost'").get().total;
+  const totalExpenses = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM expenses").get().total;
+  const kassenstand = Math.round((start + totalPaid + totalIncome - totalCosts - totalExpenses) * 100) / 100;
+  return { start, totalPaid, totalIncome, totalCosts, totalExpenses, kassenstand };
+}
+
+// Kassenstand-Aufstellung für einen bestimmten Spieltag
+function getKassenstandForGameday(gamedayId) {
+  const details = getKassenstandDetails();
+  const gamedayPaid = db.prepare("SELECT COALESCE(SUM(paid), 0) as total FROM attendance WHERE gameday_id = ?").get(gamedayId).total;
+  const gamedayIncome = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM gameday_entries WHERE gameday_id = ? AND type = 'income'").get(gamedayId).total;
+  const gamedayCostTotal = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM gameday_entries WHERE gameday_id = ? AND type = 'cost'").get(gamedayId).total;
+  const previousKassenstand = Math.round((details.kassenstand - gamedayPaid - gamedayIncome + gamedayCostTotal) * 100) / 100;
+  const incomeItems = db.prepare("SELECT id, name, amount FROM gameday_entries WHERE gameday_id = ? AND type = 'income' ORDER BY sort_order, id").all(gamedayId);
+  const costItems = db.prepare("SELECT id, name, amount FROM gameday_entries WHERE gameday_id = ? AND type = 'cost' ORDER BY sort_order, id").all(gamedayId);
+  return {
+    previousKassenstand,
+    gamedayPaid,
+    gamedayIncome,
+    gamedayCostTotal,
+    incomeItems,
+    costItems,
+    kassenstand: details.kassenstand
+  };
+}
+
 module.exports = {
   db,
   encrypt,
   decrypt,
   getOrderedMembers,
   withDisplayNames,
-  logAudit
+  logAudit,
+  getKassenstand,
+  getKassenstandDetails,
+  getKassenstandForGameday
 };

@@ -9,6 +9,7 @@ const kegelkladdeRoutes = require("./routes/kegelkladde");
 const membersRoutes = require("./routes/members");
 const recordsRoutes = require("./routes/records");
 const statisticsRoutes = require("./routes/statistics");
+const adminRoutes = require("./routes/admin");
 
 // Import middleware
 const { requireInitialized, flashMiddleware, setLocals } = require("./middleware/auth");
@@ -58,6 +59,7 @@ app.use(kegelkladdeRoutes);
 app.use(membersRoutes);
 app.use(recordsRoutes);
 app.use(statisticsRoutes);
+app.use(adminRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

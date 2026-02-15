@@ -566,7 +566,7 @@ textarea:focus {
 .kladde-table th,
 .kladde-table td {
   border-bottom: 1px solid var(--line);
-  padding: 0.35rem 0.5rem;
+  padding: 0.25rem 0.1rem;
   text-align: center;
   border-right: 1px solid #eee;
   white-space: nowrap;
@@ -824,7 +824,7 @@ td.col-active.cell-empty > * {
 }
 
 .mini-number.no-spin {
-  width: 45px;
+  width: 36px;
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -898,10 +898,10 @@ td.col-active.cell-empty > * {
 .marker-strip {
   min-height: 18px;
   width: 40px;
-  border: 1px solid var(--line);
+  /*border: 1px solid var(--line);*/
   border-radius: 7px;
   padding: 1px 3px;
-  background: #fff;
+  background: #00000011;
   font-size: 0.7rem;
   text-align: left;
   overflow: hidden;
@@ -1212,6 +1212,100 @@ td.col-active.cell-empty > * {
 .order-list button {
   padding: 0.25rem 0.5rem;
   margin-left: 0.25rem;
+}
+
+/* Kladde Footer: Status + Kassenstand */
+.kladde-footer {
+  margin-top: 1.25rem;
+}
+
+.kassenstand-summary {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8f5eb;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.kassenstand-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.kassenstand-table td {
+  padding: 0.3rem 0.5rem;
+  border: none;
+}
+
+.kassenstand-table td:first-child {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ks-value {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ks-plus {
+  color: var(--success);
+}
+
+.ks-minus {
+  color: var(--error);
+}
+
+.ks-entry-row .money-inline {
+  justify-content: flex-end;
+}
+
+.ks-entry-input {
+  width: 60px;
+  text-align: right;
+}
+
+.ks-new-entry td {
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+}
+
+.ks-new-entry-input {
+  border: 1px dashed var(--line);
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  width: 180px;
+}
+
+.ks-new-entry-input::placeholder {
+  color: var(--line);
+  font-style: italic;
+}
+
+.ks-new-entry-input:focus {
+  border-color: var(--accent);
+  background: #fff;
+  color: var(--ink);
+}
+
+.ks-divider td {
+  padding: 0;
+  height: 1px;
+  background: var(--line);
+}
+
+.ks-total td:first-child {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ks-total .ks-value {
+  font-size: 1.1rem;
+  color: var(--accent);
 }
 
 /* Gameday navigation */

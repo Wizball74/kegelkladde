@@ -25,7 +25,7 @@
       <img src="/sheep_title.png" alt="KC Schaf Maskottchen" class="brand-mascot" />
       <div>
         <strong>KC Schaf Zeilsheim</strong>
-        <small>Vereinsportal</small>
+        <small>Per aspera ad astra - määh!</small>
       </div>
     </a>
 
@@ -37,6 +37,7 @@
         <a href="/members">Mitglieder</a>
         <a href="/ranglisten">Ranglisten</a>
         <a href="/kurioses">Kurioses</a>
+        <% if (isAdmin) { %><a href="/admin">Einstellungen</a><% } %>
       </nav>
 
       <!-- Desktop logout -->
@@ -62,6 +63,7 @@
       <a href="/members">Mitglieder</a>
       <a href="/ranglisten">Ranglisten</a>
       <a href="/kurioses">Kurioses</a>
+      <% if (isAdmin) { %><a href="/admin">Einstellungen</a><% } %>
       <form method="post" action="/logout" style="margin-top: 0.5rem;">
         <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
         <button type="submit" style="width: 100%;">Logout (<%= currentUser.firstName %>)</button>

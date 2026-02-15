@@ -15,11 +15,6 @@
   };
 %>
 <section class="card fade-in">
-  <div class="section-head">
-    <h1>Kegelkladde</h1>
-    <p class="subtle">Per aspera ad astra - määh!.</p>
-  </div>
-
   <%
     // Datum-Formatierung DD.MM.YYYY
     const formatDateDE = (isoStr) => {
@@ -135,39 +130,10 @@ Spieltag starten, um die Kladde zu bearbeiten.
 
     <%
       const status = selectedGameday.settled;
-      const statusLabels = ['Noch nicht begonnen', 'Gut Holz!', 'Abrechnung', 'Archiv'];
+      const statusLabels = ['Noch nicht begonnen', 'Spieltag läuft - gut Holz!', 'Abrechnung', 'Archiv'];
       const statusBadges = ['badge-muted', 'badge-warning', 'badge-info', 'badge-success'];
       const advanceLabels = [null, 'Abrechnen!', 'Abrechnung beenden'];
     %>
-    <div class="settle-row">
-      <p>
-        Status:
-        <span class="badge <%= statusBadges[status] %>"><%= statusLabels[status] %></span>
-      </p>
-      <div class="settle-actions">
-        <% if (status > 0) { %>
-          <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurücksetzen?">
-            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-            <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
-            <button type="submit" class="btn-secondary btn-sm">&laquo; Zurück</button>
-          </form>
-        <% } %>
-        <% if (status >= 1 && status < 3) { %>
-          <form method="post" action="/kegelkladde/advance-status" data-confirm="<%= advanceLabels[status] %>?">
-            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-            <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
-            <button type="submit" class="btn-primary btn-sm"><%= advanceLabels[status] %> &raquo;</button>
-          </form>
-        <% } %>
-        <% if (isAdmin) { %>
-          <form method="post" action="/kegelkladde/delete" data-confirm="Spieltag wirklich löschen? Alle Daten gehen verloren!">
-            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-            <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
-            <button type="submit" class="btn-danger btn-sm">Löschen</button>
-          </form>
-        <% } %>
-      </div>
-    </div>
 
     <%
       let totalAlle9Present = 0, totalKranzPresent = 0, totalTriclopsPresent = 0;
@@ -364,6 +330,101 @@ Spieltag starten, um die Kladde zu bearbeiten.
         </table>
     </div>
     </div>
+
+    <!-- Footer: Status + Kassenstand-Aufstellung -->
+    <div class="kladde-footer">
+      <div class="settle-row">
+        <p>
+          Status:
+          <span class="badge <%= statusBadges[status] %>"><%= statusLabels[status] %></span>
+        </p>
+        <div class="settle-actions">
+          <% if (status > 0) { %>
+            <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurücksetzen?">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <button type="submit" class="btn-secondary btn-sm">&laquo; Zurück</button>
+            </form>
+          <% } %>
+          <% if (status >= 1 && status < 3) { %>
+            <form method="post" action="/kegelkladde/advance-status" data-confirm="<%= advanceLabels[status] %>?">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <button type="submit" class="btn-primary btn-sm"><%= advanceLabels[status] %> &raquo;</button>
+            </form>
+          <% } %>
+          <% if (isAdmin) { %>
+            <form method="post" action="/kegelkladde/delete" data-confirm="Spieltag wirklich löschen? Alle Daten gehen verloren!">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <button type="submit" class="btn-danger btn-sm">Löschen</button>
+            </form>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="kassenstand-summary" id="kassenstandSummary"
+           data-gameday-id="<%= selectedGameday.id %>"
+           data-csrf="<%= csrfToken %>"
+           data-status="<%= status %>">
+        <table class="kassenstand-table">
+          <tbody>
+            <tr>
+              <td>Kassenstand vor Spieltag:</td>
+              <td class="ks-value" id="ksPrev"><%= formatEuro(ksGameday.previousKassenstand) %> &euro;</td>
+            </tr>
+            <tr>
+              <td>+ Einnahmen Spieltag:</td>
+              <td class="ks-value ks-plus" id="ksPaid">+<%= formatEuro(ksGameday.gamedayPaid) %> &euro;</td>
+            </tr>
+            <% ksGameday.incomeItems.forEach((ci) => { %>
+            <tr class="ks-entry-row" data-entry-id="<%= ci.id %>">
+              <td>+ <%= ci.name %>:</td>
+              <td class="ks-value ks-plus">
+                <% if (status <= 2) { %>
+                  <span class="money-inline">+<input type="number" min="0" max="9999" step="0.01" value="<%= Number(ci.amount).toFixed(2) %>" class="mini-number no-spin ks-entry-input" data-entry-id="<%= ci.id %>" />&euro;</span>
+                <% } else { %>
+                  +<%= formatEuro(ci.amount) %> &euro;
+                <% } %>
+              </td>
+            </tr>
+            <% }) %>
+            <% if (status <= 2) { %>
+            <tr class="ks-new-entry">
+              <td colspan="2">
+                <input type="text" class="ks-new-entry-input" placeholder="Neue Einnahme..." maxlength="40" data-entry-type="income" />
+              </td>
+            </tr>
+            <% } %>
+            <% ksGameday.costItems.forEach((ci) => { %>
+            <tr class="ks-entry-row" data-entry-id="<%= ci.id %>">
+              <td>&minus; <%= ci.name %>:</td>
+              <td class="ks-value ks-minus">
+                <% if (status <= 2) { %>
+                  <span class="money-inline">&minus;<input type="number" min="0" max="9999" step="0.01" value="<%= Number(ci.amount).toFixed(2) %>" class="mini-number no-spin ks-entry-input" data-entry-id="<%= ci.id %>" />&euro;</span>
+                <% } else { %>
+                  &minus;<%= formatEuro(ci.amount) %> &euro;
+                <% } %>
+              </td>
+            </tr>
+            <% }) %>
+            <% if (status <= 2) { %>
+            <tr class="ks-new-entry">
+              <td colspan="2">
+                <input type="text" class="ks-new-entry-input" placeholder="Neue Kosten..." maxlength="40" data-entry-type="cost" />
+              </td>
+            </tr>
+            <% } %>
+            <tr class="ks-divider"><td colspan="2"></td></tr>
+            <tr class="ks-total">
+              <td>= Kassenstand:</td>
+              <td class="ks-value" id="ksTotal"><%= formatEuro(ksGameday.kassenstand) %> &euro;</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   <% } %>
 </section>
 

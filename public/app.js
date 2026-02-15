@@ -500,11 +500,84 @@ function autoSaveRow(row) {
   .then((data) => {
     if (data.ok) {
       showSaved();
+      if (kladdeStatus === 2) updateKassenstand();
     } else {
       showToast(data.error || "Fehler beim Speichern", "error");
     }
   })
   .catch(() => showToast("Fehler beim Speichern", "error"));
+}
+
+// Live-Update Kassenstand (Spieltag-bezogen)
+function updateKassenstand() {
+  const summary = document.getElementById("kassenstandSummary");
+  if (!summary) return;
+  const gamedayId = summary.dataset.gamedayId;
+  if (!gamedayId) return;
+  fetch("/api/kassenstand?gamedayId=" + encodeURIComponent(gamedayId))
+    .then((r) => r.json())
+    .then((data) => {
+      const el = (id) => document.getElementById(id);
+      if (el("ksPrev")) el("ksPrev").textContent = formatEuroCost(data.previousKassenstand) + " \u20ac";
+      if (el("ksPaid")) el("ksPaid").textContent = "+" + formatEuroCost(data.gamedayPaid) + " \u20ac";
+      if (el("ksTotal")) el("ksTotal").textContent = formatEuroCost(data.kassenstand) + " \u20ac";
+    })
+    .catch(() => {});
+}
+
+// Spieltag-Einträge (Kosten + Einnahmen): Betrag speichern + neue anlegen
+function initGamedayCosts() {
+  const summary = document.getElementById("kassenstandSummary");
+  if (!summary) return;
+
+  const gamedayId = summary.dataset.gamedayId;
+  const csrfToken = summary.dataset.csrf;
+
+  // Betrag-Inputs: AJAX-Save bei Änderung
+  summary.querySelectorAll(".ks-entry-input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const entryId = input.dataset.entryId;
+      showSaving();
+      fetch("/kegelkladde/gameday-entry-value", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csrfToken, entryId, amount: input.value || 0 })
+      })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) { showSaved(); updateKassenstand(); }
+        else showToast(data.error || "Fehler", "error");
+      })
+      .catch(() => showToast("Fehler beim Speichern", "error"));
+    });
+  });
+
+  // Neue Einträge anlegen (Kosten oder Einnahmen)
+  summary.querySelectorAll(".ks-new-entry-input").forEach((newInput) => {
+    function createEntry() {
+      const name = newInput.value.trim();
+      if (!name) return;
+      const type = newInput.dataset.entryType;
+      newInput.disabled = true;
+
+      fetch("/kegelkladde/gameday-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csrfToken, gamedayId, name, type })
+      })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) window.location.reload();
+        else { showToast(data.error || "Fehler", "error"); newInput.disabled = false; }
+      })
+      .catch(() => { showToast("Fehler beim Anlegen", "error"); newInput.disabled = false; });
+    }
+
+    newInput.addEventListener("blur", createEntry);
+    newInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); newInput.blur(); }
+    });
+  });
 }
 
 // Trigger auto-save on blur for number inputs
@@ -675,6 +748,92 @@ document.querySelectorAll(".btn-edit").forEach((btn) => {
     cancelBtn.addEventListener("click", doCancel);
 
     // Enter = Speichern, Escape = Abbrechen
+    row.querySelectorAll(".edit-input").forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); doSave(); }
+        if (e.key === "Escape") { doCancel(); }
+      });
+    });
+  });
+});
+
+// Inline-Edit für Ausgaben
+document.querySelectorAll(".btn-expense-edit").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const row = btn.closest("tr");
+    if (row.classList.contains("editing")) return;
+
+    const dateCell = row.querySelector(".expense-date");
+    const descCell = row.querySelector(".expense-desc");
+    const amountCell = row.querySelector(".expense-amount");
+    const actionsCell = row.querySelector(".actions");
+    const actionBtns = actionsCell.querySelector(".action-btns");
+    const editForm = actionsCell.querySelector(".edit-form");
+
+    const origDate = dateCell.textContent.trim();
+    const origDesc = descCell.textContent.trim();
+    const origAmount = amountCell.textContent.trim().replace(/[^\d,.-]/g, "").replace(",", ".");
+
+    // DD.MM.YYYY -> YYYY-MM-DD
+    const [d, m, y] = origDate.split(".");
+    const isoDate = `${y}-${m}-${d}`;
+
+    row.classList.add("editing");
+
+    dateCell.innerHTML = '<input type="date" class="edit-input" value="' + isoDate + '" />';
+    descCell.innerHTML = '<input type="text" class="edit-input" value="' + origDesc.replace(/"/g, '&quot;') + '" maxlength="200" />';
+    amountCell.innerHTML = '<input type="number" class="edit-input" step="0.01" min="0.01" value="' + origAmount + '" style="width:80px" />';
+
+    actionBtns.style.display = "none";
+    editForm.style.display = "";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "btn-save btn-sm";
+    saveBtn.textContent = "\u2713";
+    saveBtn.title = "Speichern";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn-cancel btn-sm";
+    cancelBtn.textContent = "\u2717";
+    cancelBtn.title = "Abbrechen";
+
+    const editBtns = document.createElement("div");
+    editBtns.className = "action-btns edit-active-btns";
+    editBtns.appendChild(saveBtn);
+    editBtns.appendChild(cancelBtn);
+    actionsCell.appendChild(editBtns);
+
+    descCell.querySelector("input").focus();
+
+    function doSave() {
+      const newDate = dateCell.querySelector("input").value;
+      const newDesc = descCell.querySelector("input").value.trim();
+      const newAmount = amountCell.querySelector("input").value;
+      if (!newDate || !newDesc || !newAmount) {
+        showToast("Alle Felder müssen ausgefüllt sein.", "error");
+        return;
+      }
+      editForm.querySelector(".edit-date-val").value = newDate;
+      editForm.querySelector(".edit-desc-val").value = newDesc;
+      editForm.querySelector(".edit-amount-val").value = newAmount;
+      editForm.submit();
+    }
+
+    function doCancel() {
+      row.classList.remove("editing");
+      dateCell.textContent = origDate;
+      descCell.textContent = origDesc;
+      amountCell.textContent = origAmount.replace(".", ",") + " \u20ac";
+      actionBtns.style.display = "";
+      editForm.style.display = "none";
+      editBtns.remove();
+    }
+
+    saveBtn.addEventListener("click", doSave);
+    cancelBtn.addEventListener("click", doCancel);
+
     row.querySelectorAll(".edit-input").forEach((input) => {
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); doSave(); }
@@ -1297,6 +1456,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initMobileByGame();
   initMobileCards();
   initEditLocks();
+  initGamedayCosts();
   recalcCosts();
   const flashData = document.getElementById("flashData");
   if (flashData) {

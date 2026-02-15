@@ -1,5 +1,5 @@
 const express = require("express");
-const { db, getOrderedMembers, withDisplayNames, logAudit } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
@@ -82,6 +82,8 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
     }
   }
 
+  const ksGameday = selectedGameday ? getKassenstandForGameday(selectedGameday.id) : null;
+
   res.render("kegelkladde", {
     members,
     gamedays,
@@ -91,7 +93,8 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
     nextDate,
     isNext,
     customGames,
-    customGameValues
+    customGameValues,
+    ksGameday
   });
 });
 
@@ -155,8 +158,15 @@ router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
         toPay = (r.contribution || 0) + (r.penalties || 0) + (r.carryover || 0);
       }
       const rest = Math.round((toPay - (r.paid || 0)) * 100) / 100;
-      if (rest !== 0) prevRestMap.set(r.user_id, rest);
+      prevRestMap.set(r.user_id, rest);
     }
+  }
+
+  // Anfangswerte laden (fuer Uebertrag wenn kein vorheriger Spieltag)
+  const initialRows = db.prepare("SELECT user_id, initial_carryover FROM member_initial_values").all();
+  const initialMap = new Map();
+  for (const iv of initialRows) {
+    initialMap.set(iv.user_id, iv);
   }
 
   const insertAttendance = db.prepare(
@@ -165,11 +175,20 @@ router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
 
   const trx = db.transaction(() => {
     for (const m of members) {
-      const carryover = prevRestMap.get(m.id) || 0;
+      let carryover;
+      if (prevDay && prevRestMap.has(m.id)) {
+        carryover = prevRestMap.get(m.id);
+      } else {
+        const iv = initialMap.get(m.id);
+        carryover = iv ? iv.initial_carryover : 0;
+      }
       insertAttendance.run(result.lastInsertRowid, m.id, DEFAULT_CONTRIBUTION_EUR, carryover);
     }
   });
   trx();
+
+  // "Kosten Bahn" automatisch anlegen
+  db.prepare("INSERT INTO gameday_entries (gameday_id, type, name, amount, sort_order) VALUES (?, 'cost', 'Kosten Bahn', 0, 1)").run(result.lastInsertRowid);
 
   logAudit(req.session.userId, "GAMEDAY_CREATE", "gameday", result.lastInsertRowid, { matchDate, note });
   req.session.flash = { type: "success", message: `Spieltag ${matchDate} angelegt.` };
@@ -273,7 +292,7 @@ router.post("/kegelkladde/attendance-auto", requireAuth, verifyCsrf, (req, res) 
 });
 
 // Status: 0=Noch nicht begonnen, 1=Gut Holz!, 2=Abrechnung, 3=Archiv
-const STATUS_LABELS = ["Noch nicht begonnen", "Gut Holz!", "Abrechnung", "Archiv"];
+const STATUS_LABELS = ["Noch nicht begonnen", "Spieltag läuft - gut Holz!", "Abrechnung", "Archiv"];
 
 router.post("/kegelkladde/advance-status", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
@@ -324,6 +343,7 @@ router.post("/kegelkladde/delete", requireAuth, requireAdmin, verifyCsrf, (req, 
     return res.redirect("/kegelkladde");
   }
 
+  db.prepare("DELETE FROM gameday_entries WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM custom_game_values WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM custom_games WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM attendance WHERE gameday_id = ?").run(gamedayId);
@@ -419,6 +439,44 @@ router.post("/kegelkladde/member-order", requireAuth, requireAdmin, verifyCsrf, 
 
   req.session.flash = { type: "success", message: "Reihenfolge gespeichert." };
   res.redirect("/members");
+});
+
+// --- Spieltag-Einträge (Kosten + Einnahmen) ---
+
+router.post("/kegelkladde/gameday-entry", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const name = sanitize(req.body.name, 40);
+  const type = req.body.type === "income" ? "income" : "cost";
+
+  if (!Number.isInteger(gamedayId) || !name) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day) return res.status(404).json({ error: "Spieltag nicht gefunden." });
+  if (day.settled > 2) return res.status(400).json({ error: "Spieltag ist archiviert." });
+
+  const maxOrder = db.prepare("SELECT MAX(sort_order) as mx FROM gameday_entries WHERE gameday_id = ? AND type = ?").get(gamedayId, type);
+  const sortOrder = (maxOrder?.mx || 0) + 1;
+
+  const result = db.prepare("INSERT INTO gameday_entries (gameday_id, type, name, amount, sort_order) VALUES (?, ?, ?, 0, ?)").run(gamedayId, type, name, sortOrder);
+  res.json({ ok: true, id: Number(result.lastInsertRowid), name, type });
+});
+
+router.post("/kegelkladde/gameday-entry-value", requireAuth, verifyCsrf, (req, res) => {
+  const entryId = Number.parseInt(req.body.entryId, 10);
+  const amount = Math.max(0, Math.round((Number.parseFloat(req.body.amount) || 0) * 100) / 100);
+
+  if (!Number.isInteger(entryId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const entry = db.prepare("SELECT e.id, g.settled, g.id as gid FROM gameday_entries e JOIN gamedays g ON g.id = e.gameday_id WHERE e.id = ?").get(entryId);
+  if (!entry) return res.status(404).json({ error: "Eintrag nicht gefunden." });
+  if (entry.settled > 2) return res.status(400).json({ error: "Spieltag ist archiviert." });
+
+  db.prepare("UPDATE gameday_entries SET amount = ? WHERE id = ?").run(amount, entryId);
+  res.json({ ok: true, ...getKassenstandForGameday(entry.gid) });
 });
 
 // --- Edit-Lock Endpoints ---

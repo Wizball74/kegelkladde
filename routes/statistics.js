@@ -9,8 +9,8 @@ router.get("/statistik", requireAuth, (req, res) => {
   const totalGamedays = db.prepare("SELECT COUNT(*) as count FROM gamedays").get().count;
   const settledGamedays = db.prepare("SELECT COUNT(*) as count FROM gamedays WHERE settled = 3").get().count;
 
-  // Total contributions
-  const totalContributions = db.prepare("SELECT COALESCE(SUM(contribution), 0) as total FROM attendance").get().total;
+  // Total payments
+  const totalPaid = db.prepare("SELECT COALESCE(SUM(paid), 0) as total FROM attendance").get().total;
   const totalPenalties = db.prepare("SELECT COALESCE(SUM(penalties), 0) as total FROM attendance").get().total;
 
   // Member count
@@ -28,19 +28,9 @@ router.get("/statistik", requireAuth, (req, res) => {
     LIMIT 5
   `).all();
 
-  // Top contributions
-  const topContributors = db.prepare(`
-    SELECT u.first_name, u.last_name, COALESCE(SUM(a.contribution), 0) as total
-    FROM attendance a
-    JOIN users u ON a.user_id = u.id
-    GROUP BY a.user_id
-    ORDER BY total DESC
-    LIMIT 5
-  `).all();
-
-  // Top alle9
-  const topAlle9 = db.prepare(`
-    SELECT u.first_name, u.last_name, COALESCE(SUM(a.alle9), 0) as total
+  // Top payments
+  const topPayers = db.prepare(`
+    SELECT u.first_name, u.last_name, COALESCE(SUM(a.paid), 0) as total
     FROM attendance a
     JOIN users u ON a.user_id = u.id
     GROUP BY a.user_id
@@ -49,11 +39,26 @@ router.get("/statistik", requireAuth, (req, res) => {
     LIMIT 5
   `).all();
 
-  // Top kranz
-  const topKranz = db.prepare(`
-    SELECT u.first_name, u.last_name, COALESCE(SUM(a.kranz), 0) as total
+  // Top alle9 (inkl. Anfangswerte)
+  const topAlle9 = db.prepare(`
+    SELECT u.first_name, u.last_name,
+      COALESCE(SUM(a.alle9), 0) + COALESCE(iv.initial_alle9, 0) as total
     FROM attendance a
     JOIN users u ON a.user_id = u.id
+    LEFT JOIN member_initial_values iv ON iv.user_id = u.id
+    GROUP BY a.user_id
+    HAVING total > 0
+    ORDER BY total DESC
+    LIMIT 5
+  `).all();
+
+  // Top kranz (inkl. Anfangswerte)
+  const topKranz = db.prepare(`
+    SELECT u.first_name, u.last_name,
+      COALESCE(SUM(a.kranz), 0) + COALESCE(iv.initial_kranz, 0) as total
+    FROM attendance a
+    JOIN users u ON a.user_id = u.id
+    LEFT JOIN member_initial_values iv ON iv.user_id = u.id
     GROUP BY a.user_id
     HAVING total > 0
     ORDER BY total DESC
@@ -100,27 +105,29 @@ router.get("/statistik", requireAuth, (req, res) => {
     monthName: monthNames[parseInt(m.month, 10) - 1]
   }));
 
-  // Per-member 9er stats
+  // Per-member 9er stats (inkl. Anfangswerte)
   const neunerStats = db.prepare(`
     SELECT u.first_name, u.last_name,
-      COALESCE(SUM(a.alle9), 0) as total,
+      COALESCE(SUM(a.alle9), 0) + COALESCE(iv.initial_alle9, 0) as total,
       COUNT(*) as games,
       ROUND(CAST(COALESCE(SUM(a.alle9), 0) AS REAL) / COUNT(*), 2) as avg
     FROM attendance a
     JOIN users u ON a.user_id = u.id
+    LEFT JOIN member_initial_values iv ON iv.user_id = u.id
     WHERE a.present = 1
     GROUP BY a.user_id
     ORDER BY total DESC
   `).all();
 
-  // Per-member Kranz stats
+  // Per-member Kranz stats (inkl. Anfangswerte)
   const kraenzeStats = db.prepare(`
     SELECT u.first_name, u.last_name,
-      COALESCE(SUM(a.kranz), 0) as total,
+      COALESCE(SUM(a.kranz), 0) + COALESCE(iv.initial_kranz, 0) as total,
       COUNT(*) as games,
       ROUND(CAST(COALESCE(SUM(a.kranz), 0) AS REAL) / COUNT(*), 2) as avg
     FROM attendance a
     JOIN users u ON a.user_id = u.id
+    LEFT JOIN member_initial_values iv ON iv.user_id = u.id
     WHERE a.present = 1
     GROUP BY a.user_id
     ORDER BY total DESC
@@ -129,12 +136,12 @@ router.get("/statistik", requireAuth, (req, res) => {
   res.render("statistics", {
     totalGamedays,
     settledGamedays,
-    totalContributions,
+    totalPaid,
     totalPenalties,
     memberCount,
     guestCount,
     topAttendance,
-    topContributors,
+    topPayers,
     topAlle9,
     topKranz,
     mostPudel,

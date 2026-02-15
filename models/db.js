@@ -142,6 +142,9 @@ if (!attendanceColumns.includes("monte_tiebreak")) {
 if (!attendanceColumns.includes("aussteigen_tiebreak")) {
   db.exec("ALTER TABLE attendance ADD COLUMN aussteigen_tiebreak INTEGER NOT NULL DEFAULT 0");
 }
+if (!attendanceColumns.includes("struck_games")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN struck_games TEXT");
+}
 
 // Custom games tables
 db.exec(`
@@ -214,6 +217,12 @@ if (!mivColumns.includes("initial_medaillen_gold")) {
 }
 if (!mivColumns.includes("initial_medaillen_silver")) {
   db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_silver INTEGER NOT NULL DEFAULT 0");
+}
+if (!mivColumns.includes("initial_monte_siege")) {
+  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_monte_siege INTEGER NOT NULL DEFAULT 0");
+}
+if (!mivColumns.includes("initial_medaillen_siege")) {
+  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_siege INTEGER NOT NULL DEFAULT 0");
 }
 
 // Create indexes for performance

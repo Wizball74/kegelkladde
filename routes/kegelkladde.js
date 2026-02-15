@@ -57,7 +57,7 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
   const attendanceRows = selectedGameday
     ? db
       .prepare(
-        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, va, monte, aussteigen, sechs_tage, monte_extra, monte_tiebreak, aussteigen_tiebreak
+        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, va, monte, aussteigen, sechs_tage, monte_extra, monte_tiebreak, aussteigen_tiebreak, struck_games
          FROM attendance
          WHERE gameday_id = ?`
       )
@@ -67,6 +67,20 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
   const attendanceMap = new Map();
   for (const row of attendanceRows) {
     attendanceMap.set(row.user_id, row);
+  }
+
+  // Erster Spieltag: Übertrag aus Anfangswerten übernehmen
+  if (selectedGameday) {
+    const prevDayForCarryover = db.prepare(
+      "SELECT id FROM gamedays WHERE match_date < ? ORDER BY match_date DESC, id DESC LIMIT 1"
+    ).get(selectedGameday.match_date);
+    if (!prevDayForCarryover) {
+      const ivRows = db.prepare("SELECT user_id, initial_carryover FROM member_initial_values").all();
+      for (const iv of ivRows) {
+        const att = attendanceMap.get(iv.user_id);
+        if (att) att.carryover = iv.initial_carryover || 0;
+      }
+    }
   }
 
   // Custom games for this gameday
@@ -316,6 +330,37 @@ router.post("/kegelkladde/monte-extra", requireAuth, verifyCsrf, (req, res) => {
   res.json({ ok: true });
 });
 
+// Spiel durchstreichen (nicht teilgenommen)
+router.post("/kegelkladde/struck-game", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const memberId = Number.parseInt(req.body.memberId, 10);
+  const gameKey = String(req.body.gameKey || "").slice(0, 30);
+
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(memberId) || !gameKey) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const dayExists = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists || dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag nicht bearbeitbar." });
+  }
+
+  const row = db.prepare("SELECT struck_games FROM attendance WHERE gameday_id = ? AND user_id = ?").get(gamedayId, memberId);
+  let struck = {};
+  try { struck = JSON.parse(row?.struck_games || "{}"); } catch { struck = {}; }
+
+  if (struck[gameKey]) {
+    delete struck[gameKey];
+  } else {
+    struck[gameKey] = true;
+  }
+
+  const json = Object.keys(struck).length > 0 ? JSON.stringify(struck) : null;
+  db.prepare("UPDATE attendance SET struck_games = ? WHERE gameday_id = ? AND user_id = ?").run(json, gamedayId, memberId);
+
+  res.json({ ok: true, struck: !!struck[gameKey] });
+});
+
 // Status: 0=Noch nicht begonnen, 1=Gut Holz!, 2=Abrechnung, 3=Archiv
 const STATUS_LABELS = ["Noch nicht begonnen", "Spieltag läuft - gut Holz!", "Abrechnung", "Archiv"];
 
@@ -438,6 +483,48 @@ router.post("/kegelkladde/custom-game-value", requireAuth, verifyCsrf, (req, res
      ON CONFLICT(gameday_id, user_id, custom_game_id) DO UPDATE SET amount = excluded.amount`
   ).run(gamedayId, memberId, customGameId, amount);
 
+  res.json({ ok: true });
+});
+
+router.post("/kegelkladde/custom-game-rename", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const customGameId = Number.parseInt(req.body.customGameId, 10);
+  const name = sanitize(req.body.name, 30);
+
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(customGameId) || !name) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const dayExists = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists) {
+    return res.status(404).json({ error: "Spieltag nicht gefunden." });
+  }
+  if (dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag ist bereits in Abrechnung oder archiviert." });
+  }
+
+  db.prepare("UPDATE custom_games SET name = ? WHERE id = ? AND gameday_id = ?").run(name, customGameId, gamedayId);
+  res.json({ ok: true, name });
+});
+
+router.post("/kegelkladde/custom-game-delete", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const customGameId = Number.parseInt(req.body.customGameId, 10);
+
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(customGameId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const dayExists = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists) {
+    return res.status(404).json({ error: "Spieltag nicht gefunden." });
+  }
+  if (dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag ist bereits in Abrechnung oder archiviert." });
+  }
+
+  db.prepare("DELETE FROM custom_game_values WHERE custom_game_id = ? AND gameday_id = ?").run(customGameId, gamedayId);
+  db.prepare("DELETE FROM custom_games WHERE id = ? AND gameday_id = ?").run(customGameId, gamedayId);
   res.json({ ok: true });
 });
 

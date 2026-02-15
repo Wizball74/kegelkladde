@@ -57,6 +57,7 @@
   <div class="tab-panel active" id="tab-monte">
     <p class="subtle" style="margin-bottom:0.5rem;">
       Platz 1&#8211;6: 10 / 6 / 4 / 3 / 2 / 1 Punkt(e) &middot; ab 2,00 &euro; keine Punkte &middot;
+      100 Pkt. = Sieg &#x1F451; &middot;
       <span class="tally-hl" style="font-weight:700;">|</span> = Punkte vom gew&auml;hlten Spieltag
     </p>
     <% if (monteRanking.length > 0) { %>
@@ -66,6 +67,7 @@
             <tr>
               <th style="width:40px;">Platz</th>
               <th data-sort="string">Name</th>
+              <th data-sort="number" style="width:45px;">&#x1F451;</th>
               <th data-sort="number" style="width:65px;">Punkte</th>
               <th>Strichliste</th>
             </tr>
@@ -80,6 +82,9 @@
               <tr>
                 <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
                 <td><%= player.display_name %></td>
+                <td data-value="<%= player.wins %>" style="text-align:center; white-space:nowrap;">
+                  <% if (player.wins > 0) { %>&#x1F451;<span style="font-weight:700;"><%= player.wins %></span><% } %>
+                </td>
                 <td data-value="<%= player.total %>" style="text-align:center; font-weight:700;"><%= player.total %></td>
                 <td>
                   <span class="rangliste-tally"><%- renderTallyColored(player.total, hlPts) %></span>
@@ -101,6 +106,7 @@
   <div class="tab-panel" id="tab-medaillen">
     <p class="subtle" style="margin-bottom:0.5rem;">
       Aussteigen: Sieger (0,00 &euro;) = Gold (2 Pkt.) &middot; Zweiter (0,10 &euro;) = Silber (1 Pkt.) &middot;
+      41 Pkt. = Sieg &#x1F451; &middot;
       <span class="tally-hl" style="font-weight:700;">|</span> = Punkte vom gew&auml;hlten Spieltag
     </p>
     <% if (medaillenRanking.length > 0) { %>
@@ -110,6 +116,7 @@
             <tr>
               <th style="width:40px;">Platz</th>
               <th data-sort="string">Name</th>
+              <th data-sort="number" style="width:45px;">&#x1F451;</th>
               <th data-sort="number" style="width:55px;">&#129351;</th>
               <th data-sort="number" style="width:55px;">&#129352;</th>
               <th data-sort="number" style="width:65px;">Punkte</th>
@@ -126,6 +133,9 @@
               <tr>
                 <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
                 <td><%= player.display_name %></td>
+                <td data-value="<%= player.wins %>" style="text-align:center; white-space:nowrap;">
+                  <% if (player.wins > 0) { %>&#x1F451;<span style="font-weight:700;"><%= player.wins %></span><% } %>
+                </td>
                 <td data-value="<%= player.gold %>" style="text-align:center;"><%= player.gold %></td>
                 <td data-value="<%= player.silver %>" style="text-align:center;"><%= player.silver %></td>
                 <td data-value="<%= player.total %>" style="text-align:center; font-weight:700;"><%= player.total %></td>

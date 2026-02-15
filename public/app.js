@@ -195,17 +195,17 @@ function recalcCosts() {
     });
 
     // Game fields (V+A, Monte, Aussteigen, 6-Tage)
-    const va = Number(row.querySelector('[name^="va_"]')?.value || 0);
-    const monte = Number(row.querySelector('[name^="monte_"]')?.value || 0);
-    const aussteigen = Number(row.querySelector('[name^="aussteigen_"]')?.value || 0);
-    const sechs_tage = Number(row.querySelector('[name^="sechs_tage_"]')?.value || 0);
+    const va = Number(row.querySelector('[name^="va_"]')?.value || 0) / 10;
+    const monte = Number(row.querySelector('[name^="monte_"]')?.value || 0) / 10;
+    const aussteigen = Number(row.querySelector('[name^="aussteigen_"]')?.value || 0) / 10;
+    const sechs_tage = Number(row.querySelector('[name^="sechs_tage_"]')?.value || 0) / 10;
     const gameCosts = isPresent ? va + monte + aussteigen + sechs_tage : 0;
 
     // Custom game fields
     let customGameTotal = 0;
     if (isPresent) {
       row.querySelectorAll("[data-custom-game-field]").forEach((input) => {
-        customGameTotal += Number(input.value || 0);
+        customGameTotal += Number(input.value || 0) / 10;
       });
     }
 
@@ -231,9 +231,163 @@ function recalcCosts() {
   });
 
   updateCompactCells();
+  updateMontePoints();
 
   // Sync mobile "nach Spiel" display if active
   if (typeof window._syncMobileDisplay === "function") window._syncMobileDisplay();
+}
+
+// Monte-Liste Punkte (10, 6, 4, 3, 2, 1 + Extrapunkt)
+function updateMontePoints() {
+  const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+  if (!table) return;
+  const pointScale = [10, 6, 4, 3, 2, 1];
+  const MONTE_CUTOFF_ZEHNTEL = 20; // 2,00 € = keine Platz-Punkte
+  const rows = table.querySelectorAll("tbody tr[data-member-id]");
+
+  const entries = [];
+  rows.forEach(row => {
+    const td = row.querySelector('td[data-game-key="monte"]');
+    if (!td) return;
+    const isActive = !row.classList.contains("row-inactive");
+    const isStruck = td.classList.contains("cell-struck");
+    const input = td.querySelector(".game-col-input");
+    const value = Number(input?.value || 0);
+    const tbInput = row.querySelector('[data-tiebreak="monte"]');
+    const tiebreak = Number(tbInput?.value || 0);
+    const extraRadio = row.querySelector(".monte-extra-radio");
+    const hasExtra = extraRadio?.checked || false;
+    entries.push({ td, row, value, tiebreak, hasExtra, isActive, isStruck });
+  });
+
+  const hasValues = entries.some(e => e.isActive && !e.isStruck && e.value > 0);
+
+  // Rank eligible (active + not struck + below cutoff) players: lowest value = best
+  const eligible = entries
+    .filter(e => e.isActive && !e.isStruck && e.value < MONTE_CUTOFF_ZEHNTEL)
+    .sort((a, b) => a.value - b.value || a.tiebreak - b.tiebreak);
+
+  const ptsMap = new Map();
+  // Detect ties: group by value, groups with >1 member are tied
+  const tiedSet = new Set();
+  if (hasValues) {
+    eligible.forEach((e, i) => {
+      const base = i < pointScale.length ? pointScale[i] : 0;
+      ptsMap.set(e.td, base + (e.hasExtra ? 1 : 0));
+    });
+
+    // Build value groups for tie detection
+    const valueGroups = new Map();
+    eligible.forEach(e => {
+      const arr = valueGroups.get(e.value) || [];
+      arr.push(e);
+      valueGroups.set(e.value, arr);
+    });
+    valueGroups.forEach(group => {
+      if (group.length > 1) group.forEach(e => tiedSet.add(e.td));
+    });
+
+    // Extrapunkt for cutoff players (>= 2,00 €) who have the extra radio
+    entries.forEach(e => {
+      if (e.isActive && !e.isStruck && e.value >= MONTE_CUTOFF_ZEHNTEL && e.hasExtra) {
+        ptsMap.set(e.td, 1);
+      }
+    });
+  }
+
+  // Update DOM
+  entries.forEach(e => {
+    let el = e.td.querySelector(".monte-pts");
+    const pts = ptsMap.get(e.td);
+    const isTied = tiedSet.has(e.td);
+    if (pts != null && pts > 0) {
+      if (!el) {
+        el = document.createElement("span");
+        el.className = "monte-pts";
+        const radio = e.td.querySelector(".monte-extra-radio");
+        if (radio) {
+          let wrap = radio.closest(".monte-extra-wrap");
+          if (!wrap) {
+            wrap = document.createElement("span");
+            wrap.className = "monte-extra-wrap";
+            radio.before(wrap);
+            wrap.appendChild(radio);
+          }
+          wrap.prepend(el);
+        } else {
+          const mi = e.td.querySelector(".money-inline");
+          if (mi) mi.append(el);
+        }
+      }
+      el.textContent = pts;
+      el.classList.toggle("monte-pts-tie", isTied);
+      el.onclick = isTied ? () => cycleMonteTiebreak(e.td) : null;
+    } else if (el) {
+      el.remove();
+    }
+  });
+}
+
+// Cycle Monte tiebreak: swap clicked player one position up within their tie group
+function cycleMonteTiebreak(clickedTd) {
+  const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+  if (!table) return;
+  const MONTE_CUTOFF_ZEHNTEL = 20;
+
+  // Find clicked entry's value
+  const clickedRow = clickedTd.closest("tr[data-member-id]");
+  if (!clickedRow) return;
+  const clickedInput = clickedTd.querySelector(".game-col-input");
+  const clickedValue = Number(clickedInput?.value || 0);
+
+  // Build list of all active, non-struck, below-cutoff entries with same value
+  const rows = table.querySelectorAll("tbody tr[data-member-id]");
+  const group = [];
+  rows.forEach(row => {
+    const td = row.querySelector('td[data-game-key="monte"]');
+    if (!td) return;
+    const isActive = !row.classList.contains("row-inactive");
+    const isStruck = td.classList.contains("cell-struck");
+    const input = td.querySelector(".game-col-input");
+    const value = Number(input?.value || 0);
+    if (!isActive || isStruck || value >= MONTE_CUTOFF_ZEHNTEL) return;
+    if (value !== clickedValue) return;
+    const tbInput = row.querySelector('[data-tiebreak="monte"]');
+    const tiebreak = Number(tbInput?.value || 0);
+    group.push({ row, td, tbInput, tiebreak });
+  });
+
+  if (group.length < 2) return;
+
+  // Sort group by tiebreak ASC
+  group.sort((a, b) => a.tiebreak - b.tiebreak);
+
+  // If all tiebreaks are the same (e.g. all 0), assign sequential values
+  const allSame = group.every(g => g.tiebreak === group[0].tiebreak);
+  if (allSame) {
+    group.forEach((g, i) => {
+      g.tiebreak = i;
+      if (g.tbInput) g.tbInput.value = i;
+    });
+  }
+
+  // Find clicked player's position in sorted group
+  const clickedIdx = group.findIndex(g => g.row === clickedRow);
+  if (clickedIdx <= 0) return; // already first or not found
+
+  // Swap tiebreak with the one above
+  const above = group[clickedIdx - 1];
+  const current = group[clickedIdx];
+  const tmpTb = above.tiebreak;
+  above.tiebreak = current.tiebreak;
+  current.tiebreak = tmpTb;
+  if (above.tbInput) above.tbInput.value = above.tiebreak;
+  if (current.tbInput) current.tbInput.value = current.tiebreak;
+
+  // Recalc and auto-save both rows
+  recalcCosts();
+  autoSaveRow(above.row);
+  autoSaveRow(current.row);
 }
 
 // Compact cell mode: display values as text, edit on hover
@@ -242,7 +396,8 @@ function initCompactMode() {
     if (input.hasAttribute("data-paid-field")) return;
     const display = document.createElement("span");
     display.className = "field-display";
-    display.textContent = formatEuroCost(Number(input.value) || 0);
+    const isGameField = input.hasAttribute("data-game-field") || input.hasAttribute("data-custom-game-field");
+    display.textContent = isGameField ? String(Number(input.value) || 0) : formatEuroCost(Number(input.value) || 0);
     input.after(display);
     const td = input.closest("td");
     if (td) td.classList.add("has-compact");
@@ -250,15 +405,27 @@ function initCompactMode() {
 }
 
 function updateCompactCells() {
+  // Per game column: if any active player has a value > 0, show 0s too
+  const gameKeysWithValues = new Set();
+  document.querySelectorAll('.kladde-table tbody tr:not(.row-inactive) td[data-game-key] .mini-number').forEach(inp => {
+    if (Number(inp.value) > 0) {
+      const td = inp.closest("td[data-game-key]");
+      if (td) gameKeysWithValues.add(td.dataset.gameKey);
+    }
+  });
+
   // Update display spans for money inputs
   document.querySelectorAll(".kladde-table td.has-compact").forEach((td) => {
     const input = td.querySelector(".mini-number");
     const display = td.querySelector(".field-display");
     if (input && display) {
       const val = Number(input.value) || 0;
-      display.textContent = formatEuroCost(val);
+      const isGameField = input.hasAttribute("data-game-field") || input.hasAttribute("data-custom-game-field");
+      display.textContent = isGameField ? String(val) : formatEuroCost(val);
       const alwaysEdit = input.hasAttribute("data-always-edit");
-      td.classList.toggle("cell-empty", val === 0 && !alwaysEdit);
+      const gameKey = td.dataset.gameKey;
+      const gameActive = gameKey && gameKeysWithValues.has(gameKey);
+      td.classList.toggle("cell-empty", val === 0 && !alwaysEdit && !gameActive);
     }
   });
 
@@ -523,10 +690,10 @@ function buildSavePayload(row) {
     payload.alle9 = row.querySelector('[data-marker-input="alle9"]')?.value || 0;
     payload.kranz = row.querySelector('[data-marker-input="kranz"]')?.value || 0;
     payload.triclops = row.querySelector('[data-marker-input="triclops"]')?.value || 0;
-    payload.va = row.querySelector(`[name="va_${memberId}"]`)?.value || 0;
-    payload.monte = row.querySelector(`[name="monte_${memberId}"]`)?.value || 0;
-    payload.aussteigen = row.querySelector(`[name="aussteigen_${memberId}"]`)?.value || 0;
-    payload.sechs_tage = row.querySelector(`[name="sechs_tage_${memberId}"]`)?.value || 0;
+    payload.va = (Number(row.querySelector(`[name="va_${memberId}"]`)?.value) || 0) / 10;
+    payload.monte = (Number(row.querySelector(`[name="monte_${memberId}"]`)?.value) || 0) / 10;
+    payload.aussteigen = (Number(row.querySelector(`[name="aussteigen_${memberId}"]`)?.value) || 0) / 10;
+    payload.sechs_tage = (Number(row.querySelector(`[name="sechs_tage_${memberId}"]`)?.value) || 0) / 10;
     payload.monte_tiebreak = row.querySelector(`[name="monte_tiebreak_${memberId}"]`)?.value || 0;
     payload.aussteigen_tiebreak = row.querySelector(`[name="aussteigen_tiebreak_${memberId}"]`)?.value || 0;
   } else if (kladdeStatus === 2) {
@@ -667,7 +834,7 @@ document.querySelectorAll(".kladde-table [data-custom-game-field]").forEach((inp
     const gamedayId = kladdeData.dataset.gamedayId;
     const memberId = row.dataset.memberId;
     const customGameId = input.dataset.customGameId;
-    const amount = input.value || 0;
+    const amount = (Number(input.value) || 0) / 10;
 
     showSaving();
     fetch("/kegelkladde/custom-game-value", {
@@ -683,6 +850,72 @@ document.querySelectorAll(".kladde-table [data-custom-game-field]").forEach((inp
     .catch(() => showToast("Fehler beim Speichern", "error"));
   });
 });
+
+// Struck game: dblclick / long-press auf Spiel-Zellen togglet Durchstreichung
+(function() {
+  if (!kladdeData || kladdeStatus > 1) return;
+  const gameCells = document.querySelectorAll(".kladde-table td[data-game-key]");
+
+  function toggleStruck(td) {
+    const row = td.closest("tr[data-member-id]");
+    if (!row || row.classList.contains("row-inactive")) return;
+    const gameKey = td.dataset.gameKey;
+    const memberId = row.dataset.memberId;
+    const csrfToken = kladdeData.dataset.csrf;
+    const gamedayId = kladdeData.dataset.gamedayId;
+
+    td.classList.toggle("cell-struck");
+
+    fetch("/kegelkladde/struck-game", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrfToken, gamedayId, memberId, gameKey })
+    })
+    .then((r) => {
+      if (!r.ok) return r.text().then((t) => { throw new Error(t || r.statusText); });
+      return r.json();
+    })
+    .then((data) => {
+      if (!data.ok) {
+        td.classList.toggle("cell-struck");
+        showToast(data.error || "Fehler", "error");
+      }
+    })
+    .catch(() => {
+      td.classList.toggle("cell-struck");
+      showToast("Fehler beim Speichern", "error");
+    });
+  }
+
+  // Desktop: dblclick
+  gameCells.forEach((td) => {
+    td.addEventListener("dblclick", (e) => {
+      if (e.target.closest("input, button, label")) return;
+      toggleStruck(td);
+    });
+  });
+
+  // Mobile: long-press (500ms)
+  let pressTimer = null;
+  let pressTarget = null;
+  gameCells.forEach((td) => {
+    td.addEventListener("touchstart", (e) => {
+      if (e.target.closest("input, button, label")) return;
+      pressTarget = td;
+      pressTimer = setTimeout(() => {
+        e.preventDefault();
+        toggleStruck(td);
+        pressTimer = null;
+      }, 500);
+    }, { passive: false });
+    td.addEventListener("touchend", () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    });
+    td.addEventListener("touchmove", () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    });
+  });
+})();
 
 // Paid field inputs (status 2): recalc rest + debounced save
 document.querySelectorAll(".kladde-table [data-paid-field]").forEach((input) => {
@@ -736,6 +969,91 @@ document.querySelectorAll("[data-new-game-header]").forEach((input) => {
       e.preventDefault();
       input.blur();
     }
+  });
+});
+
+// Rename custom game column: blur/Enter on header input
+document.querySelectorAll("[data-custom-game-rename]").forEach((input) => {
+  function doRename() {
+    const name = input.value.trim();
+    const original = input.dataset.originalName;
+    if (!name) {
+      input.value = original;
+      return;
+    }
+    if (name === original) return;
+    if (!kladdeData) return;
+
+    const csrfToken = kladdeData.dataset.csrf;
+    const gamedayId = kladdeData.dataset.gamedayId;
+    const customGameId = input.dataset.customGameRename;
+
+    showSaving();
+    fetch("/kegelkladde/custom-game-rename", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrfToken, gamedayId, customGameId, name })
+    })
+    .then((r) => {
+      if (!r.ok) return r.text().then((t) => { throw new Error(t || r.statusText); });
+      return r.json();
+    })
+    .then((data) => {
+      if (data.ok) {
+        showSaved();
+        input.dataset.originalName = name;
+        // Update data-label on matching td cells in all rows
+        document.querySelectorAll(`[data-custom-game-id="${customGameId}"]`).forEach((field) => {
+          const td = field.closest("td");
+          if (td) td.dataset.label = name;
+        });
+      } else {
+        showToast(data.error || "Fehler beim Umbenennen", "error");
+        input.value = original;
+      }
+    })
+    .catch(() => {
+      showToast("Fehler beim Umbenennen", "error");
+      input.value = original;
+    });
+  }
+
+  input.addEventListener("blur", doRename);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+  });
+});
+
+// Delete custom game column: click on delete button
+document.querySelectorAll("[data-custom-game-delete]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (!kladdeData) return;
+    const customGameId = btn.dataset.customGameDelete;
+    const th = btn.closest("th");
+    const name = th ? th.querySelector("[data-custom-game-rename]")?.value || "Spiel" : "Spiel";
+
+    confirmAction(`Spiel "${name}" wirklich löschen? Alle Werte gehen verloren!`, () => {
+      const csrfToken = kladdeData.dataset.csrf;
+      const gamedayId = kladdeData.dataset.gamedayId;
+
+      fetch("/kegelkladde/custom-game-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csrfToken, gamedayId, customGameId })
+      })
+      .then((r) => {
+        if (!r.ok) return r.text().then((t) => { throw new Error(t || r.statusText); });
+        return r.json();
+      })
+      .then((data) => {
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          showToast(data.error || "Fehler beim Löschen", "error");
+        }
+      })
+      .catch((err) => showToast("Fehler beim Löschen: " + (err.message || err), "error"));
+    });
   });
 });
 
@@ -1153,12 +1471,12 @@ function initMobileByGame() {
 
   // 3. Money field cards
   [
-    { prefix: "penalties", label: "Strafen" },
-    { prefix: "va", label: "V+A" },
-    { prefix: "monte", label: "Monte" },
-    { prefix: "aussteigen", label: "Aussteigen" },
-    { prefix: "sechs_tage", label: "6-Tage" }
-  ].forEach(({ prefix, label }) => {
+    { prefix: "penalties", label: "Strafen", isGame: false },
+    { prefix: "va", label: "V+A", isGame: true },
+    { prefix: "monte", label: "Monte", isGame: true },
+    { prefix: "aussteigen", label: "Aussteigen", isGame: true },
+    { prefix: "sechs_tage", label: "6-Tage", isGame: true }
+  ].forEach(({ prefix, label, isGame }) => {
     const { card, body } = makeCard(label);
     let any = false;
     members.forEach(m => {
@@ -1167,9 +1485,9 @@ function initMobileByGame() {
       any = true;
       const r = makeRow(m);
       r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
-        '<span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="' + ti.value +
+        '<span class="money-inline"><input type="number" min="0" max="999" step="' + (isGame ? '1' : '0.10') + '" value="' + ti.value +
         '" class="mini-number no-spin" data-mi="' + prefix + '_' + m.id + '"' +
-        (ti.disabled ? " disabled" : "") + ' />&euro;</span>';
+        (ti.disabled ? " disabled" : "") + ' />' + (isGame ? '' : '&euro;') + '</span>';
       const inp = r.querySelector("input");
       inp.addEventListener("input", () => { ti.value = inp.value; recalcCosts(); });
       inp.addEventListener("change", () => { ti.value = inp.value; recalcCosts(); autoSaveRow(m.row); });
@@ -1190,9 +1508,9 @@ function initMobileByGame() {
         if (!ti) return;
         const r = makeRow(m);
         r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
-          '<span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="' + ti.value +
+          '<span class="money-inline"><input type="number" min="0" max="999" step="1" value="' + ti.value +
           '" class="mini-number no-spin" data-mcg="' + cgId + '_' + m.id + '"' +
-          (ti.disabled ? " disabled" : "") + ' />&euro;</span>';
+          (ti.disabled ? " disabled" : "") + ' /></span>';
         const inp = r.querySelector("input");
         inp.addEventListener("input", () => { ti.value = inp.value; recalcCosts(); });
         inp.addEventListener("change", () => {
@@ -1203,7 +1521,7 @@ function initMobileByGame() {
           fetch("/kegelkladde/custom-game-value", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ csrfToken, gamedayId, memberId: m.id, customGameId: cgId, amount: inp.value || 0 })
+            body: JSON.stringify({ csrfToken, gamedayId, memberId: m.id, customGameId: cgId, amount: (Number(inp.value) || 0) / 10 })
           })
           .then(res => res.json())
           .then(data => { if (data.ok) showSaved(); else showToast(data.error || "Fehler", "error"); })
@@ -1473,10 +1791,13 @@ function initEditLocks() {
           const indicator = nameCell.querySelector(".lock-indicator");
           if (indicator) indicator.remove();
         }
-        // Re-enable inputs/buttons (respect row-inactive state)
+        // Re-enable inputs/buttons (respect row-inactive state and kladdeStatus)
         const isInactive = row.classList.contains("row-inactive");
         row.querySelectorAll("input, button").forEach((el) => {
-          if (isInactive && el.hasAttribute("data-field") && !el.hasAttribute("data-always-edit")) {
+          if (kladdeStatus >= 2) {
+            // Abrechnung/Archiv: nur Gezahlt-Feld aktiv
+            el.disabled = !el.hasAttribute("data-paid-field");
+          } else if (isInactive && el.hasAttribute("data-field") && !el.hasAttribute("data-always-edit")) {
             el.disabled = true;
           } else {
             el.disabled = false;
@@ -1511,6 +1832,7 @@ function initEditLocks() {
 // Monte-Extrapunkt Radio-Button Handler
 document.querySelectorAll(".monte-extra-radio").forEach((radio) => {
   radio.addEventListener("change", () => {
+    updateMontePoints();
     if (!kladdeData || kladdeStatus > 1) return;
     const csrfToken = kladdeData.dataset.csrf;
     const gamedayId = kladdeData.dataset.gamedayId;

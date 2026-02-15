@@ -618,6 +618,10 @@ textarea:focus {
   color: var(--muted);
 }
 
+.head-label-multiline {
+  margin-left: 10px;
+}
+
 .head-sub {
   font-size: 0.65rem;
   font-weight: 300;
@@ -644,7 +648,7 @@ textarea:focus {
 }
 
 .game-col-input {
-  width: 45px;
+  width: 32px;
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -672,6 +676,30 @@ textarea:focus {
 .custom-game-header-input::placeholder {
   color: var(--line);
   font-style: italic;
+}
+
+/* Struck game cells (nicht teilgenommen) */
+td.cell-struck {
+  position: relative;
+}
+
+td.cell-struck::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.5px),
+    var(--muted) calc(50% - 0.5px),
+    var(--muted) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+td.cell-struck > * {
+  opacity: 0.3;
 }
 
 /* === Compact cell mode: show values as text, edit on hover === */
@@ -757,6 +785,40 @@ td.col-active.cell-empty > * {
 .custom-game-header-input:focus {
   border-color: var(--accent);
   background: #fff;
+}
+
+/* Custom game header: editable th with delete button */
+.custom-game-th {
+  position: relative;
+}
+
+.custom-game-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 21px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.custom-game-th:hover .custom-game-delete-btn {
+  opacity: 0.7;
+}
+
+.custom-game-delete-btn:hover {
+  opacity: 1 !important;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Present toggle */
@@ -947,7 +1009,10 @@ td.col-active.cell-empty > * {
 .row-inactive .marker-controls,
 .row-inactive .marker-cost,
 .row-inactive [data-game-field],
-.row-inactive [data-custom-game-field] {
+.row-inactive [data-custom-game-field],
+.row-inactive .monte-extra-wrap,
+.row-inactive .monte-extra-radio,
+.row-inactive .game-col .field-display {
   display: none;
 }
 
@@ -2022,9 +2087,14 @@ td.col-active.cell-empty > * {
   }
 
   /* --- Money inputs bigger on mobile --- */
-  .mini-number.no-spin,
-  .game-col-input {
+  .mini-number.no-spin {
     width: 65px;
+    font-size: 0.9rem;
+    padding: 0.4rem;
+  }
+
+  .game-col-input {
+    width: 50px;
     font-size: 0.9rem;
     padding: 0.4rem;
   }
@@ -2168,6 +2238,40 @@ tr.row-locked td.name-col {
 .monte-extra-radio:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+/* Monte Extrapunkt Wrapper (Punkte über Radio gestapelt) */
+.monte-extra-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-left: 2px;
+}
+
+/* Monte-Liste Punkte */
+.monte-pts {
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1;
+  min-width: 10px;
+  text-align: center;
+}
+
+.monte-extra-wrap .monte-extra-radio {
+  margin-left: 0;
+}
+
+
+.monte-pts-tie {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--muted);
+}
+
+.monte-pts-tie:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Tiebreak-Indikator */

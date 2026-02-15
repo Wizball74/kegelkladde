@@ -42,7 +42,11 @@
       "Bash(powershell.exe -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object OwningProcess,State\")",
       "Bash(powershell.exe -Command \"Stop-Process -Id 3764 -Force\")",
       "WebSearch",
-      "Bash(timeout 8 node:*)"
+      "Bash(timeout 8 node:*)",
+      "Bash(node -c:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(node:*)"
     ]
   }
 }

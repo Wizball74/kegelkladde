@@ -6,6 +6,8 @@ const router = express.Router();
 
 const MONTE_POINTS = [10, 6, 4, 3, 2, 1]; // Platz 1-6
 const MONTE_CUTOFF = 2.0; // >= 2,00 € = keine Punkte
+const MONTE_WIN_THRESHOLD = 100;
+const MEDAILLEN_WIN_THRESHOLD = 41;
 
 router.get("/ranglisten", requireAuth, (req, res) => {
   const members = withDisplayNames(getOrderedMembers());
@@ -22,41 +24,82 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   const medaillenMap = new Map();
 
   members.forEach((m) => {
-    monteMap.set(m.id, { total: 0, perGameday: [] });
-    medaillenMap.set(m.id, { gold: 0, silver: 0, total: 0, perGameday: [] });
+    monteMap.set(m.id, { total: 0, wins: 0, perGameday: [] });
+    medaillenMap.set(m.id, { gold: 0, silver: 0, total: 0, wins: 0, perGameday: [] });
   });
 
   // Anfangswerte laden
   const initials = db.prepare(
-    "SELECT user_id, initial_monte_points, initial_medaillen_gold, initial_medaillen_silver FROM member_initial_values"
+    "SELECT user_id, initial_monte_points, initial_medaillen_gold, initial_medaillen_silver, initial_monte_siege, initial_medaillen_siege FROM member_initial_values"
   ).all();
   initials.forEach((iv) => {
     const mt = monteMap.get(iv.user_id);
-    if (mt) mt.total += iv.initial_monte_points || 0;
+    if (mt) {
+      mt.total += iv.initial_monte_points || 0;
+      mt.wins += iv.initial_monte_siege || 0;
+    }
     const md = medaillenMap.get(iv.user_id);
     if (md) {
       md.gold += iv.initial_medaillen_gold || 0;
       md.silver += iv.initial_medaillen_silver || 0;
       md.total += (iv.initial_medaillen_gold || 0) * 2 + (iv.initial_medaillen_silver || 0);
+      md.wins += iv.initial_medaillen_siege || 0;
     }
   });
 
   // Alle Spieltage durchgehen
   gamedays.forEach((gd) => {
     computeMonteForGameday(gd.id, monteMap);
+
+    // Monte: Schwellwert prüfen
+    let monteWinner = null;
+    let monteMax = 0;
+    for (const [userId, entry] of monteMap) {
+      if (entry.total >= MONTE_WIN_THRESHOLD && entry.total > monteMax) {
+        monteMax = entry.total;
+        monteWinner = userId;
+      }
+    }
+    if (monteWinner) {
+      monteMap.get(monteWinner).wins++;
+      for (const [, entry] of monteMap) {
+        entry.total = 0;
+        entry.perGameday = [];
+      }
+    }
+
     computeMedaillenForGameday(gd.id, medaillenMap);
+
+    // Medaillen: Schwellwert prüfen
+    let medaillenWinner = null;
+    let medaillenMax = 0;
+    for (const [userId, entry] of medaillenMap) {
+      if (entry.total >= MEDAILLEN_WIN_THRESHOLD && entry.total > medaillenMax) {
+        medaillenMax = entry.total;
+        medaillenWinner = userId;
+      }
+    }
+    if (medaillenWinner) {
+      medaillenMap.get(medaillenWinner).wins++;
+      for (const [, entry] of medaillenMap) {
+        entry.total = 0;
+        entry.gold = 0;
+        entry.silver = 0;
+        entry.perGameday = [];
+      }
+    }
   });
 
   // Sortierte Rankings erstellen
   const monteRanking = members
     .map((m) => ({ ...m, ...monteMap.get(m.id) }))
-    .filter((m) => m.total > 0)
-    .sort((a, b) => b.total - a.total);
+    .filter((m) => m.wins > 0 || m.total > 0)
+    .sort((a, b) => b.wins - a.wins || b.total - a.total);
 
   const medaillenRanking = members
     .map((m) => ({ ...m, ...medaillenMap.get(m.id) }))
-    .filter((m) => m.total > 0)
-    .sort((a, b) => b.total - a.total || b.gold - a.gold);
+    .filter((m) => m.wins > 0 || m.total > 0)
+    .sort((a, b) => b.wins - a.wins || b.total - a.total || b.gold - a.gold);
 
   // Datum-Format für Anzeige
   const formatDateDE = (iso) => {

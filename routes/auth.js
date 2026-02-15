@@ -12,7 +12,8 @@ const loginLimiter = rateLimit({
   limit: 15,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: "Zu viele Login-Versuche. Bitte spaeter erneut versuchen."
+  message: "Zu viele Login-Versuche. Bitte spaeter erneut versuchen.",
+  validate: { xForwardedForHeader: false }
 });
 
 router.get("/setup", (req, res) => {

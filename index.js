@@ -16,6 +16,10 @@ const { requireInitialized, flashMiddleware, setLocals } = require("./middleware
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Railway/Render/etc. terminieren TLS am Reverse Proxy –
+// ohne trust proxy setzt Express secure-Cookies nicht korrekt
+app.set("trust proxy", 1);
+
 // View engine
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -31,6 +35,7 @@ app.use(
   session({
     name: "kc_schaf_sid",
     secret: process.env.SESSION_SECRET || "dev-only-fallback-change-me",
+    proxy: true,
     resave: false,
     saveUninitialized: false,
     cookie: {

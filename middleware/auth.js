@@ -10,15 +10,6 @@ function ensureSessionCsrf(req) {
 function verifyCsrf(req, res, next) {
   ensureSessionCsrf(req);
   if (req.body.csrfToken !== req.session.csrfToken) {
-    console.error("[CSRF] Mismatch!", {
-      bodyToken: req.body.csrfToken ? "vorhanden" : "FEHLT",
-      sessionToken: req.session.csrfToken ? "vorhanden" : "FEHLT",
-      sessionID: req.sessionID,
-      isNew: req.session.isNew,
-      cookie: req.headers.cookie ? "vorhanden" : "FEHLT",
-      proto: req.protocol,
-      forwarded: req.get("x-forwarded-proto")
-    });
     return res.status(403).send("CSRF-Token ungueltig.");
   }
   next();

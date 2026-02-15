@@ -133,6 +133,15 @@ if (!attendanceColumns.includes("aussteigen")) {
 if (!attendanceColumns.includes("sechs_tage")) {
   db.exec("ALTER TABLE attendance ADD COLUMN sechs_tage REAL NOT NULL DEFAULT 0");
 }
+if (!attendanceColumns.includes("monte_extra")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN monte_extra INTEGER NOT NULL DEFAULT 0");
+}
+if (!attendanceColumns.includes("monte_tiebreak")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN monte_tiebreak INTEGER NOT NULL DEFAULT 0");
+}
+if (!attendanceColumns.includes("aussteigen_tiebreak")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN aussteigen_tiebreak INTEGER NOT NULL DEFAULT 0");
+}
 
 // Custom games tables
 db.exec(`
@@ -175,6 +184,9 @@ db.exec(`
     initial_alle9 INTEGER NOT NULL DEFAULT 0,
     initial_kranz INTEGER NOT NULL DEFAULT 0,
     initial_carryover REAL NOT NULL DEFAULT 0,
+    initial_monte_points INTEGER NOT NULL DEFAULT 0,
+    initial_medaillen_gold INTEGER NOT NULL DEFAULT 0,
+    initial_medaillen_silver INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
@@ -191,6 +203,18 @@ db.exec(`
 
 // Migration: alte gameday_costs Tabelle entfernen falls vorhanden
 db.exec("DROP TABLE IF EXISTS gameday_costs");
+
+// Migration: member_initial_values neue Spalten
+const mivColumns = db.prepare("PRAGMA table_info(member_initial_values)").all().map((c) => c.name);
+if (!mivColumns.includes("initial_monte_points")) {
+  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_monte_points INTEGER NOT NULL DEFAULT 0");
+}
+if (!mivColumns.includes("initial_medaillen_gold")) {
+  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_gold INTEGER NOT NULL DEFAULT 0");
+}
+if (!mivColumns.includes("initial_medaillen_silver")) {
+  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_silver INTEGER NOT NULL DEFAULT 0");
+}
 
 // Create indexes for performance
 db.exec(`

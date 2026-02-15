@@ -454,26 +454,68 @@ document.querySelectorAll("[data-present]").forEach((cb) => {
   });
 });
 
-// Recalc on any number input change (Strafen)
+// Recalc + debounced save on any number input change (Strafen etc.)
 document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
-  input.addEventListener("input", () => recalcCosts());
+  input.addEventListener("input", () => {
+    recalcCosts();
+    const row = input.closest("tr");
+    if (row) debouncedSaveRow(row);
+  });
 });
 
 // Auto-save attendance row via AJAX
 const kladdeData = document.getElementById("kladdeData");
 const kladdeStatus = Number(kladdeData?.dataset.status || 0);
 
-function autoSaveRow(row) {
-  if (!kladdeData || kladdeStatus >= 3) return;
+// Debounced auto-save: speichert 600ms nach letzter Eingabe
+const _rowSaveTimers = new Map();
+function debouncedSaveRow(row) {
+  if (!row) return;
+  const id = row.dataset.memberId;
+  if (!id) return;
+  clearTimeout(_rowSaveTimers.get(id));
+  _rowSaveTimers.set(id, setTimeout(() => {
+    _rowSaveTimers.delete(id);
+    autoSaveRow(row);
+  }, 400));
+}
 
+// Pending saves bei Seitenwechsel sofort abschicken
+window.addEventListener("beforeunload", () => flushPendingSaves());
+
+// Bei Klick auf Nav-Links: ausstehende Saves sofort flushen
+function flushPendingSaves() {
+  for (const [id, timer] of _rowSaveTimers) {
+    clearTimeout(timer);
+    const row = document.querySelector(`tr[data-member-id="${id}"]`);
+    if (row && kladdeData) {
+      const payload = buildSavePayload(row);
+      if (payload) {
+        navigator.sendBeacon(
+          "/kegelkladde/attendance-auto",
+          new Blob([JSON.stringify(payload)], { type: "application/json" })
+        );
+      }
+    }
+  }
+  _rowSaveTimers.clear();
+}
+
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("a[href]");
+  if (link && _rowSaveTimers.size > 0) {
+    flushPendingSaves();
+  }
+});
+
+function buildSavePayload(row) {
+  if (!kladdeData || kladdeStatus >= 3) return null;
   const csrfToken = kladdeData.dataset.csrf;
   const gamedayId = kladdeData.dataset.gamedayId;
   const memberId = row.dataset.memberId;
-
-  if (!csrfToken || !gamedayId || !memberId) return;
+  if (!csrfToken || !gamedayId || !memberId) return null;
 
   const payload = { csrfToken, gamedayId, memberId };
-
   if (kladdeStatus <= 1) {
     payload.present = row.querySelector("[data-present]")?.checked ? 1 : 0;
     payload.penalties = row.querySelector(`[name="penalties_${memberId}"]`)?.value || 0;
@@ -485,16 +527,25 @@ function autoSaveRow(row) {
     payload.monte = row.querySelector(`[name="monte_${memberId}"]`)?.value || 0;
     payload.aussteigen = row.querySelector(`[name="aussteigen_${memberId}"]`)?.value || 0;
     payload.sechs_tage = row.querySelector(`[name="sechs_tage_${memberId}"]`)?.value || 0;
+    payload.monte_tiebreak = row.querySelector(`[name="monte_tiebreak_${memberId}"]`)?.value || 0;
+    payload.aussteigen_tiebreak = row.querySelector(`[name="aussteigen_tiebreak_${memberId}"]`)?.value || 0;
   } else if (kladdeStatus === 2) {
     payload.paid = row.querySelector(`[name="paid_${memberId}"]`)?.value || 0;
   }
+  return payload;
+}
+
+function autoSaveRow(row) {
+  const payload = buildSavePayload(row);
+  if (!payload) return;
 
   showSaving();
 
   fetch("/kegelkladde/attendance-auto", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    keepalive: true
   })
   .then((r) => r.json())
   .then((data) => {
@@ -588,18 +639,25 @@ document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
   });
 });
 
-// Game field inputs: recalc + auto-save
+// Game field inputs: recalc + debounced save on input, immediate save on blur
 document.querySelectorAll(".kladde-table [data-game-field]").forEach((input) => {
-  input.addEventListener("input", () => recalcCosts());
+  input.addEventListener("input", () => {
+    recalcCosts();
+    const row = input.closest("tr");
+    if (row) debouncedSaveRow(row);
+  });
   input.addEventListener("change", () => {
     const row = input.closest("tr");
     if (row) autoSaveRow(row);
   });
 });
 
-// Custom game value inputs: recalc + AJAX save
+// Custom game value inputs: recalc + debounced AJAX save
 document.querySelectorAll(".kladde-table [data-custom-game-field]").forEach((input) => {
-  input.addEventListener("input", () => recalcCosts());
+  input.addEventListener("input", () => {
+    recalcCosts();
+    // Custom games haben eigenen Save-Endpoint, trotzdem debounced
+  });
   input.addEventListener("change", () => {
     recalcCosts();
     if (!kladdeData || kladdeStatus > 1) return;
@@ -626,7 +684,7 @@ document.querySelectorAll(".kladde-table [data-custom-game-field]").forEach((inp
   });
 });
 
-// Paid field inputs (status 2): recalc rest + auto-save
+// Paid field inputs (status 2): recalc rest + debounced save
 document.querySelectorAll(".kladde-table [data-paid-field]").forEach((input) => {
   input.addEventListener("input", () => {
     const row = input.closest("tr");
@@ -640,6 +698,7 @@ document.querySelectorAll(".kladde-table [data-paid-field]").forEach((input) => 
       restEl.textContent = formatEuroCost(rest) + " €";
       restEl.style.color = rest > 0 ? "var(--error)" : rest < 0 ? "var(--success)" : "";
     }
+    if (row) debouncedSaveRow(row);
   });
   input.addEventListener("change", () => {
     const row = input.closest("tr");
@@ -1446,6 +1505,38 @@ function initEditLocks() {
       const payload = JSON.stringify({ csrfToken, gamedayId, memberId: currentLockedRow });
       navigator.sendBeacon("/kegelkladde/unlock-row", new Blob([payload], { type: "application/json" }));
     }
+  });
+}
+
+// Monte-Extrapunkt Radio-Button Handler
+document.querySelectorAll(".monte-extra-radio").forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (!kladdeData || kladdeStatus > 1) return;
+    const csrfToken = kladdeData.dataset.csrf;
+    const gamedayId = kladdeData.dataset.gamedayId;
+    const memberId = radio.value;
+
+    showSaving();
+    fetch("/kegelkladde/monte-extra", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrfToken, gamedayId, memberId })
+    })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.ok) showSaved();
+      else showToast(data.error || "Fehler beim Speichern", "error");
+    })
+    .catch(() => showToast("Fehler beim Speichern", "error"));
+  });
+});
+
+// Ranglisten: Spieltag-Auswahl
+const ranglistenSelect = document.getElementById("ranglistenGameday");
+if (ranglistenSelect) {
+  ranglistenSelect.addEventListener("change", () => {
+    const val = ranglistenSelect.value;
+    window.location = val ? "/ranglisten?gamedayId=" + encodeURIComponent(val) : "/ranglisten";
   });
 }
 

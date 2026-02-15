@@ -5,25 +5,32 @@ const { sanitize } = require("../utils/helpers");
 
 const router = express.Router();
 
-function renderRecords(req, res, section, title) {
-  const entries = db
+// Kombinierte Seite: Rekorde + Kurioses mit Tabs
+router.get("/rekorde", requireAuth, (req, res) => {
+  const rekorde = db
     .prepare(
       `SELECT id, title, holder
        FROM records
-       WHERE section = ?
+       WHERE section = 'rangliste'
        ORDER BY id DESC`
     )
-    .all(section);
+    .all();
 
-  res.render("records", {
-    section,
-    pageTitle: title,
-    entries
-  });
-}
+  const kurioses = db
+    .prepare(
+      `SELECT id, title, holder
+       FROM records
+       WHERE section = 'kurioses'
+       ORDER BY id DESC`
+    )
+    .all();
 
-router.get("/ranglisten", requireAuth, (req, res) => renderRecords(req, res, "rangliste", "Ranglisten"));
-router.get("/kurioses", requireAuth, (req, res) => renderRecords(req, res, "kurioses", "Kurioses"));
+  res.render("records", { rekorde, kurioses });
+});
+
+// Alte URLs auf neue kombinierte Seite umleiten
+router.get("/ranglisten-alt", requireAuth, (req, res) => res.redirect("/rekorde"));
+router.get("/kurioses", requireAuth, (req, res) => res.redirect("/rekorde"));
 
 router.post("/records/add", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const section = req.body.section === "kurioses" ? "kurioses" : "rangliste";
@@ -32,7 +39,7 @@ router.post("/records/add", requireAuth, requireAdmin, verifyCsrf, (req, res) =>
 
   if (!record || !holder) {
     req.session.flash = { type: "error", message: "Rekord und Rekordhalter erforderlich." };
-    return res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+    return res.redirect("/rekorde");
   }
 
   const result = db.prepare(
@@ -43,16 +50,15 @@ router.post("/records/add", requireAuth, requireAdmin, verifyCsrf, (req, res) =>
   logAudit(req.session.userId, "RECORD_ADD", "record", result.lastInsertRowid, { section, record, holder });
   req.session.flash = { type: "success", message: "Eintrag hinzugefügt." };
 
-  res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+  res.redirect("/rekorde");
 });
 
 router.post("/records/edit", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const recordId = Number.parseInt(req.body.recordId, 10);
-  const section = req.body.section === "kurioses" ? "kurioses" : "rangliste";
 
   if (!Number.isInteger(recordId)) {
     req.session.flash = { type: "error", message: "Ungültige Rekord-ID." };
-    return res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+    return res.redirect("/rekorde");
   }
 
   const record = sanitize(req.body.record, 120);
@@ -60,7 +66,7 @@ router.post("/records/edit", requireAuth, requireAdmin, verifyCsrf, (req, res) =
 
   if (!record || !holder) {
     req.session.flash = { type: "error", message: "Rekord und Rekordhalter erforderlich." };
-    return res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+    return res.redirect("/rekorde");
   }
 
   const existing = db.prepare("SELECT id FROM records WHERE id = ?").get(recordId);
@@ -70,16 +76,15 @@ router.post("/records/edit", requireAuth, requireAdmin, verifyCsrf, (req, res) =
     req.session.flash = { type: "success", message: "Eintrag aktualisiert." };
   }
 
-  res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+  res.redirect("/rekorde");
 });
 
 router.post("/records/delete", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const recordId = Number.parseInt(req.body.recordId, 10);
-  const section = req.body.section === "kurioses" ? "kurioses" : "rangliste";
 
   if (!Number.isInteger(recordId)) {
     req.session.flash = { type: "error", message: "Ungültige Rekord-ID." };
-    return res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+    return res.redirect("/rekorde");
   }
 
   const record = db.prepare("SELECT title FROM records WHERE id = ?").get(recordId);
@@ -89,7 +94,7 @@ router.post("/records/delete", requireAuth, requireAdmin, verifyCsrf, (req, res)
     req.session.flash = { type: "success", message: "Eintrag gelöscht." };
   }
 
-  res.redirect(section === "kurioses" ? "/kurioses" : "/ranglisten");
+  res.redirect("/rekorde");
 });
 
 module.exports = router;

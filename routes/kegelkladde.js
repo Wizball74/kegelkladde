@@ -57,7 +57,7 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
   const attendanceRows = selectedGameday
     ? db
       .prepare(
-        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, va, monte, aussteigen, sechs_tage
+        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, va, monte, aussteigen, sechs_tage, monte_extra, monte_tiebreak, aussteigen_tiebreak
          FROM attendance
          WHERE gameday_id = ?`
       )
@@ -278,14 +278,39 @@ router.post("/kegelkladde/attendance-auto", requireAuth, verifyCsrf, (req, res) 
     const monte = Math.max(0, Math.round((Number.parseFloat(req.body.monte) || 0) * 100) / 100);
     const aussteigen = Math.max(0, Math.round((Number.parseFloat(req.body.aussteigen) || 0) * 100) / 100);
     const sechs_tage = Math.max(0, Math.round((Number.parseFloat(req.body.sechs_tage) || 0) * 100) / 100);
+    const monte_tiebreak = Math.max(0, Math.min(99, Number.parseInt(req.body.monte_tiebreak, 10) || 0));
+    const aussteigen_tiebreak = Math.max(0, Math.min(99, Number.parseInt(req.body.aussteigen_tiebreak, 10) || 0));
 
     db.prepare(
-      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?
+      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?, monte_tiebreak = ?, aussteigen_tiebreak = ?
        WHERE gameday_id = ? AND user_id = ?`
-    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, gamedayId, memberId);
+    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, monte_tiebreak, aussteigen_tiebreak, gamedayId, memberId);
   } else if (dayExists.settled === 2) {
     const paid = Math.max(0, Math.round((Number.parseFloat(req.body.paid) || 0) * 100) / 100);
     db.prepare("UPDATE attendance SET paid = ? WHERE gameday_id = ? AND user_id = ?").run(paid, gamedayId, memberId);
+  }
+
+  res.json({ ok: true });
+});
+
+// Monte-Extrapunkt: Radio-Button (nur ein Spieler pro Spieltag)
+router.post("/kegelkladde/monte-extra", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const memberId = Number.parseInt(req.body.memberId, 10);
+
+  if (!Number.isInteger(gamedayId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const dayExists = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists || dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag nicht bearbeitbar." });
+  }
+
+  // Alle zurücksetzen, dann den gewählten Spieler setzen
+  db.prepare("UPDATE attendance SET monte_extra = 0 WHERE gameday_id = ?").run(gamedayId);
+  if (Number.isInteger(memberId) && memberId > 0) {
+    db.prepare("UPDATE attendance SET monte_extra = 1 WHERE gameday_id = ? AND user_id = ?").run(gamedayId, memberId);
   }
 
   res.json({ ok: true });

@@ -32,11 +32,11 @@
     <% if (currentUser) { %>
       <!-- Desktop navigation -->
       <nav class="nav-links">
-        <a href="/kegelkladde">Kegelkladde</a>
-        <a href="/statistik">Statistik</a>
-        <a href="/members">Mitglieder</a>
+        <a href="/kegelkladde">Kegelbuch</a>
         <a href="/ranglisten">Ranglisten</a>
-        <a href="/kurioses">Kurioses</a>
+        <a href="/statistik">Statistik</a>
+        <a href="/rekorde">Rekorde/Kurioses</a>
+        <a href="/members">Mitglieder</a>
         <% if (isAdmin) { %><a href="/admin">Einstellungen</a><% } %>
       </nav>
 
@@ -58,11 +58,11 @@
   <% if (currentUser) { %>
     <!-- Mobile navigation -->
     <nav id="mobileNav" class="mobile-nav">
-      <a href="/kegelkladde">Kegelkladde</a>
-      <a href="/statistik">Statistik</a>
-      <a href="/members">Mitglieder</a>
+      <a href="/kegelkladde">Kegelbuch</a>
       <a href="/ranglisten">Ranglisten</a>
-      <a href="/kurioses">Kurioses</a>
+      <a href="/statistik">Statistik</a>
+      <a href="/rekorde">Rekorde/Kurioses</a>
+      <a href="/members">Mitglieder</a>
       <% if (isAdmin) { %><a href="/admin">Einstellungen</a><% } %>
       <form method="post" action="/logout" style="margin-top: 0.5rem;">
         <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />

@@ -1,76 +1,144 @@
 <%- include("partials/top") %>
 <section class="card fade-in">
   <div class="section-head">
-    <h1><%= pageTitle %></h1>
-    <p class="subtle">
-      <% if (section === 'rangliste') { %>
-        Bestenlisten und Rekorde des Vereins.
-      <% } else { %>
-        Lustige und kuriose Begebenheiten aus dem Vereinsleben.
-      <% } %>
-    </p>
+    <h1>Rekorde / Kurioses</h1>
+    <p class="subtle">Bestenlisten, Rekorde und kuriose Begebenheiten aus dem Vereinsleben.</p>
   </div>
 
-  <% if (entries.length > 0) { %>
-    <div class="records-table-wrap">
-      <table class="records-table">
-        <thead>
-          <tr>
-            <th>Rekord</th>
-            <th>Rekordhalter</th>
-            <% if (isAdmin) { %><th class="actions"></th><% } %>
-          </tr>
-        </thead>
-        <tbody>
-          <% entries.forEach((entry) => { %>
-            <tr data-record-id="<%= entry.id %>">
-              <td class="record-title"><%= entry.title %></td>
-              <td class="record-holder"><%= entry.holder %></td>
-              <% if (isAdmin) { %>
-                <td class="actions">
-                  <div class="action-btns">
-                    <button type="button" class="btn-edit btn-sm" title="Bearbeiten">✎</button>
-                    <form method="post" action="/records/delete" data-confirm="Eintrag wirklich löschen?">
+  <!-- Tabs -->
+  <nav class="tab-nav">
+    <button type="button" class="tab-btn active" data-tab="rekorde">Rekorde</button>
+    <button type="button" class="tab-btn" data-tab="kurioses">Kurioses</button>
+  </nav>
+
+  <!-- Tab: Rekorde -->
+  <div class="tab-panel active" id="tab-rekorde">
+    <% if (rekorde.length > 0) { %>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Rekord</th>
+              <th>Rekordhalter</th>
+              <% if (isAdmin) { %><th class="actions"></th><% } %>
+            </tr>
+          </thead>
+          <tbody>
+            <% rekorde.forEach((entry) => { %>
+              <tr data-record-id="<%= entry.id %>">
+                <td class="record-title"><%= entry.title %></td>
+                <td class="record-holder"><%= entry.holder %></td>
+                <% if (isAdmin) { %>
+                  <td class="actions">
+                    <div class="action-btns">
+                      <button type="button" class="btn-edit btn-sm" title="Bearbeiten">&#10000;</button>
+                      <form method="post" action="/records/delete" data-confirm="Eintrag wirklich löschen?">
+                        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                        <input type="hidden" name="recordId" value="<%= entry.id %>" />
+                        <input type="hidden" name="section" value="rangliste" />
+                        <button type="submit" class="btn-danger btn-sm">&times;</button>
+                      </form>
+                    </div>
+                    <form method="post" action="/records/edit" class="edit-form" style="display:none">
                       <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
                       <input type="hidden" name="recordId" value="<%= entry.id %>" />
-                      <input type="hidden" name="section" value="<%= section %>" />
-                      <button type="submit" class="btn-danger btn-sm">×</button>
+                      <input type="hidden" name="section" value="rangliste" />
+                      <input type="hidden" name="record" class="edit-title-val" />
+                      <input type="hidden" name="holder" class="edit-holder-val" />
                     </form>
-                  </div>
-                  <form method="post" action="/records/edit" class="edit-form" style="display:none">
-                    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-                    <input type="hidden" name="recordId" value="<%= entry.id %>" />
-                    <input type="hidden" name="section" value="<%= section %>" />
-                    <input type="hidden" name="record" class="edit-title-val" />
-                    <input type="hidden" name="holder" class="edit-holder-val" />
-                  </form>
-                </td>
-              <% } %>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  <% } else { %>
-    <div class="empty-state">
-      <div class="empty-state-icon">📊</div>
-      <p>Noch keine Einträge vorhanden.</p>
-    </div>
-  <% } %>
+                  </td>
+                <% } %>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128202;</div>
+        <p>Noch keine Rekorde vorhanden.</p>
+      </div>
+    <% } %>
 
-  <% if (isAdmin) { %>
-    <h2>Neuer Eintrag</h2>
-    <form method="post" action="/records/add" class="inline-form">
-      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-      <input type="hidden" name="section" value="<%= section %>" />
-      <label>Rekord / Titel
-        <input name="record" placeholder="z. B. Höchste Punktzahl" required maxlength="120" />
-      </label>
-      <label>Rekordhalter
-        <input name="holder" placeholder="z. B. Max Mustermann" required maxlength="120" />
-      </label>
-      <button type="submit">Eintrag speichern</button>
-    </form>
-  <% } %>
+    <% if (isAdmin) { %>
+      <h2>Neuer Rekord</h2>
+      <form method="post" action="/records/add" class="inline-form">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <input type="hidden" name="section" value="rangliste" />
+        <label>Rekord / Titel
+          <input name="record" placeholder="z. B. Höchste Punktzahl" required maxlength="120" />
+        </label>
+        <label>Rekordhalter
+          <input name="holder" placeholder="z. B. Max Mustermann" required maxlength="120" />
+        </label>
+        <button type="submit">Eintrag speichern</button>
+      </form>
+    <% } %>
+  </div>
+
+  <!-- Tab: Kurioses -->
+  <div class="tab-panel" id="tab-kurioses">
+    <% if (kurioses.length > 0) { %>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Begebenheit</th>
+              <th>Beteiligte</th>
+              <% if (isAdmin) { %><th class="actions"></th><% } %>
+            </tr>
+          </thead>
+          <tbody>
+            <% kurioses.forEach((entry) => { %>
+              <tr data-record-id="<%= entry.id %>">
+                <td class="record-title"><%= entry.title %></td>
+                <td class="record-holder"><%= entry.holder %></td>
+                <% if (isAdmin) { %>
+                  <td class="actions">
+                    <div class="action-btns">
+                      <button type="button" class="btn-edit btn-sm" title="Bearbeiten">&#10000;</button>
+                      <form method="post" action="/records/delete" data-confirm="Eintrag wirklich löschen?">
+                        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                        <input type="hidden" name="recordId" value="<%= entry.id %>" />
+                        <input type="hidden" name="section" value="kurioses" />
+                        <button type="submit" class="btn-danger btn-sm">&times;</button>
+                      </form>
+                    </div>
+                    <form method="post" action="/records/edit" class="edit-form" style="display:none">
+                      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                      <input type="hidden" name="recordId" value="<%= entry.id %>" />
+                      <input type="hidden" name="section" value="kurioses" />
+                      <input type="hidden" name="record" class="edit-title-val" />
+                      <input type="hidden" name="holder" class="edit-holder-val" />
+                    </form>
+                  </td>
+                <% } %>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128513;</div>
+        <p>Noch keine kuriosen Begebenheiten vorhanden.</p>
+      </div>
+    <% } %>
+
+    <% if (isAdmin) { %>
+      <h2>Neuer Eintrag</h2>
+      <form method="post" action="/records/add" class="inline-form">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+        <input type="hidden" name="section" value="kurioses" />
+        <label>Begebenheit / Titel
+          <input name="record" placeholder="z. B. Lustigster Moment des Abends" required maxlength="120" />
+        </label>
+        <label>Beteiligte
+          <input name="holder" placeholder="z. B. Fritz und Hans" required maxlength="120" />
+        </label>
+        <button type="submit">Eintrag speichern</button>
+      </form>
+    <% } %>
+  </div>
 </section>
 <%- include("partials/bottom") %>

@@ -2099,6 +2099,87 @@ tr.row-locked td.name-col {
   font-style: italic;
 }
 
+/* Ranglisten */
+.ranglisten-gameday-select {
+  margin-bottom: 1rem;
+}
+
+.rangliste-tally {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #333;
+  line-height: 1.2;
+}
+
+.tally-hl {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tally-hl .tally-five {
+  color: var(--accent);
+}
+
+.tally-hl .tally-five::after {
+  background: var(--accent);
+}
+
+/* Monte Extrapunkt Radio */
+.monte-extra-radio {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  margin: 0 2px 0 0;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  vertical-align: middle;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.monte-extra-radio:checked {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+.monte-extra-radio:hover {
+  transform: none;
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.monte-extra-radio:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Tiebreak-Indikator */
+.tiebreak-badge {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--warning-bg);
+  color: #744210;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid var(--warning);
+}
+
+.tiebreak-badge.visible {
+  display: inline-block;
+}
+
 /* Print styles */
 @media print {
   .topbar,

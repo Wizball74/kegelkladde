@@ -1,0 +1,148 @@
+<%- include("partials/top") %>
+<%
+  const renderTallyColored = (total, highlightPts) => {
+    const base = total - highlightPts;
+    let html = '';
+    // Basis-Striche (normal)
+    if (base > 0) html += renderTallySegment(base, '');
+    // Hervorgehobene Striche (aktueller Spieltag)
+    if (highlightPts > 0) html += renderTallySegment(highlightPts, 'tally-hl');
+    return html;
+  };
+  const renderTallySegment = (count, cls) => {
+    const safe = Math.min(count, 99);
+    const fives = Math.floor(safe / 5);
+    const rest = safe % 5;
+    const wrap = cls ? `<span class="${cls}">` : '';
+    const wrapEnd = cls ? '</span>' : '';
+    let html = wrap;
+    for (let i = 0; i < fives; i++) {
+      html += '<span class="tally-five">||||</span>';
+      if ((i + 1) % 2 === 0 && (i + 1 < fives || rest > 0)) html += '<span class="tally-break"></span>';
+    }
+    if (rest > 0) html += '|'.repeat(rest);
+    html += wrapEnd;
+    return html;
+  };
+%>
+<section class="card fade-in">
+  <div class="section-head">
+    <h1>Ranglisten</h1>
+    <p class="subtle">Punktestände aus Monte und Aussteigen.</p>
+  </div>
+
+  <% if (gamedays.length > 0) { %>
+    <div class="ranglisten-gameday-select">
+      <label style="display:inline-flex; align-items:center; gap:0.5rem; font-size:0.9rem;">
+        Spieltag hervorheben:
+        <select id="ranglistenGameday" style="font-weight:600;">
+          <option value="">Keiner</option>
+          <% gamedays.forEach((gd) => { %>
+            <option value="<%= gd.id %>" <%= selectedGameday && selectedGameday.id === gd.id ? 'selected' : '' %>>
+              <%= formatDateDE(gd.match_date) %><%= gd.note ? ` - ${gd.note}` : '' %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+    </div>
+  <% } %>
+
+  <!-- Tabs -->
+  <nav class="tab-nav">
+    <button type="button" class="tab-btn active" data-tab="monte">Monte</button>
+    <button type="button" class="tab-btn" data-tab="medaillen">Medaillen</button>
+  </nav>
+
+  <!-- Tab: Monte -->
+  <div class="tab-panel active" id="tab-monte">
+    <p class="subtle" style="margin-bottom:0.5rem;">
+      Platz 1&#8211;6: 10 / 6 / 4 / 3 / 2 / 1 Punkt(e) &middot; ab 2,00 &euro; keine Punkte &middot;
+      <span class="tally-hl" style="font-weight:700;">|</span> = Punkte vom gew&auml;hlten Spieltag
+    </p>
+    <% if (monteRanking.length > 0) { %>
+      <div class="records-table-wrap">
+        <table class="records-table sortable-table">
+          <thead>
+            <tr>
+              <th style="width:40px;">Platz</th>
+              <th data-sort="string">Name</th>
+              <th data-sort="number" style="width:65px;">Punkte</th>
+              <th>Strichliste</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% monteRanking.forEach((player, i) => {
+              const hlEntry = selectedGameday
+                ? player.perGameday.find(e => e.gamedayId === selectedGameday.id)
+                : null;
+              const hlPts = hlEntry ? hlEntry.points : 0;
+            %>
+              <tr>
+                <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
+                <td><%= player.display_name %></td>
+                <td data-value="<%= player.total %>" style="text-align:center; font-weight:700;"><%= player.total %></td>
+                <td>
+                  <span class="rangliste-tally"><%- renderTallyColored(player.total, hlPts) %></span>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#127922;</div>
+        <p>Noch keine Monte-Ergebnisse vorhanden.</p>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Tab: Medaillen -->
+  <div class="tab-panel" id="tab-medaillen">
+    <p class="subtle" style="margin-bottom:0.5rem;">
+      Aussteigen: Sieger (0,00 &euro;) = Gold (2 Pkt.) &middot; Zweiter (0,10 &euro;) = Silber (1 Pkt.) &middot;
+      <span class="tally-hl" style="font-weight:700;">|</span> = Punkte vom gew&auml;hlten Spieltag
+    </p>
+    <% if (medaillenRanking.length > 0) { %>
+      <div class="records-table-wrap">
+        <table class="records-table sortable-table">
+          <thead>
+            <tr>
+              <th style="width:40px;">Platz</th>
+              <th data-sort="string">Name</th>
+              <th data-sort="number" style="width:55px;">&#129351;</th>
+              <th data-sort="number" style="width:55px;">&#129352;</th>
+              <th data-sort="number" style="width:65px;">Punkte</th>
+              <th>Strichliste</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% medaillenRanking.forEach((player, i) => {
+              const hlEntry = selectedGameday
+                ? player.perGameday.find(e => e.gamedayId === selectedGameday.id)
+                : null;
+              const hlPts = hlEntry ? hlEntry.points : 0;
+            %>
+              <tr>
+                <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
+                <td><%= player.display_name %></td>
+                <td data-value="<%= player.gold %>" style="text-align:center;"><%= player.gold %></td>
+                <td data-value="<%= player.silver %>" style="text-align:center;"><%= player.silver %></td>
+                <td data-value="<%= player.total %>" style="text-align:center; font-weight:700;"><%= player.total %></td>
+                <td>
+                  <span class="rangliste-tally"><%- renderTallyColored(player.total, hlPts) %></span>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#127942;</div>
+        <p>Noch keine Medaillen-Ergebnisse vorhanden.</p>
+      </div>
+    <% } %>
+  </div>
+</section>
+<%- include("partials/bottom") %>

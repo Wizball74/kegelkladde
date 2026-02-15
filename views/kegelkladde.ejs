@@ -161,7 +161,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <col style="width: 80px;" /><!-- Triclops -->
             <col style="width: 80px;" /><!-- Pudel -->
             <col style="width: 60px;" /><!-- V+A -->
-            <col style="width: 60px;" /><!-- Monte -->
+            <col style="width: 72px;" /><!-- Monte (+ Radio) -->
             <col style="width: 60px;" /><!-- Aussteigen -->
             <col style="width: 60px;" /><!-- 6-Tage -->
             <% customGames.forEach(() => { %>
@@ -282,8 +282,8 @@ Spieltag starten, um die Kladde zu bearbeiten.
                   const sechsTageVal = Number(hit.sechs_tage || 0);
                 %>
                 <td class="game-col" data-label="V+A"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= vaVal.toFixed(2) %>" name="va_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
-                <td class="game-col" data-label="Monte"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= monteVal.toFixed(2) %>" name="monte_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
-                <td class="game-col" data-label="Aussteigen"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= aussteigenVal.toFixed(2) %>" name="aussteigen_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
+                <td class="game-col" data-label="Monte"><span class="money-inline"><input type="radio" name="monte_extra" value="<%= member.id %>" class="monte-extra-radio" <%= hit.monte_extra ? 'checked' : '' %> <%= canEdit ? '' : 'disabled' %> data-monte-extra title="Extrapunkt" /><input type="number" min="0" max="999" step="0.10" value="<%= monteVal.toFixed(2) %>" name="monte_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span><input type="hidden" name="monte_tiebreak_<%= member.id %>" value="<%= Number(hit.monte_tiebreak || 0) %>" data-tiebreak="monte" /></td>
+                <td class="game-col" data-label="Aussteigen"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= aussteigenVal.toFixed(2) %>" name="aussteigen_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span><input type="hidden" name="aussteigen_tiebreak_<%= member.id %>" value="<%= Number(hit.aussteigen_tiebreak || 0) %>" data-tiebreak="aussteigen" /></td>
                 <td class="game-col" data-label="6-Tage"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= sechsTageVal.toFixed(2) %>" name="sechs_tage_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
                 <% customGames.forEach((cg) => {
                   const cgVal = Number(customGameValues.get(member.id + '_' + cg.id) || 0);

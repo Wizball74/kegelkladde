@@ -188,7 +188,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <th><span class="head-label">Triclops</span></th>
               <th><span class="head-label">Pudel</span></th>
               <th class="game-col"><span class="head-label">V+A</span></th>
-              <th class="game-col"><span class="head-label">Monte</span></th>
+              <th class="game-col"><span class="head-label">Monte<br><br><span class="head-sub">(Extrapunkt)</span></span></th>
               <th class="game-col"><span class="head-label">Aussteigen</span></th>
               <th class="game-col"><span class="head-label">6-Tage-Rennen</span></th>
               <% customGames.forEach((cg) => { %>
@@ -282,7 +282,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                   const sechsTageVal = Number(hit.sechs_tage || 0);
                 %>
                 <td class="game-col" data-label="V+A"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= vaVal.toFixed(2) %>" name="va_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
-                <td class="game-col" data-label="Monte"><span class="money-inline"><input type="radio" name="monte_extra" value="<%= member.id %>" class="monte-extra-radio" <%= hit.monte_extra ? 'checked' : '' %> <%= canEdit ? '' : 'disabled' %> data-monte-extra title="Extrapunkt" /><input type="number" min="0" max="999" step="0.10" value="<%= monteVal.toFixed(2) %>" name="monte_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span><input type="hidden" name="monte_tiebreak_<%= member.id %>" value="<%= Number(hit.monte_tiebreak || 0) %>" data-tiebreak="monte" /></td>
+                <td class="game-col" data-label="Monte"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= monteVal.toFixed(2) %>" name="monte_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;<input type="radio" name="monte_extra" value="<%= member.id %>" class="monte-extra-radio" <%= hit.monte_extra ? 'checked' : '' %> <%= canEdit ? '' : 'disabled' %> data-monte-extra title="Extrapunkt" /></span><input type="hidden" name="monte_tiebreak_<%= member.id %>" value="<%= Number(hit.monte_tiebreak || 0) %>" data-tiebreak="monte" /></td>
                 <td class="game-col" data-label="Aussteigen"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= aussteigenVal.toFixed(2) %>" name="aussteigen_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span><input type="hidden" name="aussteigen_tiebreak_<%= member.id %>" value="<%= Number(hit.aussteigen_tiebreak || 0) %>" data-tiebreak="aussteigen" /></td>
                 <td class="game-col" data-label="6-Tage"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= sechsTageVal.toFixed(2) %>" name="sechs_tage_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field />&euro;</span></td>
                 <% customGames.forEach((cg) => {
@@ -370,11 +370,11 @@ Spieltag starten, um die Kladde zu bearbeiten.
         <table class="kassenstand-table">
           <tbody>
             <tr>
-              <td>Kassenstand vor Spieltag:</td>
+              <td>Alter Kassenstand:</td>
               <td class="ks-value" id="ksPrev"><%= formatEuro(ksGameday.previousKassenstand) %> &euro;</td>
             </tr>
             <tr>
-              <td>+ Einnahmen Spieltag:</td>
+              <td>+ Einnahmen:</td>
               <td class="ks-value ks-plus" id="ksPaid">+<%= formatEuro(ksGameday.gamedayPaid) %> &euro;</td>
             </tr>
             <% ksGameday.incomeItems.forEach((ci) => { %>
@@ -417,7 +417,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <% } %>
             <tr class="ks-divider"><td colspan="2"></td></tr>
             <tr class="ks-total">
-              <td>= Kassenstand:</td>
+              <td>= Neuer Kassenstand:</td>
               <td class="ks-value" id="ksTotal"><%= formatEuro(ksGameday.kassenstand) %> &euro;</td>
             </tr>
           </tbody>

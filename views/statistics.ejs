@@ -16,36 +16,66 @@
 
   <!-- Tab: Neuner / Kränze -->
   <div class="tab-panel active" id="tab-neuner-kraenze">
-    <% if (neunerKraenze.length > 0) { %>
-      <div class="records-table-wrap">
-        <table class="records-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>9er</th>
-              <th>&#8709; / Abend</th>
-              <th>Kränze</th>
-              <th>&#8709; / Abend</th>
-              <th>Spieltage</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% neunerKraenze.forEach((item) => { %>
-              <tr>
-                <td><%= item.first_name %> <%= item.last_name || '' %></td>
-                <td><%= item.total_alle9 %></td>
-                <td><%= item.avg_alle9.toFixed(2).replace(".", ",") %></td>
-                <td><%= item.total_kranz %></td>
-                <td><%= item.avg_kranz.toFixed(2).replace(".", ",") %></td>
-                <td><%= item.games %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+    <div class="split-grid">
+      <div>
+        <h2 style="margin-top: 0;">Neuner (Alle 9)</h2>
+        <% if (neunerStats.length > 0) { %>
+          <div class="records-table-wrap">
+            <table class="records-table sortable-table">
+              <thead>
+                <tr>
+                  <th data-sort="string">Name</th>
+                  <th data-sort="number">Gesamt</th>
+                  <th data-sort="number">&#8709; / Abend</th>
+                  <th data-sort="number">Spieltage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% neunerStats.forEach((item) => { %>
+                  <tr>
+                    <td><%= item.first_name %> <%= item.last_name || '' %></td>
+                    <td data-value="<%= item.total %>"><%= item.total %></td>
+                    <td data-value="<%= item.avg %>"><%= item.avg.toFixed(2).replace(".", ",") %></td>
+                    <td data-value="<%= item.games %>"><%= item.games %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %>
+          <p class="subtle" style="text-align: center; padding: 2rem 0;">Noch keine Daten.</p>
+        <% } %>
       </div>
-    <% } else { %>
-      <p class="subtle" style="text-align: center; padding: 2rem 0;">Noch keine Daten vorhanden.</p>
-    <% } %>
+      <div>
+        <h2 style="margin-top: 0;">Kränze</h2>
+        <% if (kraenzeStats.length > 0) { %>
+          <div class="records-table-wrap">
+            <table class="records-table sortable-table">
+              <thead>
+                <tr>
+                  <th data-sort="string">Name</th>
+                  <th data-sort="number">Gesamt</th>
+                  <th data-sort="number">&#8709; / Abend</th>
+                  <th data-sort="number">Spieltage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% kraenzeStats.forEach((item) => { %>
+                  <tr>
+                    <td><%= item.first_name %> <%= item.last_name || '' %></td>
+                    <td data-value="<%= item.total %>"><%= item.total %></td>
+                    <td data-value="<%= item.avg %>"><%= item.avg.toFixed(2).replace(".", ",") %></td>
+                    <td data-value="<%= item.games %>"><%= item.games %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %>
+          <p class="subtle" style="text-align: center; padding: 2rem 0;">Noch keine Daten.</p>
+        <% } %>
+      </div>
+    </div>
   </div>
 
   <!-- Tab: Allgemein -->
@@ -188,12 +218,12 @@
               <tr>
                 <td><a href="/kegelkladde?gamedayId=<%= day.id %>"><%= day.match_date %></a></td>
                 <td><%= day.note || '-' %></td>
+                <%
+                  const sLabels = ['Noch nicht begonnen', 'Gut Holz!', 'Abrechnung', 'Archiv'];
+                  const sBadges = ['badge-muted', 'badge-warning', 'badge-info', 'badge-success'];
+                %>
                 <td>
-                  <% if (day.settled) { %>
-                    <span class="badge badge-success">Abgerechnet</span>
-                  <% } else { %>
-                    <span class="badge badge-warning">Offen</span>
-                  <% } %>
+                  <span class="badge <%= sBadges[day.settled] || 'badge-muted' %>"><%= sLabels[day.settled] || 'Unbekannt' %></span>
                 </td>
               </tr>
             <% }) %>

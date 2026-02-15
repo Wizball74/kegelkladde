@@ -6,6 +6,17 @@ const { sanitize } = require("../utils/helpers");
 const router = express.Router();
 const DEFAULT_CONTRIBUTION_EUR = 4.0;
 
+// In-memory edit locks: key "gamedayId_memberId" → { userId, firstName, lockedAt }
+const editLocks = new Map();
+const LOCK_TTL_MS = 15000;
+
+function cleanExpiredLocks() {
+  const now = Date.now();
+  for (const [key, lock] of editLocks) {
+    if (now - lock.lockedAt > LOCK_TTL_MS) editLocks.delete(key);
+  }
+}
+
 router.get("/", requireAuth, (req, res) => {
   res.redirect("/kegelkladde");
 });
@@ -84,7 +95,7 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
   });
 });
 
-router.post("/kegelkladde/gamedays", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
   const matchDate = sanitize(req.body.matchDate, 10);
   const note = sanitize(req.body.note, 120);
 
@@ -94,7 +105,7 @@ router.post("/kegelkladde/gamedays", requireAuth, requireAdmin, verifyCsrf, (req
   }
 
   const result = db
-    .prepare("INSERT INTO gamedays (match_date, note, created_by) VALUES (?, ?, ?)")
+    .prepare("INSERT INTO gamedays (match_date, note, settled, created_by) VALUES (?, ?, 1, ?)")
     .run(matchDate, note || null, req.session.userId);
 
   const members = getOrderedMembers();
@@ -132,16 +143,19 @@ router.post("/kegelkladde/gamedays", requireAuth, requireAdmin, verifyCsrf, (req
     }
 
     for (const r of prevRows) {
+      let toPay;
       if (r.present) {
         const pudelCost = r.pudel * 0.10;
         const alle9Cost = (totalAlle9 - r.alle9) * 0.10;
         const kranzCost = (totalKranz - r.kranz) * 0.10;
         const triclopsCost = (totalTriclops - r.triclops) * 0.10;
         const gameCosts = (r.va || 0) + (r.monte || 0) + (r.aussteigen || 0) + (r.sechs_tage || 0) + (prevCustomVals.get(r.user_id) || 0);
-        const toPay = r.contribution + r.penalties + pudelCost + alle9Cost + kranzCost + triclopsCost + gameCosts + (r.carryover || 0);
-        const rest = Math.round((toPay - (r.paid || 0)) * 100) / 100;
-        prevRestMap.set(r.user_id, rest);
+        toPay = r.contribution + r.penalties + pudelCost + alle9Cost + kranzCost + triclopsCost + gameCosts + (r.carryover || 0);
+      } else {
+        toPay = (r.contribution || 0) + (r.penalties || 0) + (r.carryover || 0);
       }
+      const rest = Math.round((toPay - (r.paid || 0)) * 100) / 100;
+      if (rest !== 0) prevRestMap.set(r.user_id, rest);
     }
   }
 
@@ -163,7 +177,7 @@ router.post("/kegelkladde/gamedays", requireAuth, requireAdmin, verifyCsrf, (req
   res.redirect("/kegelkladde");
 });
 
-router.post("/kegelkladde/attendance", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/attendance", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
     return res.redirect("/kegelkladde");
@@ -173,8 +187,8 @@ router.post("/kegelkladde/attendance", requireAuth, requireAdmin, verifyCsrf, (r
   if (!dayExists) {
     return res.redirect("/kegelkladde");
   }
-  if (dayExists.settled) {
-    req.session.flash = { type: "error", message: "Spieltag ist bereits abgerechnet." };
+  if (dayExists.settled > 1) {
+    req.session.flash = { type: "error", message: "Spieltag kann nicht mehr bearbeitet werden." };
     return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
   }
 
@@ -217,7 +231,7 @@ router.post("/kegelkladde/attendance", requireAuth, requireAdmin, verifyCsrf, (r
   res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
 });
 
-router.post("/kegelkladde/attendance-auto", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/attendance-auto", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   const memberId = Number.parseInt(req.body.memberId, 10);
 
@@ -229,51 +243,72 @@ router.post("/kegelkladde/attendance-auto", requireAuth, requireAdmin, verifyCsr
   if (!dayExists) {
     return res.status(404).json({ error: "Spieltag nicht gefunden." });
   }
-  if (dayExists.settled) {
-    return res.status(400).json({ error: "Spieltag ist bereits abgeschlossen." });
+  if (dayExists.settled >= 3) {
+    return res.status(400).json({ error: "Spieltag ist archiviert." });
   }
 
-  const present = req.body.present ? 1 : 0;
-  const triclops = Math.max(0, Math.min(99, Number.parseInt(req.body.triclops, 10) || 0));
-  const penalties = Math.max(0, Math.min(999, Math.round((Number.parseFloat(req.body.penalties) || 0) * 100) / 100));
-  const alle9 = Math.max(0, Math.min(999, Number.parseInt(req.body.alle9, 10) || 0));
-  const kranz = Math.max(0, Math.min(999, Number.parseInt(req.body.kranz, 10) || 0));
-  const pudel = Math.max(0, Math.min(999, Number.parseInt(req.body.pudel, 10) || 0));
-  const va = Math.max(0, Math.round((Number.parseFloat(req.body.va) || 0) * 100) / 100);
-  const monte = Math.max(0, Math.round((Number.parseFloat(req.body.monte) || 0) * 100) / 100);
-  const aussteigen = Math.max(0, Math.round((Number.parseFloat(req.body.aussteigen) || 0) * 100) / 100);
-  const sechs_tage = Math.max(0, Math.round((Number.parseFloat(req.body.sechs_tage) || 0) * 100) / 100);
+  // Status 0-1: marks editable, Status 2: only paid editable
+  if (dayExists.settled <= 1) {
+    const present = req.body.present ? 1 : 0;
+    const triclops = Math.max(0, Math.min(99, Number.parseInt(req.body.triclops, 10) || 0));
+    const penalties = Math.max(0, Math.min(999, Math.round((Number.parseFloat(req.body.penalties) || 0) * 100) / 100));
+    const alle9 = Math.max(0, Math.min(999, Number.parseInt(req.body.alle9, 10) || 0));
+    const kranz = Math.max(0, Math.min(999, Number.parseInt(req.body.kranz, 10) || 0));
+    const pudel = Math.max(0, Math.min(999, Number.parseInt(req.body.pudel, 10) || 0));
+    const va = Math.max(0, Math.round((Number.parseFloat(req.body.va) || 0) * 100) / 100);
+    const monte = Math.max(0, Math.round((Number.parseFloat(req.body.monte) || 0) * 100) / 100);
+    const aussteigen = Math.max(0, Math.round((Number.parseFloat(req.body.aussteigen) || 0) * 100) / 100);
+    const sechs_tage = Math.max(0, Math.round((Number.parseFloat(req.body.sechs_tage) || 0) * 100) / 100);
 
-  db.prepare(
-    `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?
-     WHERE gameday_id = ? AND user_id = ?`
-  ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, gamedayId, memberId);
+    db.prepare(
+      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?
+       WHERE gameday_id = ? AND user_id = ?`
+    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, gamedayId, memberId);
+  } else if (dayExists.settled === 2) {
+    const paid = Math.max(0, Math.round((Number.parseFloat(req.body.paid) || 0) * 100) / 100);
+    db.prepare("UPDATE attendance SET paid = ? WHERE gameday_id = ? AND user_id = ?").run(paid, gamedayId, memberId);
+  }
 
   res.json({ ok: true });
 });
 
-router.post("/kegelkladde/settle", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+// Status: 0=Noch nicht begonnen, 1=Gut Holz!, 2=Abrechnung, 3=Archiv
+const STATUS_LABELS = ["Noch nicht begonnen", "Gut Holz!", "Abrechnung", "Archiv"];
+
+router.post("/kegelkladde/advance-status", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
     return res.redirect("/kegelkladde");
   }
-  db.prepare("UPDATE gamedays SET settled = 1 WHERE id = ?").run(gamedayId);
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled >= 3) {
+    req.session.flash = { type: "error", message: "Status kann nicht weiter erhöht werden." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+  const newStatus = day.settled + 1;
+  db.prepare("UPDATE gamedays SET settled = ? WHERE id = ?").run(newStatus, gamedayId);
 
-  logAudit(req.session.userId, "GAMEDAY_SETTLE", "gameday", gamedayId);
-  req.session.flash = { type: "success", message: "Spieltag abgerechnet und gesperrt." };
+  logAudit(req.session.userId, "GAMEDAY_STATUS_ADVANCE", "gameday", gamedayId, { from: day.settled, to: newStatus });
+  req.session.flash = { type: "success", message: `Status: ${STATUS_LABELS[newStatus]}` };
 
   res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
 });
 
-router.post("/kegelkladde/unsettle", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/revert-status", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
     return res.redirect("/kegelkladde");
   }
-  db.prepare("UPDATE gamedays SET settled = 0 WHERE id = ?").run(gamedayId);
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled <= 0) {
+    req.session.flash = { type: "error", message: "Status kann nicht weiter zurückgesetzt werden." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+  const newStatus = day.settled - 1;
+  db.prepare("UPDATE gamedays SET settled = ? WHERE id = ?").run(newStatus, gamedayId);
 
-  logAudit(req.session.userId, "GAMEDAY_UNSETTLE", "gameday", gamedayId);
-  req.session.flash = { type: "success", message: "Spieltag wieder geöffnet." };
+  logAudit(req.session.userId, "GAMEDAY_STATUS_REVERT", "gameday", gamedayId, { from: day.settled, to: newStatus });
+  req.session.flash = { type: "success", message: `Status: ${STATUS_LABELS[newStatus]}` };
 
   res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
 });
@@ -300,7 +335,7 @@ router.post("/kegelkladde/delete", requireAuth, requireAdmin, verifyCsrf, (req, 
   res.redirect("/kegelkladde");
 });
 
-router.post("/kegelkladde/custom-game", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/custom-game", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   const name = sanitize(req.body.name, 30);
 
@@ -312,8 +347,8 @@ router.post("/kegelkladde/custom-game", requireAuth, requireAdmin, verifyCsrf, (
   if (!dayExists) {
     return res.status(404).json({ error: "Spieltag nicht gefunden." });
   }
-  if (dayExists.settled) {
-    return res.status(400).json({ error: "Spieltag ist bereits abgeschlossen." });
+  if (dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag ist bereits in Abrechnung oder archiviert." });
   }
 
   const maxOrder = db.prepare("SELECT MAX(sort_order) as mx FROM custom_games WHERE gameday_id = ?").get(gamedayId);
@@ -335,7 +370,7 @@ router.post("/kegelkladde/custom-game", requireAuth, requireAdmin, verifyCsrf, (
   res.json({ ok: true, id: Number(gameId), name, sortOrder });
 });
 
-router.post("/kegelkladde/custom-game-value", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/custom-game-value", requireAuth, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   const memberId = Number.parseInt(req.body.memberId, 10);
   const customGameId = Number.parseInt(req.body.customGameId, 10);
@@ -349,8 +384,8 @@ router.post("/kegelkladde/custom-game-value", requireAuth, requireAdmin, verifyC
   if (!dayExists) {
     return res.status(404).json({ error: "Spieltag nicht gefunden." });
   }
-  if (dayExists.settled) {
-    return res.status(400).json({ error: "Spieltag ist bereits abgeschlossen." });
+  if (dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag ist bereits in Abrechnung oder archiviert." });
   }
 
   db.prepare(
@@ -384,6 +419,73 @@ router.post("/kegelkladde/member-order", requireAuth, requireAdmin, verifyCsrf, 
 
   req.session.flash = { type: "success", message: "Reihenfolge gespeichert." };
   res.redirect("/members");
+});
+
+// --- Edit-Lock Endpoints ---
+
+router.post("/kegelkladde/lock-row", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const memberId = Number.parseInt(req.body.memberId, 10);
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(memberId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  cleanExpiredLocks();
+
+  const key = `${gamedayId}_${memberId}`;
+  const existing = editLocks.get(key);
+  // Only allow setting/renewing if no lock or own lock
+  if (!existing || existing.userId === req.session.userId) {
+    editLocks.set(key, {
+      userId: req.session.userId,
+      firstName: req.session.user.firstName,
+      lockedAt: Date.now()
+    });
+  }
+
+  // Return all locks for this gameday (excluding requester's own)
+  const locks = [];
+  for (const [k, lock] of editLocks) {
+    if (k.startsWith(gamedayId + "_") && lock.userId !== req.session.userId) {
+      const mId = Number.parseInt(k.split("_")[1], 10);
+      locks.push({ memberId: mId, firstName: lock.firstName });
+    }
+  }
+  res.json({ ok: true, locks });
+});
+
+router.post("/kegelkladde/unlock-row", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const memberId = Number.parseInt(req.body.memberId, 10);
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(memberId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const key = `${gamedayId}_${memberId}`;
+  const existing = editLocks.get(key);
+  if (existing && existing.userId === req.session.userId) {
+    editLocks.delete(key);
+  }
+
+  res.json({ ok: true });
+});
+
+router.get("/kegelkladde/locks", requireAuth, (req, res) => {
+  const gamedayId = Number.parseInt(req.query.gamedayId, 10);
+  if (!Number.isInteger(gamedayId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  cleanExpiredLocks();
+
+  const locks = [];
+  for (const [k, lock] of editLocks) {
+    if (k.startsWith(gamedayId + "_") && lock.userId !== req.session.userId) {
+      const mId = Number.parseInt(k.split("_")[1], 10);
+      locks.push({ memberId: mId, firstName: lock.firstName });
+    }
+  }
+  res.json({ locks });
 });
 
 module.exports = router;

@@ -85,6 +85,17 @@ if (!gamedayColumns.includes("settled")) {
   db.exec("ALTER TABLE gamedays ADD COLUMN settled INTEGER NOT NULL DEFAULT 0");
 }
 
+// Migration tracking
+db.exec(`CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+
+// Migrate binary settled (0/1) to 4-state status (0=Noch nicht begonnen, 1=Gut Holz!, 2=Abrechnung, 3=Archiv)
+const statusMigration = db.prepare("SELECT 1 FROM migrations WHERE name = 'settled_to_4state'").get();
+if (!statusMigration) {
+  db.exec("UPDATE gamedays SET settled = 3 WHERE settled = 1");
+  db.exec("UPDATE gamedays SET settled = 1 WHERE settled = 0");
+  db.prepare("INSERT INTO migrations (name) VALUES ('settled_to_4state')").run();
+}
+
 const attendanceColumns = db.prepare("PRAGMA table_info(attendance)").all().map((c) => c.name);
 if (!attendanceColumns.includes("penalties")) {
   db.exec("ALTER TABLE attendance ADD COLUMN penalties INTEGER NOT NULL DEFAULT 0");

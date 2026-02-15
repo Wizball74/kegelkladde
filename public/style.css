@@ -6,7 +6,7 @@
   --accent: #2f8f6d;
   --accent-strong: #20684f;
   --accent-light: #e8f5ef;
-  --line: #d7d9cf;
+  --line: #aaa;
   --warm: #e8d09f;
   --success: #2f8f6d;
   --success-bg: #e8f5ef;
@@ -64,6 +64,11 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+a.brand {
+  text-decoration: none;
+  color: inherit;
 }
 
 .brand {
@@ -235,6 +240,15 @@ button:disabled {
 .btn-secondary:hover {
   background: #f5f2e8;
   border-color: var(--muted);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #2d6930;
 }
 
 .btn-danger {
@@ -502,6 +516,11 @@ textarea:focus {
   color: #744210;
 }
 
+.badge-info {
+  background: #e0ecf8;
+  color: #2a5a8a;
+}
+
 .badge-muted {
   background: #e8e8e8;
   color: var(--muted);
@@ -541,6 +560,7 @@ textarea:focus {
   border-collapse: collapse;
   font-size: 0.85rem;
   table-layout: fixed;
+  width: 100%;
 }
 
 .kladde-table th,
@@ -634,13 +654,93 @@ textarea:focus {
   background: transparent;
   padding: 0.2rem;
   width: 1.6em;
-  text-align: center;
+  text-align: left;
   cursor: text;
 }
 
 .custom-game-header-input::placeholder {
   color: var(--line);
   font-style: italic;
+}
+
+/* === Compact cell mode: show values as text, edit on hover === */
+
+/* Money fields: hide input by default, show formatted display text */
+td.has-compact .money-inline {
+  position: relative;
+}
+
+td.has-compact input.mini-number {
+  visibility: hidden;
+}
+
+td.has-compact .field-display {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 45px;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* On hover, focus-within, or active column: show input, hide display */
+td.has-compact:hover input.mini-number:not(:disabled),
+td.has-compact:focus-within input.mini-number:not(:disabled),
+td.has-compact.col-active input.mini-number:not(:disabled) {
+  visibility: visible;
+}
+
+td.has-compact:hover input:not(:disabled) ~ .field-display,
+td.has-compact:focus-within input:not(:disabled) ~ .field-display,
+td.has-compact.col-active input:not(:disabled) ~ .field-display {
+  display: none;
+}
+
+/* Marker buttons: invisible until hover */
+.marker-controls .mark-btn {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+td:hover .marker-controls .mark-btn:not(:disabled),
+td.col-active .marker-controls .mark-btn:not(:disabled) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+td:hover .marker-controls .marker-strip,
+td.col-active .marker-controls .marker-strip {
+  visibility: visible !important;
+}
+
+/* Empty cells (value 0): fade out until hover */
+td.cell-empty > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+td.cell-empty:hover > *,
+td.cell-empty:focus-within > * {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Reveal entire column when active (tab navigation) */
+td.col-active.cell-empty > * {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Keep empty cells hidden in inactive (not present) rows */
+.row-inactive td.cell-empty:hover > *,
+.row-inactive td.col-active.cell-empty > * {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .custom-game-header-input:focus {
@@ -757,7 +857,7 @@ textarea:focus {
 /* Marker controls */
 .marker-controls {
   display: grid;
-  grid-template-columns: 10px 73px 18px;
+  grid-template-columns: 10px 40px 18px;
   gap: 2px;
   align-items: center;
 }
@@ -797,9 +897,9 @@ textarea:focus {
 
 .marker-strip {
   min-height: 18px;
-  width: 73px;
+  width: 40px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 7px;
   padding: 1px 3px;
   background: #fff;
   font-size: 0.7rem;
@@ -809,6 +909,7 @@ textarea:focus {
   align-items: center;
   flex-wrap: wrap;
   gap: 3px;
+  color: #333;
 }
 
 .tally-break {
@@ -827,22 +928,39 @@ textarea:focus {
 
 /* Inactive rows (not present) */
 .row-inactive td {
-  padding-top: 0;
-  padding-bottom: 0;
+  color: #999;
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
 }
 
 .row-inactive .marker-controls,
 .row-inactive .marker-cost,
-.row-inactive .money-inline,
-.row-inactive [data-topay],
-.row-inactive [data-rest] {
+.row-inactive [data-game-field],
+.row-inactive [data-custom-game-field] {
   display: none;
+}
+
+.row-inactive td.marker-cell,
+.row-inactive td.game-col {
+  position: relative;
+}
+
+.row-inactive td.marker-cell::after,
+.row-inactive td.game-col::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--line);
 }
 
 .tally-five {
   position: relative;
   display: inline-block;
   letter-spacing: 0.5px;
+  color: #333;
 }
 
 .tally-five::after {
@@ -943,6 +1061,32 @@ textarea:focus {
 
 .tab-panel.active {
   display: block;
+}
+
+/* Sortable table headers */
+.sortable-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 1.2em;
+}
+
+.sortable-table th[data-sort]::after {
+  content: '⇅';
+  position: absolute;
+  right: 0.3em;
+  opacity: 0.3;
+  font-size: 0.75em;
+}
+
+.sortable-table th.sort-asc::after {
+  content: '▲';
+  opacity: 0.8;
+}
+
+.sortable-table th.sort-desc::after {
+  content: '▼';
+  opacity: 0.8;
 }
 
 /* Records table */
@@ -1418,6 +1562,385 @@ textarea:focus {
   opacity: 0.5;
 }
 
+/* Mobile view toggle + game cards (hidden on desktop) */
+.mobile-view-toggle,
+.mobile-by-game {
+  display: none;
+}
+
+/* ========== Mobile Kladde: table → cards ========== */
+@media (max-width: 899px) {
+
+  /* --- View toggle --- */
+  .mobile-view-toggle {
+    display: flex;
+    margin-bottom: 1rem;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+
+  .toggle-btn {
+    flex: 1;
+    padding: 0.55rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
+
+  .toggle-btn.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  .toggle-btn:not(.active) {
+    background: var(--panel);
+    color: var(--ink);
+  }
+
+  .toggle-btn:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* --- View switching via class on #kladdeData --- */
+  .kladde-view-game > .table-shell { display: none !important; }
+  .kladde-view-game > .mobile-by-game { display: block; }
+
+  /* --- Game cards --- */
+  .game-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+  }
+
+  .game-card-header {
+    padding: 0.75rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    background: #f8f5eb;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+
+  .game-card-header::after {
+    content: '\25BE';
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .game-card.mobile-collapsed .game-card-header::after {
+    content: '\25B8';
+  }
+
+  .game-card.mobile-collapsed .game-card-body {
+    display: none;
+  }
+
+  .game-card-body {
+    padding: 0.25rem 0;
+  }
+
+  .game-card-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .game-card-row:last-child {
+    border-bottom: none;
+  }
+
+  .game-card-row.gc-inactive {
+    opacity: 0.35;
+  }
+
+  .gcn {
+    font-weight: 600;
+    font-size: 0.85rem;
+    min-width: 75px;
+    flex-shrink: 0;
+  }
+
+  /* Game-card marker layout (separate from table .marker-controls) */
+  .gc-marker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .gc-marker .marker-strip {
+    flex: 1;
+    min-width: 40px;
+    max-width: 140px;
+    flex-wrap: nowrap;
+  }
+
+  .gc-marker .tally-break {
+    display: none;
+  }
+
+  .gc-marker .mark-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    flex-shrink: 0;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .gc-marker .mark-dec {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    opacity: 0.7;
+  }
+
+  .game-card-row .gcost {
+    font-size: 0.75rem;
+    color: var(--error);
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .game-card-row .money-inline {
+    margin-left: auto;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .game-card-row .mini-number.no-spin {
+    width: 55px;
+  }
+
+  .game-card-row .money-text {
+    margin-left: auto;
+  }
+
+  .gc-summary .gcn {
+    flex: 1;
+  }
+
+  .gc-summary .money-text {
+    font-weight: 700;
+  }
+  .table-shell {
+    border: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .kladde-table {
+    display: block;
+    table-layout: auto;
+    font-size: 0.9rem;
+  }
+
+  .kladde-table colgroup { display: none; }
+  .kladde-table thead { display: none; }
+
+  .kladde-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .kladde-table tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .kladde-table tbody tr:nth-child(even) {
+    background: white;
+  }
+
+  .kladde-table tbody tr:hover {
+    background: white;
+  }
+
+  .kladde-table tbody tr td {
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  /* --- Card header row: present | name | zu zahlen --- */
+  .kladde-table tbody tr td.present-col {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 0.75rem 0.25rem 0.75rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+  }
+
+  .kladde-table tbody tr td.name-col {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0.75rem 0.25rem;
+    font-size: 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .kladde-table tbody tr td.name-col::after {
+    content: '\25BE';
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-left: auto;
+    transition: transform var(--transition);
+  }
+
+  .kladde-table tbody tr.mobile-collapsed td.name-col::after {
+    content: '\25B8';
+  }
+
+  .kladde-table tbody tr td.topay-col {
+    grid-column: 3;
+    grid-row: 1;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--line);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+  }
+
+  /* --- Card body cells: full width --- */
+  .kladde-table tbody tr td:not(.name-col):not(.present-col):not(.topay-col) {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .kladde-table tbody tr td:not(.name-col):not(.present-col):not(.topay-col)::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--muted);
+    flex-shrink: 0;
+    min-width: 70px;
+  }
+
+  /* Collapsed: hide body cells */
+  .kladde-table tbody tr.mobile-collapsed td:not(.name-col):not(.present-col):not(.topay-col) {
+    display: none;
+  }
+
+  /* New game placeholder: always hidden on mobile */
+  .kladde-table tbody tr td.newgame-placeholder {
+    display: none !important;
+  }
+
+  /* --- Compact mode override: always show inputs --- */
+  td.has-compact input.mini-number {
+    visibility: visible !important;
+  }
+
+  td.has-compact .field-display {
+    display: none !important;
+  }
+
+  td.cell-empty > * {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* --- Marker controls: always visible, bigger touch targets --- */
+  .marker-controls {
+    grid-template-columns: 32px 1fr 32px;
+    gap: 6px;
+  }
+
+  .marker-controls .mark-btn {
+    opacity: 1;
+    pointer-events: auto;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+
+  .marker-controls .mark-dec {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+    opacity: 0.6;
+  }
+
+  .marker-strip {
+    width: auto;
+    min-width: 50px;
+  }
+
+  .marker-cost {
+    text-align: right;
+    font-size: 0.75rem;
+    min-height: auto;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+  }
+
+  /* Marker cell layout on mobile: label | controls + cost */
+  td.marker-cell {
+    flex-wrap: wrap;
+  }
+
+  td.marker-cell .marker-controls {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  /* --- Money inputs bigger on mobile --- */
+  .mini-number.no-spin,
+  .game-col-input {
+    width: 65px;
+    font-size: 0.9rem;
+    padding: 0.4rem;
+  }
+
+  /* --- Inactive rows on mobile --- */
+  .row-inactive td.marker-cell::after,
+  .row-inactive td.game-col::after {
+    display: none;
+  }
+
+  .row-inactive td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  /* Lock indicator in mobile cards */
+  .lock-indicator {
+    font-size: 0.7rem;
+  }
+}
+
 /* Responsive */
 @media (min-width: 900px) {
   .page-shell {
@@ -1462,6 +1985,24 @@ textarea:focus {
   .stats-grid {
     grid-template-columns: repeat(6, 1fr);
   }
+}
+
+/* Row-level edit locking */
+tr.row-locked {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+tr.row-locked td.name-col {
+  pointer-events: auto;
+}
+
+.lock-indicator {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--accent);
+  font-weight: 400;
+  font-style: italic;
 }
 
 /* Print styles */

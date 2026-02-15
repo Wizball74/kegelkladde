@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/statistik", requireAuth, (req, res) => {
   // Total gamedays
   const totalGamedays = db.prepare("SELECT COUNT(*) as count FROM gamedays").get().count;
-  const settledGamedays = db.prepare("SELECT COUNT(*) as count FROM gamedays WHERE settled = 1").get().count;
+  const settledGamedays = db.prepare("SELECT COUNT(*) as count FROM gamedays WHERE settled = 3").get().count;
 
   // Total contributions
   const totalContributions = db.prepare("SELECT COALESCE(SUM(contribution), 0) as total FROM attendance").get().total;
@@ -100,19 +100,30 @@ router.get("/statistik", requireAuth, (req, res) => {
     monthName: monthNames[parseInt(m.month, 10) - 1]
   }));
 
-  // Per-member 9er/Kranz stats with averages
-  const neunerKraenze = db.prepare(`
+  // Per-member 9er stats
+  const neunerStats = db.prepare(`
     SELECT u.first_name, u.last_name,
-      COALESCE(SUM(a.alle9), 0) as total_alle9,
-      COALESCE(SUM(a.kranz), 0) as total_kranz,
+      COALESCE(SUM(a.alle9), 0) as total,
       COUNT(*) as games,
-      ROUND(CAST(COALESCE(SUM(a.alle9), 0) AS REAL) / COUNT(*), 2) as avg_alle9,
-      ROUND(CAST(COALESCE(SUM(a.kranz), 0) AS REAL) / COUNT(*), 2) as avg_kranz
+      ROUND(CAST(COALESCE(SUM(a.alle9), 0) AS REAL) / COUNT(*), 2) as avg
     FROM attendance a
     JOIN users u ON a.user_id = u.id
     WHERE a.present = 1
     GROUP BY a.user_id
-    ORDER BY total_alle9 + total_kranz DESC
+    ORDER BY total DESC
+  `).all();
+
+  // Per-member Kranz stats
+  const kraenzeStats = db.prepare(`
+    SELECT u.first_name, u.last_name,
+      COALESCE(SUM(a.kranz), 0) as total,
+      COUNT(*) as games,
+      ROUND(CAST(COALESCE(SUM(a.kranz), 0) AS REAL) / COUNT(*), 2) as avg
+    FROM attendance a
+    JOIN users u ON a.user_id = u.id
+    WHERE a.present = 1
+    GROUP BY a.user_id
+    ORDER BY total DESC
   `).all();
 
   res.render("statistics", {
@@ -130,7 +141,8 @@ router.get("/statistik", requireAuth, (req, res) => {
     recentGamedays,
     monthlySummary: formattedMonthlySummary,
     currentYear,
-    neunerKraenze
+    neunerStats,
+    kraenzeStats
   });
 });
 

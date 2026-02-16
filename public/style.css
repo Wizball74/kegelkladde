@@ -584,7 +584,7 @@ textarea:focus {
 }
 
 .kladde-table thead tr:first-child th {
-  background: linear-gradient(to bottom, #efe9d4, #cfcfcf);
+  background: linear-gradient(to bottom, #efe9d4, #dddddd);
   border-bottom: 2px solid #d4cebb;
   height: 70px;
   vertical-align: bottom;
@@ -598,7 +598,7 @@ textarea:focus {
 }
 
 .kladde-table tbody tr:nth-child(even) {
-  background: #cfcfcf;
+  background: #dddddd;
 }
 
 .kladde-table tbody tr:nth-child(even):hover {
@@ -988,6 +988,10 @@ td.col-active.cell-empty > * {
 .tally-break {
   flex-basis: 100%;
   height: 0;
+}
+
+#tab-monte .tally-break {
+  display: none;
 }
 
 .marker-cost {
@@ -2206,6 +2210,49 @@ tr.row-locked td.name-col {
 
 .tally-hl .tally-five::after {
   background: var(--accent);
+}
+
+/* Monte Detailtabelle */
+.monte-detail-table th,
+.monte-detail-table td {
+  padding: 0.5rem 0.4rem;
+}
+
+.monte-gd-th,
+.monte-gd-td {
+  white-space: nowrap;
+}
+
+.monte-gd-td {
+  color: #555;
+}
+
+.monte-detail-table tbody tr:nth-child(even) {
+  background: #dddddd;
+}
+
+.monte-detail-table tbody tr:nth-child(even) .monte-sum-td {
+  background: #e8dfc8;
+}
+
+.monte-spacer-th,
+.monte-spacer-td {
+  width: 100%;
+  padding: 0 !important;
+}
+
+.monte-sum-th,
+.monte-sum-td {
+  min-width: 100px;
+  width: 100px;
+  text-align: center;
+  background: #f8f5eb;
+}
+
+.monte-sum-td {
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--accent);
 }
 
 /* Monte Extrapunkt Radio */

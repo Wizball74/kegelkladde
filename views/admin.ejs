@@ -113,14 +113,13 @@
               <th>Übertrag&nbsp;(&euro;)</th>
               <th>Monte&nbsp;Pkt.</th>
               <th>Monte&nbsp;&#x1F451;</th>
-              <th>Med.&nbsp;&#129351;</th>
-              <th>Med.&nbsp;&#129352;</th>
+              <th>Med.&nbsp;Pkt.</th>
               <th>Med.&nbsp;&#x1F451;</th>
             </tr>
           </thead>
           <tbody>
             <% members.forEach((m) => {
-              const iv = initialMap.get(m.id) || { initial_alle9: 0, initial_kranz: 0, initial_carryover: 0, initial_monte_points: 0, initial_monte_siege: 0, initial_medaillen_gold: 0, initial_medaillen_silver: 0, initial_medaillen_siege: 0 };
+              const iv = initialMap.get(m.id) || { initial_alle9: 0, initial_kranz: 0, initial_carryover: 0, initial_monte_points: 0, initial_monte_siege: 0, initial_medaillen_points: 0, initial_medaillen_siege: 0 };
             %>
               <tr>
                 <td><%= m.display_name %></td>
@@ -129,8 +128,7 @@
                 <td><input type="number" name="initial_carryover_<%= m.id %>" step="0.01" value="<%= iv.initial_carryover.toFixed(2) %>" class="mini-number no-spin" style="width:64px" /></td>
                 <td><input type="number" name="initial_monte_points_<%= m.id %>" min="0" value="<%= iv.initial_monte_points %>" class="mini-number" style="width:48px" /></td>
                 <td><input type="number" name="initial_monte_siege_<%= m.id %>" min="0" value="<%= iv.initial_monte_siege %>" class="mini-number" style="width:48px" /></td>
-                <td><input type="number" name="initial_medaillen_gold_<%= m.id %>" min="0" value="<%= iv.initial_medaillen_gold %>" class="mini-number" style="width:48px" /></td>
-                <td><input type="number" name="initial_medaillen_silver_<%= m.id %>" min="0" value="<%= iv.initial_medaillen_silver %>" class="mini-number" style="width:48px" /></td>
+                <td><input type="number" name="initial_medaillen_points_<%= m.id %>" min="0" value="<%= iv.initial_medaillen_points %>" class="mini-number" style="width:48px" /></td>
                 <td><input type="number" name="initial_medaillen_siege_<%= m.id %>" min="0" value="<%= iv.initial_medaillen_siege %>" class="mini-number" style="width:48px" /></td>
               </tr>
             <% }) %>

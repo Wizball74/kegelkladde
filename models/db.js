@@ -224,6 +224,11 @@ if (!mivColumns.includes("initial_monte_siege")) {
 if (!mivColumns.includes("initial_medaillen_siege")) {
   db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_siege INTEGER NOT NULL DEFAULT 0");
 }
+if (!mivColumns.includes("initial_medaillen_points")) {
+  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_points INTEGER NOT NULL DEFAULT 0");
+  // Bestehende Gold/Silber-Werte migrieren
+  db.exec("UPDATE member_initial_values SET initial_medaillen_points = initial_medaillen_gold * 2 + initial_medaillen_silver");
+}
 
 // Create indexes for performance
 db.exec(`

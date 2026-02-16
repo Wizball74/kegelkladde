@@ -24,7 +24,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   const medaillenMap = new Map();
 
   members.forEach((m) => {
-    monteMap.set(m.id, { total: 0, wins: 0, perGameday: [] });
+    monteMap.set(m.id, { total: 0, wins: 0, perGameday: [], carryover: 0 });
     medaillenMap.set(m.id, { gold: 0, silver: 0, total: 0, wins: 0, perGameday: [] });
   });
 
@@ -36,13 +36,12 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     const mt = monteMap.get(iv.user_id);
     if (mt) {
       mt.total += iv.initial_monte_points || 0;
+      mt.carryover = iv.initial_monte_points || 0;
       mt.wins += iv.initial_monte_siege || 0;
     }
     const md = medaillenMap.get(iv.user_id);
     if (md) {
-      md.gold += iv.initial_medaillen_gold || 0;
-      md.silver += iv.initial_medaillen_silver || 0;
-      md.total += (iv.initial_medaillen_gold || 0) * 2 + (iv.initial_medaillen_silver || 0);
+      md.total += iv.initial_medaillen_points || 0;
       md.wins += iv.initial_medaillen_siege || 0;
     }
   });
@@ -65,6 +64,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
       for (const [, entry] of monteMap) {
         entry.total = 0;
         entry.perGameday = [];
+        entry.carryover = 0;
       }
     }
 
@@ -90,11 +90,19 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     }
   });
 
+  // Spieltage der aktuellen Monte-Runde sammeln
+  const monteGamedayIds = new Set();
+  for (const [, entry] of monteMap) {
+    entry.perGameday.forEach((pg) => monteGamedayIds.add(pg.gamedayId));
+  }
+  const monteGamedays = gamedays.filter((gd) => monteGamedayIds.has(gd.id));
+  const hasMonteCarryover = [...monteMap.values()].some((e) => e.carryover > 0);
+
   // Sortierte Rankings erstellen
   const monteRanking = members
     .map((m) => ({ ...m, ...monteMap.get(m.id) }))
     .filter((m) => m.wins > 0 || m.total > 0)
-    .sort((a, b) => b.wins - a.wins || b.total - a.total);
+    .sort((a, b) => b.total - a.total || b.wins - a.wins);
 
   const medaillenRanking = members
     .map((m) => ({ ...m, ...medaillenMap.get(m.id) }))
@@ -112,6 +120,8 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     selectedGameday,
     monteRanking,
     medaillenRanking,
+    monteGamedays,
+    hasMonteCarryover,
     formatDateDE
   });
 });

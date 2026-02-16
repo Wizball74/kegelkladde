@@ -55,40 +55,42 @@
 
   <!-- Tab: Monte -->
   <div class="tab-panel active" id="tab-monte">
-    <p class="subtle" style="margin-bottom:0.5rem;">
-      Platz 1&#8211;6: 10 / 6 / 4 / 3 / 2 / 1 Punkt(e) &middot; ab 2,00 &euro; keine Punkte &middot;
-      100 Pkt. = Sieg &#x1F451; &middot;
-      <span class="tally-hl" style="font-weight:700;">|</span> = Punkte vom gew&auml;hlten Spieltag
-    </p>
     <% if (monteRanking.length > 0) { %>
       <div class="records-table-wrap">
-        <table class="records-table sortable-table">
+        <table class="records-table monte-detail-table">
           <thead>
             <tr>
-              <th style="width:40px;">Platz</th>
-              <th data-sort="string">Name</th>
-              <th data-sort="number" style="width:45px;">&#x1F451;</th>
-              <th data-sort="number" style="width:65px;">Punkte</th>
-              <th>Strichliste</th>
+              <th style="width:32px;">#</th>
+              <th data-sort="string" style="min-width:100px;">Name</th>
+              <th data-sort="number" style="min-width:100px;">&#x1F451;</th>
+              <% if (hasMonteCarryover) { %>
+                <th class="monte-gd-th">&Uuml;bertrag</th>
+              <% } %>
+              <% monteGamedays.forEach((gd) => { %>
+                <th class="monte-gd-th"><%= formatDateDE(gd.match_date).replace(/\d{2}(\d{2})$/, '$1') %></th>
+              <% }) %>
+              <th class="monte-spacer-th"></th>
+              <th class="monte-sum-th" data-sort="number">&Sigma;</th>
             </tr>
           </thead>
           <tbody>
-            <% monteRanking.forEach((player, i) => {
-              const hlEntry = selectedGameday
-                ? player.perGameday.find(e => e.gamedayId === selectedGameday.id)
-                : null;
-              const hlPts = hlEntry ? hlEntry.points : 0;
-            %>
+            <% monteRanking.forEach((player, i) => { %>
               <tr>
                 <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
                 <td><%= player.display_name %></td>
-                <td data-value="<%= player.wins %>" style="text-align:center; white-space:nowrap;">
-                  <% if (player.wins > 0) { %>&#x1F451;<span style="font-weight:700;"><%= player.wins %></span><% } %>
+                <td data-value="<%= player.wins %>" style="white-space:nowrap;">
+                  <% if (player.wins > 0) { %>&#x1F451;&thinsp;<span style="font-weight:700;"><%= player.wins %></span><% } %>
                 </td>
-                <td data-value="<%= player.total %>" style="text-align:center; font-weight:700;"><%= player.total %></td>
-                <td>
-                  <span class="rangliste-tally"><%- renderTallyColored(player.total, hlPts) %></span>
-                </td>
+                <% if (hasMonteCarryover) { %>
+                  <td class="monte-gd-td"><%= player.carryover > 0 ? player.carryover : '' %></td>
+                <% } %>
+                <% monteGamedays.forEach((gd) => {
+                  const entry = player.perGameday.find(e => e.gamedayId === gd.id);
+                %>
+                  <td class="monte-gd-td"><%= entry ? entry.points : '' %></td>
+                <% }) %>
+                <td class="monte-spacer-td"></td>
+                <td class="monte-sum-td" data-value="<%= player.total %>"><%= player.total %></td>
               </tr>
             <% }) %>
           </tbody>

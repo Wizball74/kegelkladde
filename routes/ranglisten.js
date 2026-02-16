@@ -25,12 +25,12 @@ router.get("/ranglisten", requireAuth, (req, res) => {
 
   members.forEach((m) => {
     monteMap.set(m.id, { total: 0, wins: 0, perGameday: [], carryover: 0 });
-    medaillenMap.set(m.id, { gold: 0, silver: 0, total: 0, wins: 0, perGameday: [] });
+    medaillenMap.set(m.id, { medals: 0, total: 0, wins: 0, perGameday: [], carryover: 0 });
   });
 
   // Anfangswerte laden
   const initials = db.prepare(
-    "SELECT user_id, initial_monte_points, initial_medaillen_gold, initial_medaillen_silver, initial_monte_siege, initial_medaillen_siege FROM member_initial_values"
+    "SELECT user_id, initial_monte_points, initial_medaillen_points, initial_monte_siege, initial_medaillen_siege FROM member_initial_values"
   ).all();
   initials.forEach((iv) => {
     const mt = monteMap.get(iv.user_id);
@@ -41,7 +41,9 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     }
     const md = medaillenMap.get(iv.user_id);
     if (md) {
-      md.total += iv.initial_medaillen_points || 0;
+      const pts = iv.initial_medaillen_points || 0;
+      md.total += pts;
+      md.carryover = pts;
       md.wins += iv.initial_medaillen_siege || 0;
     }
   });
@@ -83,8 +85,8 @@ router.get("/ranglisten", requireAuth, (req, res) => {
       medaillenMap.get(medaillenWinner).wins++;
       for (const [, entry] of medaillenMap) {
         entry.total = 0;
-        entry.gold = 0;
-        entry.silver = 0;
+        entry.medals = 0;
+        entry.carryover = 0;
         entry.perGameday = [];
       }
     }
@@ -98,6 +100,13 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   const monteGamedays = gamedays.filter((gd) => monteGamedayIds.has(gd.id));
   const hasMonteCarryover = [...monteMap.values()].some((e) => e.carryover > 0);
 
+  // Spieltage der aktuellen Medaillen-Runde sammeln
+  const medaillenGamedayIds = new Set();
+  for (const [, entry] of medaillenMap) {
+    entry.perGameday.forEach((pg) => medaillenGamedayIds.add(pg.gamedayId));
+  }
+  const medaillenGamedays = gamedays.filter((gd) => medaillenGamedayIds.has(gd.id));
+
   // Sortierte Rankings erstellen
   const monteRanking = members
     .map((m) => ({ ...m, ...monteMap.get(m.id) }))
@@ -107,7 +116,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   const medaillenRanking = members
     .map((m) => ({ ...m, ...medaillenMap.get(m.id) }))
     .filter((m) => m.wins > 0 || m.total > 0)
-    .sort((a, b) => b.wins - a.wins || b.total - a.total || b.gold - a.gold);
+    .sort((a, b) => b.total - a.total || b.medals - a.medals || b.wins - a.wins);
 
   // Datum-Format für Anzeige
   const formatDateDE = (iso) => {
@@ -121,6 +130,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     monteRanking,
     medaillenRanking,
     monteGamedays,
+    medaillenGamedays,
     hasMonteCarryover,
     formatDateDE
   });
@@ -184,35 +194,35 @@ function computeMedaillenForGameday(gamedayId, medaillenMap) {
   // Silber-Kandidaten: aussteigen = 0,10
   const silverCandidates = rows.filter((r) => Math.abs(r.aussteigen - 0.10) < 0.001);
 
-  // Gold vergeben
+  // Gold vergeben (Sieger: 0,00 € → 2 Pkt.)
   if (goldCandidates.length >= 1) {
     const winner = goldCandidates[0]; // nach tiebreak sortiert
     const entry = medaillenMap.get(winner.user_id);
     if (entry) {
-      entry.gold++;
+      entry.medals++;
       entry.total += 2;
-      entry.perGameday.push({ gamedayId, type: "gold", points: 2 });
+      entry.perGameday.push({ gamedayId, points: 2 });
     }
   }
 
-  // Silber vergeben
+  // Silber vergeben (Zweiter: 0,10 € → 1 Pkt.)
   if (goldCandidates.length >= 2) {
     // Mehrere mit 0,00 → zweiter bekommt Silber
     const second = goldCandidates[1];
     const entry = medaillenMap.get(second.user_id);
     if (entry) {
-      entry.silver++;
+      entry.medals++;
       entry.total += 1;
-      entry.perGameday.push({ gamedayId, type: "silver", points: 1 });
+      entry.perGameday.push({ gamedayId, points: 1 });
     }
   } else if (goldCandidates.length === 1 && silverCandidates.length >= 1) {
     // Genau ein Gold → erster Silber-Kandidat bekommt Silber
     const second = silverCandidates[0];
     const entry = medaillenMap.get(second.user_id);
     if (entry) {
-      entry.silver++;
+      entry.medals++;
       entry.total += 1;
-      entry.perGameday.push({ gamedayId, type: "silver", points: 1 });
+      entry.perGameday.push({ gamedayId, points: 1 });
     }
   }
 }

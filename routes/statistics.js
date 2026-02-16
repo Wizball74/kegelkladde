@@ -109,6 +109,7 @@ router.get("/statistik", requireAuth, (req, res) => {
   const neunerStats = db.prepare(`
     SELECT u.first_name, u.last_name,
       COALESCE(SUM(a.alle9), 0) + COALESCE(iv.initial_alle9, 0) as total,
+      COALESCE(iv.initial_alle9, 0) as carryover,
       COUNT(*) as games,
       ROUND(CAST(COALESCE(SUM(a.alle9), 0) AS REAL) / COUNT(*), 2) as avg
     FROM attendance a
@@ -123,6 +124,7 @@ router.get("/statistik", requireAuth, (req, res) => {
   const kraenzeStats = db.prepare(`
     SELECT u.first_name, u.last_name,
       COALESCE(SUM(a.kranz), 0) + COALESCE(iv.initial_kranz, 0) as total,
+      COALESCE(iv.initial_kranz, 0) as carryover,
       COUNT(*) as games,
       ROUND(CAST(COALESCE(SUM(a.kranz), 0) AS REAL) / COUNT(*), 2) as avg
     FROM attendance a

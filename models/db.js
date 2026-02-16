@@ -188,8 +188,6 @@ db.exec(`
     initial_kranz INTEGER NOT NULL DEFAULT 0,
     initial_carryover REAL NOT NULL DEFAULT 0,
     initial_monte_points INTEGER NOT NULL DEFAULT 0,
-    initial_medaillen_gold INTEGER NOT NULL DEFAULT 0,
-    initial_medaillen_silver INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
@@ -212,12 +210,6 @@ const mivColumns = db.prepare("PRAGMA table_info(member_initial_values)").all().
 if (!mivColumns.includes("initial_monte_points")) {
   db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_monte_points INTEGER NOT NULL DEFAULT 0");
 }
-if (!mivColumns.includes("initial_medaillen_gold")) {
-  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_gold INTEGER NOT NULL DEFAULT 0");
-}
-if (!mivColumns.includes("initial_medaillen_silver")) {
-  db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_silver INTEGER NOT NULL DEFAULT 0");
-}
 if (!mivColumns.includes("initial_monte_siege")) {
   db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_monte_siege INTEGER NOT NULL DEFAULT 0");
 }
@@ -226,8 +218,6 @@ if (!mivColumns.includes("initial_medaillen_siege")) {
 }
 if (!mivColumns.includes("initial_medaillen_points")) {
   db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_points INTEGER NOT NULL DEFAULT 0");
-  // Bestehende Gold/Silber-Werte migrieren
-  db.exec("UPDATE member_initial_values SET initial_medaillen_points = initial_medaillen_gold * 2 + initial_medaillen_silver");
 }
 
 // Create indexes for performance

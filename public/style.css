@@ -1108,30 +1108,33 @@ td.col-active.cell-empty > * {
 /* Tabs */
 .tab-nav {
   display: flex;
-  gap: 0;
+  gap: 4px;
   border-bottom: 2px solid var(--line);
   margin-bottom: 1.5rem;
 }
 
 .tab-btn {
-  padding: 0.6rem 1.2rem;
+  padding: 0.55rem 1.2rem;
   border: none;
   background: none;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   margin-bottom: -2px;
-  transition: color var(--transition), border-color var(--transition);
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
 }
 
 .tab-btn:hover {
   color: var(--ink);
+  background: rgba(0,0,0,0.03);
 }
 
 .tab-btn.active {
-  color: var(--accent);
+  color: var(--accent-strong);
+  background: var(--accent-light);
   border-bottom-color: var(--accent);
 }
 
@@ -2189,70 +2192,211 @@ tr.row-locked td.name-col {
   margin-bottom: 1rem;
 }
 
-.rangliste-tally {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 3px;
+
+/* Monte Balkendiagramm (horizontal) */
+.hbar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hbar-row {
+  display: flex;
   align-items: center;
-  font-size: 0.8rem;
-  color: #333;
-  line-height: 1.2;
+  gap: 8px;
 }
 
-.tally-hl {
-  color: var(--accent);
-  font-weight: 700;
+.hbar-label {
+  width: 145px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
 }
 
-.tally-hl .tally-five {
-  color: var(--accent);
+.hbar-rank {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--muted);
+  min-width: 18px;
+  text-align: right;
 }
 
-.tally-hl .tally-five::after {
+.hbar-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hbar-crowns {
+  width: 36px;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  line-height: 1;
+  text-align: left;
+  margin-left: -4px;
+}
+
+.hbar-track {
+  position: relative;
+  flex: 1;
+  height: 28px;
+  background: #f0ece1;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.hbar-fill {
+  height: 100%;
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 4px;
+  animation: hbar-grow 0.6s ease-out both;
+}
+
+.hbar-row:nth-child(1) .hbar-fill { animation-delay: 0ms; }
+.hbar-row:nth-child(2) .hbar-fill { animation-delay: 60ms; }
+.hbar-row:nth-child(3) .hbar-fill { animation-delay: 120ms; }
+.hbar-row:nth-child(4) .hbar-fill { animation-delay: 180ms; }
+.hbar-row:nth-child(5) .hbar-fill { animation-delay: 240ms; }
+.hbar-row:nth-child(6) .hbar-fill { animation-delay: 300ms; }
+.hbar-row:nth-child(7) .hbar-fill { animation-delay: 360ms; }
+.hbar-row:nth-child(8) .hbar-fill { animation-delay: 420ms; }
+.hbar-row:nth-child(9) .hbar-fill { animation-delay: 480ms; }
+.hbar-row:nth-child(10) .hbar-fill { animation-delay: 540ms; }
+
+@keyframes hbar-grow {
+  from { transform: scaleX(0); transform-origin: left; }
+  to   { transform: scaleX(1); transform-origin: left; }
+}
+
+.hbar-seg {
+  height: 100%;
+  min-width: 0;
+}
+
+.hbar-carry {
+  background: #a8c4b0;
+}
+
+.hbar-base {
+  background: linear-gradient(90deg, var(--accent-strong) 0%, var(--accent) 100%);
+}
+
+.hbar-hl {
+  background: linear-gradient(90deg, #3aaf6e 0%, #5cc98d 100%);
+}
+
+/* Ziellinie vertikal */
+.hbar-target {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--target-pct);
+  width: 2px;
   background: var(--accent);
+  opacity: 0.3;
+  pointer-events: none;
 }
 
-/* Monte Detailtabelle */
-.monte-detail-table th,
-.monte-detail-table td {
-  padding: 0.5rem 0.4rem;
+.hbar-inline-value {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-left: 6px;
+  margin-top: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.monte-gd-th,
-.monte-gd-td {
+@keyframes hbar-fade {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Legende */
+.hbar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.hbar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   white-space: nowrap;
 }
 
-.monte-gd-td {
-  color: #555;
-}
-
-.monte-detail-table tbody tr:nth-child(even) {
-  background: #dddddd;
-}
-
-.monte-detail-table tbody tr:nth-child(even) .monte-sum-td {
-  background: #e8dfc8;
-}
-
-.monte-spacer-th,
-.monte-spacer-td {
-  width: 100%;
-  padding: 0 !important;
-}
-
-.monte-sum-th,
-.monte-sum-td {
-  min-width: 100px;
-  width: 100px;
-  text-align: center;
-  background: #f8f5eb;
-}
-
-.monte-sum-td {
+.hbar-legend-selected {
   font-weight: 700;
-  font-size: 1.3rem;
-  color: var(--accent);
+  color: var(--ink);
+}
+
+.hbar-legend-goal {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.bar-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.bar-legend-swatch.hbar-carry { background: #a8c4b0; }
+.bar-legend-swatch.hbar-base { background: var(--accent); }
+.bar-legend-swatch.hbar-hl { background: #5cc98d; }
+
+@media (max-width: 600px) {
+  .hbar-label {
+    width: 110px;
+  }
+  .hbar-rank {
+    font-size: 0.8rem;
+    min-width: 14px;
+  }
+  .hbar-name {
+    font-size: 0.8rem;
+  }
+  .hbar-crowns {
+    width: 32px;
+    font-size: 0.6rem;
+  }
+  .hbar-track {
+    height: 24px;
+  }
+  .hbar-inline-value {
+    font-size: 0.75rem;
+  }
+  .records-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .records-table th,
+  .records-table td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  .ranglisten-gameday-select select {
+    max-width: 100%;
+    font-size: 0.85rem;
+  }
+  .ranglisten-gameday-select label {
+    flex-wrap: wrap;
+  }
 }
 
 /* Monte Extrapunkt Radio */

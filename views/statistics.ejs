@@ -26,6 +26,7 @@
                 <tr>
                   <th data-sort="string">Name</th>
                   <th data-sort="number">Gesamt</th>
+                  <th data-sort="number">&Uuml;bertrag</th>
                   <th data-sort="number">&#8709; / Abend</th>
                   <th data-sort="number">Spieltage</th>
                 </tr>
@@ -35,6 +36,7 @@
                   <tr>
                     <td><%= item.first_name %> <%= item.last_name || '' %></td>
                     <td data-value="<%= item.total %>"><%= item.total %></td>
+                    <td data-value="<%= item.carryover %>"><%= item.carryover || '–' %></td>
                     <td data-value="<%= item.avg %>"><%= item.avg.toFixed(2).replace(".", ",") %></td>
                     <td data-value="<%= item.games %>"><%= item.games %></td>
                   </tr>
@@ -55,6 +57,7 @@
                 <tr>
                   <th data-sort="string">Name</th>
                   <th data-sort="number">Gesamt</th>
+                  <th data-sort="number">&Uuml;bertrag</th>
                   <th data-sort="number">&#8709; / Abend</th>
                   <th data-sort="number">Spieltage</th>
                 </tr>
@@ -64,6 +67,7 @@
                   <tr>
                     <td><%= item.first_name %> <%= item.last_name || '' %></td>
                     <td data-value="<%= item.total %>"><%= item.total %></td>
+                    <td data-value="<%= item.carryover %>"><%= item.carryover || '–' %></td>
                     <td data-value="<%= item.avg %>"><%= item.avg.toFixed(2).replace(".", ",") %></td>
                     <td data-value="<%= item.games %>"><%= item.games %></td>
                   </tr>

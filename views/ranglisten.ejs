@@ -1,28 +1,8 @@
 <%- include("partials/top") %>
 <%
-  const renderTallyColored = (total, highlightPts) => {
-    const base = total - highlightPts;
-    let html = '';
-    // Basis-Striche (normal)
-    if (base > 0) html += renderTallySegment(base, '');
-    // Hervorgehobene Striche (aktueller Spieltag)
-    if (highlightPts > 0) html += renderTallySegment(highlightPts, 'tally-hl');
-    return html;
-  };
-  const renderTallySegment = (count, cls) => {
-    const safe = Math.min(count, 99);
-    const fives = Math.floor(safe / 5);
-    const rest = safe % 5;
-    const wrap = cls ? `<span class="${cls}">` : '';
-    const wrapEnd = cls ? '</span>' : '';
-    let html = wrap;
-    for (let i = 0; i < fives; i++) {
-      html += '<span class="tally-five">||||</span>';
-      if ((i + 1) % 2 === 0 && (i + 1 < fives || rest > 0)) html += '<span class="tally-break"></span>';
-    }
-    if (rest > 0) html += '|'.repeat(rest);
-    html += wrapEnd;
-    return html;
+  const renderCrowns = (wins) => {
+    if (wins <= 0) return '';
+    return '\u{1F451}' + wins;
   };
 %>
 <section class="card fade-in">
@@ -55,46 +35,51 @@
 
   <!-- Tab: Monte -->
   <div class="tab-panel active" id="tab-monte">
+    <%
+      const maxMonte = monteRanking.length > 0 ? Math.max(monteRanking[0].total, 1) : 1;
+      const monteTarget = 100;
+      const barCeil = Math.max(maxMonte, monteTarget);
+    %>
     <% if (monteRanking.length > 0) { %>
-      <div class="records-table-wrap">
-        <table class="records-table monte-detail-table">
-          <thead>
-            <tr>
-              <th style="width:32px;">#</th>
-              <th data-sort="string" style="min-width:100px;">Name</th>
-              <th data-sort="number" style="min-width:100px;">&#x1F451;</th>
-              <% if (hasMonteCarryover) { %>
-                <th class="monte-gd-th">&Uuml;bertrag</th>
-              <% } %>
-              <% monteGamedays.forEach((gd) => { %>
-                <th class="monte-gd-th"><%= formatDateDE(gd.match_date).replace(/\d{2}(\d{2})$/, '$1') %></th>
-              <% }) %>
-              <th class="monte-spacer-th"></th>
-              <th class="monte-sum-th" data-sort="number">&Sigma;</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% monteRanking.forEach((player, i) => { %>
-              <tr>
-                <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
-                <td><%= player.display_name %></td>
-                <td data-value="<%= player.wins %>" style="white-space:nowrap;">
-                  <% if (player.wins > 0) { %>&#x1F451;&thinsp;<span style="font-weight:700;"><%= player.wins %></span><% } %>
-                </td>
-                <% if (hasMonteCarryover) { %>
-                  <td class="monte-gd-td"><%= player.carryover > 0 ? player.carryover : '' %></td>
+      <div class="hbar-chart" style="--target-pct: <%= (monteTarget / barCeil) * 100 %>%;">
+        <% monteRanking.forEach((player, i) => {
+          const pct = (player.total / barCeil) * 100;
+          const hlEntry = selectedGameday
+            ? player.perGameday.find(e => e.gamedayId === selectedGameday.id)
+            : null;
+          const hlPts = hlEntry ? hlEntry.points : 0;
+          const carry = player.carryover || 0;
+          const gamePts = player.total - hlPts - carry;
+        %>
+          <div class="hbar-row">
+            <div class="hbar-label">
+              <span class="hbar-rank"><%= i + 1 %></span>
+              <span class="hbar-name"><%= player.display_name %></span>
+            </div>
+            <div class="hbar-crowns"><%- player.wins > 0 ? renderCrowns(player.wins) : '' %></div>
+            <div class="hbar-track">
+              <div class="hbar-fill" style="width: <%= pct %>%;">
+                <% if (carry > 0) { %>
+                  <div class="hbar-seg hbar-carry" style="flex: <%= carry %>;"></div>
                 <% } %>
-                <% monteGamedays.forEach((gd) => {
-                  const entry = player.perGameday.find(e => e.gamedayId === gd.id);
-                %>
-                  <td class="monte-gd-td"><%= entry ? entry.points : '' %></td>
-                <% }) %>
-                <td class="monte-spacer-td"></td>
-                <td class="monte-sum-td" data-value="<%= player.total %>"><%= player.total %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+                <% if (gamePts > 0) { %>
+                  <div class="hbar-seg hbar-base" style="flex: <%= gamePts %>;"></div>
+                <% } %>
+                <% if (hlPts > 0) { %>
+                  <div class="hbar-seg hbar-hl" style="flex: <%= hlPts %>;"></div>
+                <% } %>
+                <span class="hbar-inline-value"><%= player.total %></span>
+              </div>
+              <div class="hbar-target"></div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+      <div class="hbar-legend">
+        <% if (hasMonteCarryover) { %><span class="hbar-legend-item"><span class="bar-legend-swatch hbar-carry"></span>&Uuml;bertrag</span><% } %>
+        <span class="hbar-legend-item"><span class="bar-legend-swatch hbar-base"></span>Spieltage</span>
+        <% if (selectedGameday) { %><span class="hbar-legend-item"><span class="bar-legend-swatch hbar-hl"></span><%= formatDateDE(selectedGameday.match_date).replace(/\d{2}(\d{2})$/, '$1') %></span><% } %>
+        <span class="hbar-legend-item hbar-legend-goal">Ziel = 100</span>
       </div>
     <% } else { %>
       <div class="empty-state">
@@ -106,48 +91,51 @@
 
   <!-- Tab: Medaillen -->
   <div class="tab-panel" id="tab-medaillen">
-    <p class="subtle" style="margin-bottom:0.5rem;">
-      Aussteigen: Sieger (0,00 &euro;) = Gold (2 Pkt.) &middot; Zweiter (0,10 &euro;) = Silber (1 Pkt.) &middot;
-      41 Pkt. = Sieg &#x1F451; &middot;
-      <span class="tally-hl" style="font-weight:700;">|</span> = Punkte vom gew&auml;hlten Spieltag
-    </p>
+    <%
+      const maxMedaillen = medaillenRanking.length > 0 ? Math.max(medaillenRanking[0].total, 1) : 1;
+      const medTarget = 41;
+      const medCeil = Math.max(maxMedaillen, medTarget);
+    %>
     <% if (medaillenRanking.length > 0) { %>
-      <div class="records-table-wrap">
-        <table class="records-table sortable-table">
-          <thead>
-            <tr>
-              <th style="width:40px;">Platz</th>
-              <th data-sort="string">Name</th>
-              <th data-sort="number" style="width:45px;">&#x1F451;</th>
-              <th data-sort="number" style="width:55px;">&#129351;</th>
-              <th data-sort="number" style="width:55px;">&#129352;</th>
-              <th data-sort="number" style="width:65px;">Punkte</th>
-              <th>Strichliste</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% medaillenRanking.forEach((player, i) => {
-              const hlEntry = selectedGameday
-                ? player.perGameday.find(e => e.gamedayId === selectedGameday.id)
-                : null;
-              const hlPts = hlEntry ? hlEntry.points : 0;
-            %>
-              <tr>
-                <td style="text-align:center; font-weight:700;"><%= i + 1 %></td>
-                <td><%= player.display_name %></td>
-                <td data-value="<%= player.wins %>" style="text-align:center; white-space:nowrap;">
-                  <% if (player.wins > 0) { %>&#x1F451;<span style="font-weight:700;"><%= player.wins %></span><% } %>
-                </td>
-                <td data-value="<%= player.gold %>" style="text-align:center;"><%= player.gold %></td>
-                <td data-value="<%= player.silver %>" style="text-align:center;"><%= player.silver %></td>
-                <td data-value="<%= player.total %>" style="text-align:center; font-weight:700;"><%= player.total %></td>
-                <td>
-                  <span class="rangliste-tally"><%- renderTallyColored(player.total, hlPts) %></span>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+      <div class="hbar-chart" style="--target-pct: <%= (medTarget / medCeil) * 100 %>%;">
+        <% medaillenRanking.forEach((player, i) => {
+          const pct = (player.total / medCeil) * 100;
+          const hlEntry = selectedGameday
+            ? player.perGameday.find(e => e.gamedayId === selectedGameday.id)
+            : null;
+          const hlPts = hlEntry ? hlEntry.points : 0;
+          const carry = player.carryover || 0;
+          const gamePts = player.total - hlPts - carry;
+        %>
+          <div class="hbar-row">
+            <div class="hbar-label">
+              <span class="hbar-rank"><%= i + 1 %></span>
+              <span class="hbar-name"><%= player.display_name %></span>
+            </div>
+            <div class="hbar-crowns"><%- player.wins > 0 ? renderCrowns(player.wins) : '' %></div>
+            <div class="hbar-track">
+              <div class="hbar-fill" style="width: <%= pct %>%;">
+                <% if (carry > 0) { %>
+                  <div class="hbar-seg hbar-carry" style="flex: <%= carry %>;"></div>
+                <% } %>
+                <% if (gamePts > 0) { %>
+                  <div class="hbar-seg hbar-base" style="flex: <%= gamePts %>;"></div>
+                <% } %>
+                <% if (hlPts > 0) { %>
+                  <div class="hbar-seg hbar-hl" style="flex: <%= hlPts %>;"></div>
+                <% } %>
+                <span class="hbar-inline-value"><%= player.total %></span>
+              </div>
+              <div class="hbar-target"></div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+      <div class="hbar-legend">
+        <span class="hbar-legend-item"><span class="bar-legend-swatch hbar-carry"></span>&Uuml;bertrag</span>
+        <span class="hbar-legend-item"><span class="bar-legend-swatch hbar-base"></span>Spieltage</span>
+        <% if (selectedGameday) { %><span class="hbar-legend-item"><span class="bar-legend-swatch hbar-hl"></span><%= formatDateDE(selectedGameday.match_date).replace(/\d{2}(\d{2})$/, '$1') %></span><% } %>
+        <span class="hbar-legend-item hbar-legend-goal">Ziel = 41</span>
       </div>
     <% } else { %>
       <div class="empty-state">

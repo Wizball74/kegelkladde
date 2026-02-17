@@ -35,8 +35,8 @@
       </div>
 
       <label class="btn btn-secondary" style="cursor: pointer; font-size: 0.85rem;">
-        Bild anhängen
-        <input type="file" name="image" accept=".jpg,.jpeg,.png,.gif,.webp" style="display: none;" onchange="this.parentElement.textContent = this.files[0] ? this.files[0].name : 'Bild anhängen'" />
+        <span class="pin-file-label">Bild anhängen</span>
+        <input type="file" name="image" accept=".jpg,.jpeg,.png,.gif,.webp" style="display: none;" onchange="this.previousElementSibling.textContent = this.files[0] ? this.files[0].name : 'Bild anhängen'" />
       </label>
 
       <button type="submit" class="btn btn-primary" style="margin-left: auto;">Nachricht posten</button>

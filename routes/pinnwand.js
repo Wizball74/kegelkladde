@@ -61,34 +61,26 @@ router.get("/pinnwand", requireAuth, (req, res) => {
   res.render("pinnwand", { messages });
 });
 
-// POST /pinnwand/add
-router.post("/pinnwand/add", requireAuth, verifyCsrf, (req, res, next) => {
-  upload.single("image")(req, res, (err) => {
-    if (err) {
-      req.session.flash = { type: "error", message: err.message || "Fehler beim Upload." };
-      return res.redirect("/pinnwand");
-    }
+// POST /pinnwand/add — multer must run before verifyCsrf (multipart body not parsed until multer runs)
+router.post("/pinnwand/add", requireAuth, upload.single("image"), verifyCsrf, (req, res) => {
+  const message = sanitize(req.body.message, 1000);
+  if (!message) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    req.session.flash = { type: "error", message: "Nachricht darf nicht leer sein." };
+    return res.redirect("/pinnwand");
+  }
 
-    const message = sanitize(req.body.message, 1000);
-    if (!message) {
-      // Remove uploaded file if message is empty
-      if (req.file) fs.unlink(req.file.path, () => {});
-      req.session.flash = { type: "error", message: "Nachricht darf nicht leer sein." };
-      return res.redirect("/pinnwand");
-    }
+  const allowedColors = ["#fff9c4", "#c8e6c9", "#bbdefb", "#f8bbd0", "#e1bee7", "#ffe0b2"];
+  const color = allowedColors.includes(req.body.color) ? req.body.color : "#fff9c4";
+  const imagePath = req.file ? req.file.filename : null;
 
-    const allowedColors = ["#fff9c4", "#c8e6c9", "#bbdefb", "#f8bbd0", "#e1bee7", "#ffe0b2"];
-    const color = allowedColors.includes(req.body.color) ? req.body.color : "#fff9c4";
-    const imagePath = req.file ? req.file.filename : null;
+  const result = db.prepare(
+    `INSERT INTO pin_messages (user_id, message, color, image_path) VALUES (?, ?, ?, ?)`
+  ).run(req.session.userId, message, color, imagePath);
 
-    const result = db.prepare(
-      `INSERT INTO pin_messages (user_id, message, color, image_path) VALUES (?, ?, ?, ?)`
-    ).run(req.session.userId, message, color, imagePath);
-
-    logAudit(req.session.userId, "PIN_ADD", "pin_message", result.lastInsertRowid);
-    req.session.flash = { type: "success", message: "Nachricht hinzugefügt." };
-    res.redirect("/pinnwand");
-  });
+  logAudit(req.session.userId, "PIN_ADD", "pin_message", result.lastInsertRowid);
+  req.session.flash = { type: "success", message: "Nachricht hinzugefügt." };
+  res.redirect("/pinnwand");
 });
 
 // POST /pinnwand/delete

@@ -1866,9 +1866,18 @@ if (ranglistenSelect) {
 function showCelebration(items) {
   if (!items || items.length === 0) return;
   let index = 0;
+  let repeatCount = 0;
 
   function showNext() {
-    if (index >= items.length) return;
+    if (index >= items.length) {
+      // Repeat up to 3 more times with a pause
+      if (repeatCount < 3) {
+        repeatCount++;
+        index = 0;
+        setTimeout(showNext, 6000);
+      }
+      return;
+    }
     const item = items[index];
     index++;
 
@@ -1966,6 +1975,242 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  // Pinnwand drag & rotate
+  (function() {
+    var board = document.querySelector(".pin-board");
+    if (!board) return;
+    var csrf = board.dataset.csrf;
+    var currentUserId = board.dataset.userId;
+    var cards = board.querySelectorAll(".pin-card");
+    var zCounter = 10;
+
+    function isOwn(card) {
+      return card.dataset.ownerId === currentUserId;
+    }
+
+    // Assign random positions to cards without saved positions
+    cards.forEach(function(card) {
+      if (card.dataset.hasPos === "0") {
+        var x = 5 + Math.random() * 60;
+        var y = 5 + Math.random() * 70;
+        var rot = (Math.random() - 0.5) * 6;
+        card.style.left = x + "%";
+        card.style.top = y + "%";
+        card.style.transform = "rotate(" + rot + "deg)";
+        card.dataset.hasPos = "1";
+        // Only save if it's the user's own card
+        if (isOwn(card)) savePosition(card, x, y, rot);
+      }
+    });
+
+    // Ensure board is tall enough for all cards
+    function ensureBoardHeight() {
+      var maxBottom = 600;
+      cards.forEach(function(card) {
+        var top = card.offsetTop + card.offsetHeight + 20;
+        if (top > maxBottom) maxBottom = top;
+      });
+      board.style.minHeight = maxBottom + "px";
+    }
+    setTimeout(ensureBoardHeight, 50);
+
+    function savePosition(card, posX, posY, rotation) {
+      var pinId = card.dataset.pinId;
+      fetch("/pinnwand/position", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ csrfToken: csrf, pinId: pinId, posX: posX, posY: posY, rotation: rotation })
+      });
+    }
+
+    function getRotation(card) {
+      var st = card.style.transform;
+      var m = st.match(/rotate\(([-\d.]+)deg\)/);
+      return m ? parseFloat(m[1]) : 0;
+    }
+
+    function getPos(e) {
+      if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    // --- DRAG ---
+    var dragCard = null, dragOffsetX = 0, dragOffsetY = 0, dragMoved = false;
+
+    function onDragStart(e) {
+      var target = e.target;
+      // Don't drag when clicking buttons, links, forms, inputs, or rotate handle
+      if (target.closest("button, a, form, input, textarea, select, .pin-rotate-handle, .pin-ontop-handle")) return;
+      // Don't drag when clicking on images (lightbox)
+      if (target.closest(".pin-card-image")) return;
+      var card = target.closest(".pin-card");
+      if (!card || !isOwn(card)) return;
+
+      e.preventDefault();
+      dragCard = card;
+      dragMoved = false;
+      card.classList.add("dragging");
+      zCounter++;
+      card.style.zIndex = zCounter;
+
+      var pos = getPos(e);
+      var rect = card.getBoundingClientRect();
+      dragOffsetX = pos.x - rect.left;
+      dragOffsetY = pos.y - rect.top;
+    }
+
+    function onDragMove(e) {
+      if (!dragCard) return;
+      e.preventDefault();
+      dragMoved = true;
+      var pos = getPos(e);
+      var boardRect = board.getBoundingClientRect();
+      var x = pos.x - boardRect.left - dragOffsetX;
+      var y = pos.y - boardRect.top - dragOffsetY;
+      // Clamp to board bounds
+      x = Math.max(0, Math.min(x, boardRect.width - dragCard.offsetWidth));
+      y = Math.max(0, y);
+      // Convert to percentage (left=% of width, top=% of height)
+      var pctX = (x / boardRect.width) * 100;
+      var pctY = (y / boardRect.height) * 100;
+      dragCard.style.left = pctX + "%";
+      dragCard.style.top = pctY + "%";
+    }
+
+    function onDragEnd() {
+      if (!dragCard) return;
+      dragCard.classList.remove("dragging");
+      if (dragMoved) {
+        var posX = parseFloat(dragCard.style.left);
+        var posY = parseFloat(dragCard.style.top);
+        var rot = getRotation(dragCard);
+        savePosition(dragCard, posX, posY, rot);
+        ensureBoardHeight();
+      }
+      dragCard = null;
+    }
+
+    // --- ROTATE ---
+    var rotCard = null, rotStartAngle = 0, rotInitial = 0;
+
+    function onRotateStart(e) {
+      var handle = e.target.closest(".pin-rotate-handle");
+      if (!handle) return;
+      var card = handle.closest(".pin-card");
+      if (!card || !isOwn(card)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      rotCard = card;
+      rotInitial = getRotation(card);
+      zCounter++;
+      card.style.zIndex = zCounter;
+
+      var pos = getPos(e);
+      var rect = card.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      rotStartAngle = Math.atan2(pos.y - cy, pos.x - cx) * (180 / Math.PI);
+    }
+
+    function onRotateMove(e) {
+      if (!rotCard) return;
+      e.preventDefault();
+      var pos = getPos(e);
+      var rect = rotCard.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var angle = Math.atan2(pos.y - cy, pos.x - cx) * (180 / Math.PI);
+      var delta = angle - rotStartAngle;
+      var newRot = rotInitial + delta;
+      rotCard.style.transform = "rotate(" + newRot + "deg)";
+    }
+
+    function onRotateEnd() {
+      if (!rotCard) return;
+      var rot = getRotation(rotCard);
+      var posX = parseFloat(rotCard.style.left);
+      var posY = parseFloat(rotCard.style.top);
+      savePosition(rotCard, posX, posY, rot);
+      rotCard = null;
+    }
+
+    // Mouse events
+    board.addEventListener("mousedown", function(e) {
+      if (e.target.closest(".pin-rotate-handle")) {
+        onRotateStart(e);
+      } else {
+        onDragStart(e);
+      }
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (rotCard) onRotateMove(e);
+      else if (dragCard) onDragMove(e);
+    });
+    document.addEventListener("mouseup", function() {
+      if (rotCard) onRotateEnd();
+      else if (dragCard) onDragEnd();
+    });
+
+    // Touch events
+    board.addEventListener("touchstart", function(e) {
+      if (e.target.closest(".pin-rotate-handle")) {
+        onRotateStart(e);
+      } else {
+        onDragStart(e);
+      }
+    }, { passive: false });
+    document.addEventListener("touchmove", function(e) {
+      if (rotCard) onRotateMove(e);
+      else if (dragCard) onDragMove(e);
+    }, { passive: false });
+    document.addEventListener("touchend", function() {
+      if (rotCard) onRotateEnd();
+      else if (dragCard) onDragEnd();
+    });
+
+    // --- ON TOP ---
+    board.addEventListener("click", function(e) {
+      var btn = e.target.closest(".pin-ontop-handle");
+      if (!btn) return;
+      var card = btn.closest(".pin-card");
+      if (!card || !isOwn(card)) return;
+      zCounter++;
+      card.style.zIndex = zCounter;
+      card.classList.remove("pin-ontop");
+      void card.offsetWidth;
+      card.classList.add("pin-ontop");
+    });
+
+    // --- CARD STYLES ---
+    var allStyleClasses = ['pin-style-polaroid','pin-style-vintage','pin-style-neon','pin-style-doodle','pin-style-frame','pin-style-dark','pin-style-glass','pin-style-wobble','pin-style-elegant','pin-style-retro','pin-style-tape','pin-style-shadow'];
+
+    board.addEventListener("click", function(e) {
+      var btn = e.target.closest(".pin-style-btn");
+      if (!btn) return;
+      var card = btn.closest(".pin-card");
+      if (!card || !isOwn(card)) return;
+
+      var style = btn.dataset.style;
+      var pinId = card.dataset.pinId;
+
+      // Remove all style classes
+      allStyleClasses.forEach(function(cls) { card.classList.remove(cls); });
+      // Apply new style
+      if (style) card.classList.add("pin-style-" + style);
+
+      // Update active button
+      card.querySelectorAll(".pin-style-btn").forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+
+      // Save via AJAX
+      fetch("/pinnwand/style", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ csrfToken: csrf, pinId: pinId, style: style })
+      });
+    });
+  })();
 
   // Celebration for round wins
   const celebrateEl = document.getElementById("celebrateData");

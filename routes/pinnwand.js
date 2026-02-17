@@ -42,6 +42,7 @@ const upload = multer({
 router.get("/pinnwand", requireAuth, (req, res) => {
   const messages = db.prepare(
     `SELECT p.id, p.user_id, p.message, p.color, p.image_path, p.created_at,
+            p.pos_x, p.pos_y, p.rotation, p.card_style,
             u.first_name, u.last_name
      FROM pin_messages p
      JOIN users u ON u.id = p.user_id
@@ -113,6 +114,54 @@ router.post("/pinnwand/delete", requireAuth, verifyCsrf, (req, res) => {
   logAudit(req.session.userId, "PIN_DELETE", "pin_message", pinId);
   req.session.flash = { type: "success", message: "Nachricht gelöscht." };
   res.redirect("/pinnwand");
+});
+
+// POST /pinnwand/position — AJAX save position + rotation
+router.post("/pinnwand/position", requireAuth, verifyCsrf, (req, res) => {
+  const pinId = Number.parseInt(req.body.pinId, 10);
+  const posX = Number.parseFloat(req.body.posX);
+  const posY = Number.parseFloat(req.body.posY);
+  const rotation = Number.parseFloat(req.body.rotation);
+
+  if (!Number.isInteger(pinId) || Number.isNaN(posX) || Number.isNaN(posY) || Number.isNaN(rotation)) {
+    return res.status(400).json({ ok: false, error: "Ungültige Werte." });
+  }
+
+  const pin = db.prepare("SELECT id, user_id FROM pin_messages WHERE id = ?").get(pinId);
+  if (!pin) {
+    return res.status(404).json({ ok: false, error: "Nachricht nicht gefunden." });
+  }
+
+  // Only the owner can move their own card
+  if (pin.user_id !== req.session.userId) {
+    return res.status(403).json({ ok: false, error: "Nur eigene Karten verschieben." });
+  }
+
+  db.prepare("UPDATE pin_messages SET pos_x = ?, pos_y = ?, rotation = ? WHERE id = ?").run(posX, posY, rotation, pinId);
+  res.json({ ok: true });
+});
+
+// POST /pinnwand/style — AJAX save card style
+const ALLOWED_STYLES = ['', 'polaroid', 'vintage', 'neon', 'doodle', 'frame', 'dark', 'glass', 'wobble', 'elegant', 'retro', 'tape', 'shadow'];
+router.post("/pinnwand/style", requireAuth, verifyCsrf, (req, res) => {
+  const pinId = Number.parseInt(req.body.pinId, 10);
+  const style = String(req.body.style || '');
+
+  if (!Number.isInteger(pinId) || !ALLOWED_STYLES.includes(style)) {
+    return res.status(400).json({ ok: false, error: "Ungültige Werte." });
+  }
+
+  const pin = db.prepare("SELECT id, user_id FROM pin_messages WHERE id = ?").get(pinId);
+  if (!pin) {
+    return res.status(404).json({ ok: false, error: "Nachricht nicht gefunden." });
+  }
+
+  if (pin.user_id !== req.session.userId) {
+    return res.status(403).json({ ok: false, error: "Nur eigene Karten stylen." });
+  }
+
+  db.prepare("UPDATE pin_messages SET card_style = ? WHERE id = ?").run(style, pinId);
+  res.json({ ok: true });
 });
 
 module.exports = router;

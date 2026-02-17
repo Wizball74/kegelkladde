@@ -9,7 +9,8 @@ function ensureSessionCsrf(req) {
 
 function verifyCsrf(req, res, next) {
   ensureSessionCsrf(req);
-  if (req.body.csrfToken !== req.session.csrfToken) {
+  const token = req.body.csrfToken || req.headers["x-csrf-token"];
+  if (token !== req.session.csrfToken) {
     return res.status(403).send("CSRF-Token ungueltig.");
   }
   next();

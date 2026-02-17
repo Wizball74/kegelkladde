@@ -351,21 +351,21 @@ Spieltag starten, um die Kladde zu bearbeiten.
           <span class="badge <%= statusBadges[status] %>"><%= statusLabels[status] %></span>
         </p>
         <div class="settle-actions">
-          <% if (status > 0) { %>
-            <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurücksetzen?">
-              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
-              <button type="submit" class="btn-secondary btn-sm">&laquo; Zurück</button>
-            </form>
-          <% } %>
-          <% if (status >= 1 && status < 3) { %>
-            <form method="post" action="/kegelkladde/advance-status" data-confirm="<%= advanceLabels[status] %>?">
-              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
-              <button type="submit" class="btn-primary btn-sm"><%= advanceLabels[status] %> &raquo;</button>
-            </form>
-          <% } %>
           <% if (isAdmin) { %>
+            <% if (status > 0) { %>
+              <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurücksetzen?">
+                <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+                <button type="submit" class="btn-secondary btn-sm">&laquo; Zurück</button>
+              </form>
+            <% } %>
+            <% if (status >= 1 && status < 3) { %>
+              <form method="post" action="/kegelkladde/advance-status" data-confirm="<%= advanceLabels[status] %>?">
+                <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+                <button type="submit" class="btn-primary btn-sm"><%= advanceLabels[status] %> &raquo;</button>
+              </form>
+            <% } %>
             <form method="post" action="/kegelkladde/delete" data-confirm="Spieltag wirklich löschen? Alle Daten gehen verloren!">
               <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
               <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />

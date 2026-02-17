@@ -123,7 +123,8 @@ router.post("/members/admin-update", requireAuth, requireAdmin, verifyCsrf, (req
   }
 
   const username = sanitize(req.body.username, 40);
-  const role = req.body.role === "admin" ? "admin" : "user";
+  // User ID 1 is the founding admin — role is locked to admin
+  const role = memberId === 1 ? "admin" : (req.body.role === "admin" ? "admin" : "user");
   const firstName = sanitize(req.body.firstName, 60);
   const lastName = sanitize(req.body.lastName, 60);
   const address = sanitize(req.body.address, 200);

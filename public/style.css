@@ -2711,33 +2711,106 @@ tr.row-locked td.name-col {
 
 /* Pinnwand */
 .pin-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1.25rem;
+  position: relative;
+  min-height: 600px;
 }
 
 .pin-card {
-  position: relative;
+  position: absolute;
+  width: 250px;
   padding: 1rem 1rem 0.75rem;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   word-break: break-word;
-  transition: transform var(--transition), box-shadow var(--transition);
+  cursor: default;
+  transition: box-shadow var(--transition);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pin-card-own {
+  cursor: grab;
 }
 
 .pin-card:hover {
   box-shadow: var(--shadow-lg);
-  transform: scale(1.02);
 }
 
-.pin-card-rotate-0 { transform: rotate(-1.2deg); }
-.pin-card-rotate-1 { transform: rotate(0.8deg); }
-.pin-card-rotate-2 { transform: rotate(-0.5deg); }
-.pin-card-rotate-3 { transform: rotate(1.5deg); }
-.pin-card-rotate-4 { transform: rotate(-0.3deg); }
+.pin-card.dragging {
+  cursor: grabbing;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  transition: none;
+}
 
-.pin-card:hover {
-  transform: scale(1.02) rotate(0deg);
+@keyframes pin-glow {
+  0%   { box-shadow: 0 0 8px 2px rgba(255, 215, 0, 0.6); }
+  50%  { box-shadow: 0 0 20px 6px rgba(255, 215, 0, 0.9); }
+  100% { box-shadow: var(--shadow-lg); }
+}
+
+.pin-card.pin-ontop {
+  animation: pin-glow 0.8s ease-out;
+}
+
+.pin-ontop-handle {
+  position: absolute;
+  bottom: 0.35rem;
+  left: 2.1rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.15);
+  background: rgba(255,255,255,0.7);
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity var(--transition), background var(--transition);
+}
+
+.pin-card:hover .pin-ontop-handle {
+  opacity: 1;
+}
+
+.pin-ontop-handle:hover {
+  background: rgba(255, 215, 0, 0.3);
+  color: #b8860b;
+}
+
+.pin-rotate-handle {
+  position: absolute;
+  bottom: 0.35rem;
+  left: 0.35rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.15);
+  background: rgba(255,255,255,0.7);
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity var(--transition), background var(--transition);
+}
+
+.pin-card:hover .pin-rotate-handle {
+  opacity: 1;
+}
+
+.pin-rotate-handle:hover {
+  background: rgba(255,255,255,0.95);
+  color: var(--text);
 }
 
 .pin-card-message {
@@ -2754,12 +2827,7 @@ tr.row-locked td.name-col {
   object-fit: cover;
   border-radius: var(--radius-sm);
   margin-bottom: 0.5rem;
-  cursor: pointer;
-  transition: opacity var(--transition);
-}
-
-.pin-card-image:hover {
-  opacity: 0.85;
+  pointer-events: none;
 }
 
 .pin-card-footer {
@@ -2826,6 +2894,276 @@ tr.row-locked td.name-col {
 .pin-color-dot:has(input:checked) {
   border-color: var(--accent);
   transform: scale(1.15);
+}
+
+/* --- Style-Buttons (verteilt über den Kartenrand) --- */
+.pin-style-buttons {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition);
+  z-index: 10;
+}
+
+.pin-card:hover .pin-style-buttons {
+  opacity: 1;
+}
+
+.pin-style-btn {
+  position: absolute;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.18);
+  background: rgba(255,255,255,0.92);
+  font-size: 0.65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.pin-style-btn:hover {
+  transform: scale(1.35);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 11;
+}
+
+.pin-style-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,0.15);
+  background: #fff;
+}
+
+/* Top edge — 5 buttons */
+.pin-style-btn:nth-child(1)  { top: -11px; left: 12px; }
+.pin-style-btn:nth-child(2)  { top: -11px; left: 52px; }
+.pin-style-btn:nth-child(3)  { top: -11px; left: 92px; }
+.pin-style-btn:nth-child(4)  { top: -11px; left: 132px; }
+.pin-style-btn:nth-child(5)  { top: -11px; left: 172px; }
+/* Right edge — 3 buttons */
+.pin-style-btn:nth-child(6)  { right: -11px; top: 18%; }
+.pin-style-btn:nth-child(7)  { right: -11px; top: 44%; }
+.pin-style-btn:nth-child(8)  { right: -11px; top: 70%; }
+/* Bottom edge — 2 buttons (rechts, links ist rotate/ontop) */
+.pin-style-btn:nth-child(9)  { bottom: -11px; right: 20px; }
+.pin-style-btn:nth-child(10) { bottom: -11px; right: 70px; }
+/* Left edge — 3 buttons */
+.pin-style-btn:nth-child(11) { left: -11px; top: 18%; }
+.pin-style-btn:nth-child(12) { left: -11px; top: 44%; }
+.pin-style-btn:nth-child(13) { left: -11px; top: 70%; }
+
+/* ==============================================
+   CARD STYLES — 12 kreative Looks
+   ============================================== */
+
+/* 1. Polaroid — weißer Bilderrahmen */
+.pin-style-polaroid {
+  background: #fff !important;
+  padding: 0.6rem 0.6rem 2.2rem !important;
+  border-radius: 2px !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.22) !important;
+}
+
+.pin-style-polaroid .pin-card-image {
+  border-radius: 0;
+}
+
+/* 2. Vintage — gealtertes Papier */
+.pin-style-vintage {
+  filter: sepia(0.25) saturate(0.85) brightness(0.95);
+  box-shadow:
+    inset 0 0 50px rgba(139,69,19,0.12),
+    0 3px 12px rgba(0,0,0,0.2) !important;
+}
+
+.pin-style-vintage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(80,40,10,0.1) 100%);
+  pointer-events: none;
+}
+
+/* 3. Neon — leuchtender Rahmen */
+@keyframes pin-neon-pulse {
+  0%, 100% { box-shadow: 0 0 7px #0ff, 0 0 20px rgba(0,255,255,0.4), inset 0 0 15px rgba(0,255,255,0.05); }
+  33%      { box-shadow: 0 0 7px #f0f, 0 0 20px rgba(255,0,255,0.4), inset 0 0 15px rgba(255,0,255,0.05); }
+  66%      { box-shadow: 0 0 7px #ff0, 0 0 20px rgba(255,255,0,0.4), inset 0 0 15px rgba(255,255,0,0.05); }
+}
+
+.pin-style-neon {
+  background: #1a1a2e !important;
+  border: 1px solid rgba(0,255,255,0.6);
+  animation: pin-neon-pulse 4s ease-in-out infinite;
+  border-radius: var(--radius-sm) !important;
+}
+
+.pin-style-neon .pin-card-message { color: #e0e0ff; }
+.pin-style-neon .pin-card-author { color: rgba(224,224,255,0.8); }
+.pin-style-neon .pin-card-date { color: rgba(200,200,255,0.5); }
+.pin-style-neon .pin-card-footer { border-top-color: rgba(255,255,255,0.1); }
+.pin-style-neon .pin-card-delete button { color: rgba(255,255,255,0.4); }
+.pin-style-neon .pin-card-delete button:hover { background: rgba(255,60,60,0.3); color: #ff6b6b; }
+
+/* 4. Doodle — Skizzenhaft handgemalt */
+.pin-style-doodle {
+  border: 3px dashed #555 !important;
+  border-radius: 2px !important;
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.12) !important;
+}
+
+/* 5. Rahmen — Goldener Bilderrahmen */
+.pin-style-frame {
+  border: 6px ridge #c5a55a !important;
+  border-radius: 2px !important;
+  box-shadow:
+    inset 3px 3px 8px rgba(0,0,0,0.25),
+    inset -3px -3px 8px rgba(255,255,200,0.08),
+    0 6px 25px rgba(0,0,0,0.3) !important;
+}
+
+.pin-style-frame::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid rgba(197,165,90,0.4);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* 6. Tafel — Kreidetafel */
+.pin-style-dark {
+  background: #2b3d2b !important;
+  border: 4px solid #5a3a1a !important;
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.3) !important;
+}
+
+.pin-style-dark .pin-card-message { color: rgba(255,255,255,0.88); }
+.pin-style-dark .pin-card-author { color: rgba(255,255,255,0.65); }
+.pin-style-dark .pin-card-date { color: rgba(255,255,255,0.4); }
+.pin-style-dark .pin-card-footer { border-top-color: rgba(255,255,255,0.12); }
+.pin-style-dark .pin-card-delete button { color: rgba(255,255,255,0.4); }
+.pin-style-dark .pin-card-delete button:hover { background: rgba(255,60,60,0.3); color: #ff6b6b; }
+
+/* 7. Glas — Milchglas / Frosted */
+.pin-style-glass {
+  background: rgba(255,255,255,0.18) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.35) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.4) !important;
+}
+
+/* 8. Wackeln — sanftes Schweben */
+@keyframes pin-wobble-float {
+  0%, 100% { translate: 0 0; }
+  20%  { translate: 2px -3px; }
+  40%  { translate: -2px 1px; }
+  60%  { translate: 1px 2px; }
+  80%  { translate: -1px -2px; }
+}
+
+.pin-style-wobble {
+  animation: pin-wobble-float 4s ease-in-out infinite;
+}
+
+/* 9. Edel — Elegant, Serif-Schrift, Goldakzent */
+.pin-style-elegant {
+  border: 1px solid #c5a55a !important;
+  box-shadow: 0 3px 20px rgba(197,165,90,0.15) !important;
+  background: linear-gradient(170deg, rgba(255,255,255,0.4), transparent) !important;
+  background-color: inherit !important;
+}
+
+.pin-style-elegant .pin-card-message {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  line-height: 1.7;
+}
+
+.pin-style-elegant .pin-card-footer {
+  border-top-color: rgba(197,165,90,0.3);
+}
+
+/* 10. Retro — Grüner Terminal */
+@keyframes pin-retro-flicker {
+  0%, 100% { opacity: 1; }
+  92%  { opacity: 1; }
+  93%  { opacity: 0.8; }
+  94%  { opacity: 1; }
+}
+
+.pin-style-retro {
+  background: #0a100a !important;
+  border: 1px solid #33ff33 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 15px rgba(51,255,51,0.15), inset 0 0 30px rgba(0,0,0,0.5) !important;
+  animation: pin-retro-flicker 5s infinite;
+}
+
+.pin-style-retro .pin-card-message {
+  color: #33ff33;
+  font-family: 'Courier New', Courier, monospace;
+  text-shadow: 0 0 5px rgba(51,255,51,0.4);
+}
+
+.pin-style-retro .pin-card-author { color: rgba(51,255,51,0.7); }
+.pin-style-retro .pin-card-date { color: rgba(51,255,51,0.4); }
+.pin-style-retro .pin-card-footer { border-top-color: rgba(51,255,51,0.2); }
+.pin-style-retro .pin-card-delete button { color: rgba(51,255,51,0.4); }
+.pin-style-retro .pin-card-delete button:hover { background: rgba(255,0,0,0.2); color: #ff6b6b; }
+
+/* 11. Gepinnt — Reißzwecke oben, Papier-Curl */
+.pin-style-tape {
+  border-radius: 1px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+}
+
+.pin-style-tape::before {
+  content: '📌';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.2rem;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  pointer-events: none;
+  z-index: 2;
+}
+
+.pin-style-tape::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 22px 22px;
+  border-color: transparent transparent var(--bg, #f5f5f0) transparent;
+  border-bottom-right-radius: 1px;
+  box-shadow: -2px -2px 4px rgba(0,0,0,0.08);
+  pointer-events: none;
+}
+
+/* 12. Schatten — Dramatischer 3D-Schatten */
+.pin-style-shadow {
+  box-shadow:
+    0 1px 1px rgba(0,0,0,0.12),
+    0 2px 2px rgba(0,0,0,0.12),
+    0 4px 4px rgba(0,0,0,0.12),
+    0 8px 8px rgba(0,0,0,0.12),
+    0 16px 16px rgba(0,0,0,0.12),
+    0 32px 32px rgba(0,0,0,0.10) !important;
 }
 
 /* Lightbox */

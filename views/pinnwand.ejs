@@ -47,9 +47,13 @@
 <% if (messages.length === 0) { %>
   <p style="text-align: center; color: var(--muted); margin-top: 2rem;">Noch keine Nachrichten. Schreib die erste!</p>
 <% } else { %>
-  <div class="pin-board">
+  <div class="pin-board" data-csrf="<%= csrfToken %>" data-user-id="<%= currentUser?.id %>">
     <% messages.forEach((msg, i) => { %>
-      <div class="pin-card pin-card-rotate-<%= i % 5 %>" style="background: <%= msg.color %>;">
+      <div class="pin-card<%= msg.user_id === currentUser?.id ? ' pin-card-own' : '' %><%= msg.card_style ? ' pin-style-' + msg.card_style : '' %>"
+           data-pin-id="<%= msg.id %>"
+           data-owner-id="<%= msg.user_id %>"
+           data-has-pos="<%= msg.pos_x != null ? '1' : '0' %>"
+           style="background: <%= msg.color %>;<% if (msg.pos_x != null) { %> left: <%= msg.pos_x %>%; top: <%= msg.pos_y %>%; transform: rotate(<%= msg.rotation %>deg);<% } %>">
         <div class="pin-card-message"><%= msg.message %></div>
 
         <% if (msg.image_path) { %>
@@ -60,6 +64,31 @@
           <span class="pin-card-author"><%= msg.display_name %></span>
           <span class="pin-card-date"><%= new Date(msg.created_at + 'Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) %></span>
         </div>
+
+        <% if (msg.user_id === currentUser?.id) { %>
+          <button type="button" class="pin-rotate-handle" title="Drehen">↻</button>
+          <button type="button" class="pin-ontop-handle" title="Nach vorne">&#9733;</button>
+          <div class="pin-style-buttons">
+            <% const styles = [
+              { key: '', icon: '↺', title: 'Standard' },
+              { key: 'polaroid', icon: '⬜', title: 'Polaroid' },
+              { key: 'vintage', icon: '☕', title: 'Vintage' },
+              { key: 'neon', icon: '💡', title: 'Neon' },
+              { key: 'doodle', icon: '✏', title: 'Doodle' },
+              { key: 'frame', icon: '🖼', title: 'Rahmen' },
+              { key: 'dark', icon: '🌑', title: 'Tafel' },
+              { key: 'glass', icon: '💎', title: 'Glas' },
+              { key: 'wobble', icon: '🌊', title: 'Wackeln' },
+              { key: 'elegant', icon: '👑', title: 'Edel' },
+              { key: 'retro', icon: '💚', title: 'Retro' },
+              { key: 'tape', icon: '📌', title: 'Gepinnt' },
+              { key: 'shadow', icon: '🕶', title: 'Schatten' }
+            ];
+            styles.forEach(s => { %>
+              <button type="button" class="pin-style-btn<%= (msg.card_style || '') === s.key ? ' active' : '' %>" data-style="<%= s.key %>" title="<%= s.title %>"><%= s.icon %></button>
+            <% }) %>
+          </div>
+        <% } %>
 
         <% if (msg.user_id === currentUser?.id || isAdmin) { %>
           <form method="post" action="/pinnwand/delete" class="pin-card-delete">

@@ -89,10 +89,15 @@
             <input name="username" required maxlength="40" value="<%= editableMember.username %>" />
           </label>
           <label>Rolle
-            <select name="role">
-              <option value="user" <%= editableMember.role === "user" ? "selected" : "" %>>Benutzer</option>
-              <option value="admin" <%= editableMember.role === "admin" ? "selected" : "" %>>Administrator</option>
-            </select>
+            <% if (editableMember.id === 1) { %>
+              <input type="hidden" name="role" value="admin" />
+              <input value="Administrator (geschützt)" disabled style="opacity: 0.6;" />
+            <% } else { %>
+              <select name="role">
+                <option value="user" <%= editableMember.role === "user" ? "selected" : "" %>>Benutzer</option>
+                <option value="admin" <%= editableMember.role === "admin" ? "selected" : "" %>>Administrator</option>
+              </select>
+            <% } %>
           </label>
           <label>Vorname
             <input name="firstName" required maxlength="60" value="<%= editableMember.first_name %>" />

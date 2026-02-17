@@ -364,7 +364,7 @@ router.post("/kegelkladde/struck-game", requireAuth, verifyCsrf, (req, res) => {
 // Status: 0=Noch nicht begonnen, 1=Gut Holz!, 2=Abrechnung, 3=Archiv
 const STATUS_LABELS = ["Noch nicht begonnen", "Spieltag läuft - gut Holz!", "Abrechnung", "Archiv"];
 
-router.post("/kegelkladde/advance-status", requireAuth, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/advance-status", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
     return res.redirect("/kegelkladde");
@@ -383,7 +383,7 @@ router.post("/kegelkladde/advance-status", requireAuth, verifyCsrf, (req, res) =
   res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
 });
 
-router.post("/kegelkladde/revert-status", requireAuth, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/revert-status", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
     return res.redirect("/kegelkladde");

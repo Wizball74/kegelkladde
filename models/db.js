@@ -244,6 +244,21 @@ if (!mivColumns.includes("initial_medaillen_points")) {
   db.exec("ALTER TABLE member_initial_values ADD COLUMN initial_medaillen_points INTEGER NOT NULL DEFAULT 0");
 }
 
+// Migration: pin_messages position + rotation columns
+const pinColumns = db.prepare("PRAGMA table_info(pin_messages)").all().map((c) => c.name);
+if (!pinColumns.includes("pos_x")) {
+  db.exec("ALTER TABLE pin_messages ADD COLUMN pos_x REAL");
+}
+if (!pinColumns.includes("pos_y")) {
+  db.exec("ALTER TABLE pin_messages ADD COLUMN pos_y REAL");
+}
+if (!pinColumns.includes("rotation")) {
+  db.exec("ALTER TABLE pin_messages ADD COLUMN rotation REAL NOT NULL DEFAULT 0");
+}
+if (!pinColumns.includes("card_style")) {
+  db.exec("ALTER TABLE pin_messages ADD COLUMN card_style TEXT NOT NULL DEFAULT ''");
+}
+
 // Create indexes for performance
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);

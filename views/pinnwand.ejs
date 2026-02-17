@@ -1,0 +1,81 @@
+<%- include('partials/top') %>
+
+<h1>Pinnwand</h1>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+  <form method="post" action="/pinnwand/add" enctype="multipart/form-data">
+    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+
+    <div style="margin-bottom: 0.75rem;">
+      <textarea name="message" rows="3" placeholder="Nachricht schreiben..." required maxlength="1000"
+        style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: var(--radius-sm); font-family: inherit; font-size: 0.95rem; resize: vertical;"></textarea>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;">
+      <div class="pin-color-picker">
+        <span style="font-size: 0.85rem; color: var(--muted); margin-right: 0.25rem;">Farbe:</span>
+        <label class="pin-color-dot" style="background: #fff9c4;" title="Gelb">
+          <input type="radio" name="color" value="#fff9c4" checked />
+        </label>
+        <label class="pin-color-dot" style="background: #c8e6c9;" title="Grün">
+          <input type="radio" name="color" value="#c8e6c9" />
+        </label>
+        <label class="pin-color-dot" style="background: #bbdefb;" title="Blau">
+          <input type="radio" name="color" value="#bbdefb" />
+        </label>
+        <label class="pin-color-dot" style="background: #f8bbd0;" title="Rosa">
+          <input type="radio" name="color" value="#f8bbd0" />
+        </label>
+        <label class="pin-color-dot" style="background: #e1bee7;" title="Lila">
+          <input type="radio" name="color" value="#e1bee7" />
+        </label>
+        <label class="pin-color-dot" style="background: #ffe0b2;" title="Orange">
+          <input type="radio" name="color" value="#ffe0b2" />
+        </label>
+      </div>
+
+      <label class="btn btn-secondary" style="cursor: pointer; font-size: 0.85rem;">
+        Bild anhängen
+        <input type="file" name="image" accept=".jpg,.jpeg,.png,.gif,.webp" style="display: none;" onchange="this.parentElement.textContent = this.files[0] ? this.files[0].name : 'Bild anhängen'" />
+      </label>
+
+      <button type="submit" class="btn btn-primary" style="margin-left: auto;">Nachricht posten</button>
+    </div>
+  </form>
+</div>
+
+<% if (messages.length === 0) { %>
+  <p style="text-align: center; color: var(--muted); margin-top: 2rem;">Noch keine Nachrichten. Schreib die erste!</p>
+<% } else { %>
+  <div class="pin-board">
+    <% messages.forEach((msg, i) => { %>
+      <div class="pin-card pin-card-rotate-<%= i % 5 %>" style="background: <%= msg.color %>;">
+        <div class="pin-card-message"><%= msg.message %></div>
+
+        <% if (msg.image_path) { %>
+          <img src="/uploads/pinnwand/<%= msg.image_path %>" alt="Bild" class="pin-card-image" />
+        <% } %>
+
+        <div class="pin-card-footer">
+          <span class="pin-card-author"><%= msg.display_name %></span>
+          <span class="pin-card-date"><%= new Date(msg.created_at + 'Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) %></span>
+        </div>
+
+        <% if (msg.user_id === currentUser?.id || isAdmin) { %>
+          <form method="post" action="/pinnwand/delete" class="pin-card-delete">
+            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+            <input type="hidden" name="pinId" value="<%= msg.id %>" />
+            <button type="submit" title="Löschen" onclick="return confirm('Nachricht wirklich löschen?')">✕</button>
+          </form>
+        <% } %>
+      </div>
+    <% }) %>
+  </div>
+<% } %>
+
+<!-- Lightbox overlay -->
+<div id="pinLightbox" class="lightbox-overlay" style="display: none;">
+  <img id="pinLightboxImg" src="" alt="Vollbild" />
+</div>
+
+<%- include('partials/bottom') %>

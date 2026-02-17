@@ -200,6 +200,30 @@ db.exec(`
     sort_order INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS round_wins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL CHECK(type IN ('monte', 'medaillen')),
+    round_number INTEGER NOT NULL,
+    winner_user_id INTEGER NOT NULL,
+    winning_gameday_id INTEGER NOT NULL,
+    winning_score INTEGER NOT NULL,
+    standings_json TEXT NOT NULL,
+    detected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(winner_user_id) REFERENCES users(id),
+    FOREIGN KEY(winning_gameday_id) REFERENCES gamedays(id),
+    UNIQUE(type, round_number)
+  );
+
+  CREATE TABLE IF NOT EXISTS pin_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#fff9c4',
+    image_path TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migration: alte gameday_costs Tabelle entfernen falls vorhanden
@@ -230,6 +254,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date DESC);
+  CREATE INDEX IF NOT EXISTS idx_round_wins_type_round ON round_wins(type, round_number DESC);
+  CREATE INDEX IF NOT EXISTS idx_pin_messages_created ON pin_messages(created_at DESC);
 `);
 
 // Encryption functions

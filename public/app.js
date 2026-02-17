@@ -1862,6 +1862,68 @@ if (ranglistenSelect) {
   });
 }
 
+// Celebration overlay for round wins
+function showCelebration(items) {
+  if (!items || items.length === 0) return;
+  let index = 0;
+
+  function showNext() {
+    if (index >= items.length) return;
+    const item = items[index];
+    index++;
+
+    const emoji = item.type === "monte" ? "\uD83C\uDFC6" : "\uD83C\uDFC5";
+    const typeLabel = item.type === "monte" ? "Monte" : "Medaillen";
+
+    const overlay = document.createElement("div");
+    overlay.className = "celebration-overlay";
+    overlay.innerHTML =
+      '<div class="celebration-card">' +
+        '<div class="celebration-emoji">' + emoji + '</div>' +
+        '<div class="celebration-title">' + typeLabel + ' \u2013 Runde ' + item.round + '</div>' +
+        '<div class="celebration-winner">' + item.winner + '</div>' +
+        '<div class="celebration-score">' + item.score + ' Punkte</div>' +
+        '<div class="celebration-hint">Antippen zum Schlie\u00dfen</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+    spawnConfetti();
+
+    let dismissed = false;
+    function dismiss() {
+      if (dismissed) return;
+      dismissed = true;
+      overlay.classList.add("celebration-out");
+      setTimeout(() => {
+        overlay.remove();
+        showNext();
+      }, 300);
+    }
+
+    overlay.addEventListener("click", dismiss);
+    setTimeout(dismiss, 8000);
+  }
+
+  showNext();
+}
+
+function spawnConfetti() {
+  const colors = ["#ffd700", "#ff6b6b", "#48dbfb", "#ff9ff3", "#54a0ff", "#5f27cd", "#2f8f6d", "#ee5a24"];
+  for (let i = 0; i < 50; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    piece.style.left = Math.random() * 100 + "vw";
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.width = (Math.random() * 8 + 4) + "px";
+    piece.style.height = (Math.random() * 12 + 6) + "px";
+    piece.style.animationDuration = (Math.random() * 2 + 2) + "s";
+    piece.style.animationDelay = (Math.random() * 1.5) + "s";
+    piece.style.transform = "rotate(" + Math.random() * 360 + "deg)";
+    document.body.appendChild(piece);
+    piece.addEventListener("animationend", () => piece.remove());
+  }
+}
+
 // Initialize server-side flash messages as toasts and cost display
 document.addEventListener("DOMContentLoaded", () => {
   initCompactMode();
@@ -1877,6 +1939,41 @@ document.addEventListener("DOMContentLoaded", () => {
       const flash = JSON.parse(flashData.textContent);
       if (flash && flash.message) {
         showToast(flash.message, flash.type || "success");
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  // Pinnwand lightbox
+  const lightbox = document.getElementById("pinLightbox");
+  const lightboxImg = document.getElementById("pinLightboxImg");
+  if (lightbox && lightboxImg) {
+    document.querySelectorAll(".pin-card-image").forEach((img) => {
+      img.addEventListener("click", () => {
+        lightboxImg.src = img.src;
+        lightbox.style.display = "flex";
+      });
+    });
+    lightbox.addEventListener("click", () => {
+      lightbox.style.display = "none";
+      lightboxImg.src = "";
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && lightbox.style.display === "flex") {
+        lightbox.style.display = "none";
+        lightboxImg.src = "";
+      }
+    });
+  }
+
+  // Celebration for round wins
+  const celebrateEl = document.getElementById("celebrateData");
+  if (celebrateEl) {
+    try {
+      const items = JSON.parse(celebrateEl.textContent);
+      if (items && items.length > 0) {
+        setTimeout(() => showCelebration(items), 500);
       }
     } catch (e) {
       // Ignore parse errors

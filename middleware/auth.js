@@ -49,6 +49,7 @@ function setLocals(req, res, next) {
   res.locals.csrfToken = req.session.csrfToken;
   res.locals.currentUser = req.session.user || null;
   res.locals.isAdmin = req.session.role === "admin";
+  res.locals.currentPath = req.path;
   next();
 }
 

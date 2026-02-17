@@ -11,6 +11,7 @@ const ranglistenRoutes = require("./routes/ranglisten");
 const recordsRoutes = require("./routes/records");
 const statisticsRoutes = require("./routes/statistics");
 const adminRoutes = require("./routes/admin");
+const pinnwandRoutes = require("./routes/pinnwand");
 
 // Import middleware
 const { requireInitialized, flashMiddleware, setLocals } = require("./middleware/auth");
@@ -31,6 +32,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/uploads/pinnwand", express.static(path.join(__dirname, "data", "uploads", "pinnwand")));
 
 // Session configuration
 app.use(
@@ -62,6 +64,7 @@ app.use(ranglistenRoutes);
 app.use(recordsRoutes);
 app.use(statisticsRoutes);
 app.use(adminRoutes);
+app.use(pinnwandRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

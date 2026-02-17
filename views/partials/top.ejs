@@ -32,12 +32,13 @@
     <% if (currentUser) { %>
       <!-- Desktop navigation -->
       <nav class="nav-links">
-        <a href="/kegelkladde">Kegelbuch</a>
-        <a href="/ranglisten">Ranglisten</a>
-        <a href="/statistik">Statistik</a>
-        <a href="/rekorde">Rekorde/Kurioses</a>
-        <a href="/members">Mitglieder</a>
-        <% if (isAdmin) { %><a href="/admin">Einstellungen</a><% } %>
+        <a href="/kegelkladde" class="<%= currentPath === '/kegelkladde' ? 'active' : '' %>">Kegelbuch</a>
+        <a href="/ranglisten" class="<%= currentPath === '/ranglisten' ? 'active' : '' %>">Ranglisten</a>
+        <a href="/statistik" class="<%= currentPath === '/statistik' ? 'active' : '' %>">Statistik</a>
+        <a href="/rekorde" class="<%= currentPath === '/rekorde' ? 'active' : '' %>">Rekorde/Kurioses</a>
+        <a href="/pinnwand" class="<%= currentPath === '/pinnwand' ? 'active' : '' %>">Pinnwand</a>
+        <a href="/members" class="<%= currentPath === '/members' ? 'active' : '' %>">Mitglieder</a>
+        <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
       </nav>
 
       <!-- Desktop logout -->
@@ -58,12 +59,13 @@
   <% if (currentUser) { %>
     <!-- Mobile navigation -->
     <nav id="mobileNav" class="mobile-nav">
-      <a href="/kegelkladde">Kegelbuch</a>
-      <a href="/ranglisten">Ranglisten</a>
-      <a href="/statistik">Statistik</a>
-      <a href="/rekorde">Rekorde/Kurioses</a>
-      <a href="/members">Mitglieder</a>
-      <% if (isAdmin) { %><a href="/admin">Einstellungen</a><% } %>
+      <a href="/kegelkladde" class="<%= currentPath === '/kegelkladde' ? 'active' : '' %>">Kegelbuch</a>
+      <a href="/ranglisten" class="<%= currentPath === '/ranglisten' ? 'active' : '' %>">Ranglisten</a>
+      <a href="/statistik" class="<%= currentPath === '/statistik' ? 'active' : '' %>">Statistik</a>
+      <a href="/rekorde" class="<%= currentPath === '/rekorde' ? 'active' : '' %>">Rekorde/Kurioses</a>
+      <a href="/pinnwand" class="<%= currentPath === '/pinnwand' ? 'active' : '' %>">Pinnwand</a>
+      <a href="/members" class="<%= currentPath === '/members' ? 'active' : '' %>">Mitglieder</a>
+      <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
       <form method="post" action="/logout" style="margin-top: 0.5rem;">
         <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
         <button type="submit" style="width: 100%;">Logout (<%= currentUser.firstName %>)</button>

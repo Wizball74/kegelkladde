@@ -139,5 +139,18 @@
     </form>
   </div>
 
+  <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid var(--line);">
+    <h2 style="margin-top: 0;">Feuerwerk testen</h2>
+    <p class="subtle">Zeigt die Siegesfeier-Animation als Vorschau.</p>
+    <button type="button" id="btnTestCelebration">Feuerwerk testen</button>
+  </div>
+  <script>
+    document.getElementById("btnTestCelebration").addEventListener("click", function() {
+      if (typeof showCelebration === "function") {
+        showCelebration([{ type: "monte", round: 42, winner: "Testsieger", score: 107 }]);
+      }
+    });
+  </script>
+
 </section>
 <%- include("partials/bottom") %>

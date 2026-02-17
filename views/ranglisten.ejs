@@ -5,10 +5,11 @@
     return '\u{1F451}' + wins;
   };
 %>
+<script type="application/json" id="celebrateData"><%- JSON.stringify(celebrateItems) %></script>
 <section class="card fade-in">
   <div class="section-head">
     <h1>Ranglisten</h1>
-    <p class="subtle">Punktestände aus Monte und Aussteigen.</p>
+    <p class="subtle">Punktest&auml;nde aus Monte und Aussteigen.</p>
   </div>
 
   <% if (gamedays.length > 0) { %>
@@ -31,6 +32,7 @@
   <nav class="tab-nav">
     <button type="button" class="tab-btn active" data-tab="monte">Monte</button>
     <button type="button" class="tab-btn" data-tab="medaillen">Medaillen</button>
+    <button type="button" class="tab-btn" data-tab="historie">Rundenverlauf</button>
   </nav>
 
   <!-- Tab: Monte -->
@@ -142,6 +144,70 @@
         <div class="empty-state-icon">&#127942;</div>
         <p>Noch keine Medaillen-Ergebnisse vorhanden.</p>
       </div>
+    <% } %>
+  </div>
+
+  <!-- Tab: Rundenverlauf -->
+  <div class="tab-panel" id="tab-historie">
+    <% if (monteHistory.length === 0 && medaillenHistory.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128220;</div>
+        <p>Noch keine abgeschlossenen Runden.</p>
+      </div>
+    <% } else { %>
+      <% if (monteHistory.length > 0) { %>
+        <h2 style="margin-top:0;">Monte-Siege</h2>
+        <div class="round-history-list">
+          <% monteHistory.forEach((rw) => {
+            let standings = [];
+            try { standings = JSON.parse(rw.standings_json); } catch(e) {}
+          %>
+            <details class="round-history-item">
+              <summary>
+                <span class="round-badge">Runde <%= rw.round_number %></span>
+                <span class="round-winner-name"><%= rw.first_name %></span>
+                <span class="round-score"><%= rw.winning_score %> Pkt.</span>
+                <span class="round-date"><%= formatDateDE(rw.match_date) %></span>
+              </summary>
+              <ol class="round-standings">
+                <% standings.forEach((s, idx) => { %>
+                  <li class="<%= s.total === rw.winning_score ? 'round-winner' : '' %>">
+                    <span class="round-standing-name"><%= s.name %></span>
+                    <span class="round-standing-pts"><%= s.total %> Pkt.</span>
+                  </li>
+                <% }) %>
+              </ol>
+            </details>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (medaillenHistory.length > 0) { %>
+        <h2>Medaillen-Siege</h2>
+        <div class="round-history-list">
+          <% medaillenHistory.forEach((rw) => {
+            let standings = [];
+            try { standings = JSON.parse(rw.standings_json); } catch(e) {}
+          %>
+            <details class="round-history-item">
+              <summary>
+                <span class="round-badge">Runde <%= rw.round_number %></span>
+                <span class="round-winner-name"><%= rw.first_name %></span>
+                <span class="round-score"><%= rw.winning_score %> Pkt.</span>
+                <span class="round-date"><%= formatDateDE(rw.match_date) %></span>
+              </summary>
+              <ol class="round-standings">
+                <% standings.forEach((s, idx) => { %>
+                  <li class="<%= s.total === rw.winning_score ? 'round-winner' : '' %>">
+                    <span class="round-standing-name"><%= s.name %></span>
+                    <span class="round-standing-pts"><%= s.total %> Pkt.<%= s.medals != null ? ` (${s.medals} Med.)` : '' %></span>
+                  </li>
+                <% }) %>
+              </ol>
+            </details>
+          <% }) %>
+        </div>
+      <% } %>
     <% } %>
   </div>
 </section>

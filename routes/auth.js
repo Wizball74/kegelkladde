@@ -72,7 +72,8 @@ router.post("/login", loginLimiter, verifyCsrf, async (req, res) => {
     username: user.username,
     firstName: user.first_name,
     lastName: user.last_name,
-    role: user.role
+    role: user.role,
+    avatar: user.avatar || null
   };
 
   db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);

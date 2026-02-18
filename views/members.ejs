@@ -2,206 +2,226 @@
 <section class="card fade-in">
   <div class="section-head">
     <h1>Mitglieder</h1>
-    <p class="subtle">Vereinsmitglieder verwalten und Profile bearbeiten.</p>
-  </div>
-
-  <div class="split-grid">
-    <section>
-      <h2>Mitgliederliste</h2>
-      <ul class="member-list">
-        <% members.forEach((m) => { %>
-          <li>
-            <strong>
-              <%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %>
-              <% if (m.is_guest) { %><span class="badge badge-muted">Gast</span><% } %>
-            </strong>
-            <small><%= m.role === 'admin' ? 'Administrator' : 'Benutzer' %></small>
-            <% if (isAdmin || currentUser.id === m.id) { %>
-              <% if (m.email) { %><span><%= m.email %></span><% } %>
-              <% if (m.address) { %><span><%= m.address %></span><% } %>
-              <% if (m.phones && m.phones.length) { %><span><%= m.phones.join(" | ") %></span><% } %>
-            <% } %>
-          </li>
-        <% }) %>
-      </ul>
-    </section>
-
-    <section>
-      <h2>Mein Profil</h2>
-      <form method="post" action="/members/profile" class="form-grid">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <label>Vorname
-          <input name="firstName" required maxlength="60" value="<%= current.first_name %>" />
-        </label>
-        <label>Nachname
-          <input name="lastName" maxlength="60" value="<%= current.last_name %>" />
-        </label>
-        <label>Adresse (optional)
-          <input name="address" maxlength="200" value="<%= current.address %>" />
-        </label>
-        <label>E-Mail (optional)
-          <input type="email" name="email" maxlength="120" value="<%= current.email %>" />
-        </label>
-        <label>Telefone (optional, 1-3, per Komma)
-          <input name="phones" maxlength="120" value="<%= (current.phones || []).join(", ") %>" />
-        </label>
-        <button type="submit">Profil speichern</button>
-      </form>
-
-      <h2 style="margin-top: 2rem;">Passwort ändern</h2>
-      <form method="post" action="/members/change-password" class="form-grid">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <label>Aktuelles Passwort
-          <input type="password" name="currentPassword" required autocomplete="current-password" />
-        </label>
-        <label>Neues Passwort (min. 8 Zeichen)
-          <input type="password" name="newPassword" required minlength="8" autocomplete="new-password" />
-        </label>
-        <label>Neues Passwort bestätigen
-          <input type="password" name="confirmPassword" required minlength="8" autocomplete="new-password" />
-        </label>
-        <button type="submit">Passwort ändern</button>
-      </form>
-    </section>
+    <p class="subtle">Alle Vereinsmitglieder auf einen Blick.</p>
   </div>
 
   <% if (isAdmin) { %>
-    <section class="admin-box">
-      <h2>Mitglied bearbeiten</h2>
-      <% if (editError) { %><p class="error"><%= editError %></p><% } %>
-      <form method="get" action="/members" class="inline-form">
-        <label>Mitglied auswählen
-          <select name="editUserId" onchange="this.form.submit()">
-            <% members.forEach((m) => { %>
-              <option value="<%= m.id %>" <%= editableMember && editableMember.id === m.id ? "selected" : "" %>>
-                <%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %> (<%= m.username %>)
-              </option>
-            <% }) %>
-          </select>
-        </label>
-      </form>
+    <div class="member-top-actions">
+      <button class="btn" onclick="document.getElementById('createMemberModal').classList.add('active')">Mitglied anlegen</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('createGuestModal').classList.add('active')">Gast anlegen</button>
+    </div>
+  <% } %>
 
-      <% if (editableMember) { %>
-        <form method="post" action="/members/admin-update" class="form-grid" id="editForm-<%= editableMember.id %>">
-          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-          <input type="hidden" name="memberId" value="<%= editableMember.id %>" />
-          <label>Benutzername
-            <input name="username" required maxlength="40" value="<%= editableMember.username %>" />
-          </label>
-          <label>Rolle
-            <% if (editableMember.id === 1) { %>
-              <input type="hidden" name="role" value="admin" />
-              <input value="Administrator (geschützt)" disabled style="opacity: 0.6;" />
-            <% } else { %>
-              <select name="role">
-                <option value="user" <%= editableMember.role === "user" ? "selected" : "" %>>Benutzer</option>
-                <option value="admin" <%= editableMember.role === "admin" ? "selected" : "" %>>Administrator</option>
-              </select>
-            <% } %>
-          </label>
-          <label>Vorname
-            <input name="firstName" required maxlength="60" value="<%= editableMember.first_name %>" />
-          </label>
-          <label>Nachname
-            <input name="lastName" maxlength="60" value="<%= editableMember.last_name %>" />
-          </label>
-          <label>Adresse (optional)
-            <input name="address" maxlength="200" value="<%= editableMember.address %>" />
-          </label>
-          <label>E-Mail (optional)
-            <input type="email" name="email" maxlength="120" value="<%= editableMember.email %>" />
-          </label>
-          <label>Telefone (optional, 1-3, per Komma)
-            <input name="phones" maxlength="120" value="<%= (editableMember.phones || []).join(", ") %>" />
-          </label>
-        </form>
+  <!-- Desktop: Tabellen-Header -->
+  <div class="member-grid-header desktop-only <%= isAdmin ? 'has-admin' : '' %>">
+    <% if (isAdmin) { %><span></span><% } %>
+    <span></span>
+    <span>Name</span>
+    <span>E-Mail</span>
+    <span>Adresse</span>
+    <span>Telefon</span>
+    <% if (isAdmin) { %><span></span><% } %>
+  </div>
 
-        <div class="member-actions">
-          <button type="submit" form="editForm-<%= editableMember.id %>">Mitglied speichern</button>
-
-          <form method="post" action="/members/reset-password" class="inline-row">
-            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-            <input type="hidden" name="memberId" value="<%= editableMember.id %>" />
-            <input type="password" name="newPassword" required minlength="8" placeholder="Neues Passwort" />
-            <button type="submit" class="btn-secondary">Passwort zurücksetzen</button>
-          </form>
-
-          <% if (editableMember.id !== currentUser.id) { %>
-            <form method="post" action="/members/delete" data-confirm="Mitglied <%= editableMember.first_name %> wirklich löschen? Alle zugehörigen Daten werden entfernt!">
-              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-              <input type="hidden" name="memberId" value="<%= editableMember.id %>" />
-              <button type="submit" class="btn-danger">Mitglied löschen</button>
-            </form>
+  <ul class="member-list-new">
+    <% members.forEach((m, idx) => { %>
+      <li class="member-card <%= m.is_guest ? 'member-card-guest' : '' %>" data-id="<%= m.id %>" <% if (isAdmin) { %>draggable="true"<% } %>>
+        <% if (isAdmin) { %>
+          <span class="drag-handle" title="Reihenfolge aendern">&#9776;</span>
+        <% } %>
+        <div class="member-card-avatar">
+          <% if (m.avatar) { %>
+            <img src="/uploads/avatars/<%= m.avatar %>" alt="" class="member-avatar" />
+          <% } else { %>
+            <span class="member-avatar member-avatar-initials"><%= m.first_name ? m.first_name[0].toUpperCase() : '' %><%= m.last_name ? m.last_name[0].toUpperCase() : '' %></span>
           <% } %>
         </div>
-      <% } %>
+        <div class="member-col member-col-name">
+          <strong><%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %></strong>
+          <% if (m.role === 'admin') { %><span class="badge badge-success">Admin</span><% } %>
+          <% if (m.is_guest) { %><span class="badge badge-muted">Gast</span><% } %>
+        </div>
+        <% if (!m.is_guest) { %>
+          <div class="member-col member-col-email" data-label="E-Mail"><% if (m.email) { %><a href="mailto:<%= m.email %>"><%= m.email %></a><% } else { %>–<% } %></div>
+          <div class="member-col member-col-address copyable" data-label="Adresse"><%= m.address || '–' %></div>
+          <div class="member-col member-col-phone copyable" data-label="Telefon"><%= (m.phones && m.phones.length) ? m.phones.join(" | ") : '–' %></div>
+        <% } else { %>
+          <div class="member-col member-col-guest-spacer"></div>
+        <% } %>
+        <% if (isAdmin) { %>
+          <div class="member-card-actions">
+            <button class="btn btn-sm btn-secondary" onclick="openEditMember(<%= m.id %>)" title="Bearbeiten">&#9998;</button>
+            <% if (m.id !== currentUser.id) { %>
+              <form method="post" action="/members/delete" data-confirm="Mitglied <%= m.first_name %> wirklich loeschen? Alle zugehoerigen Daten werden entfernt!" style="display:inline;">
+                <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                <input type="hidden" name="memberId" value="<%= m.id %>" />
+                <button type="submit" class="btn btn-sm btn-danger" title="Loeschen">&#10005;</button>
+              </form>
+            <% } %>
+          </div>
+        <% } %>
+      </li>
+    <% }) %>
+  </ul>
 
-      <h2>Neues Mitglied anlegen</h2>
-      <form method="post" action="/members/create" class="form-grid">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <div class="form-row-2">
-          <label>Benutzername
-            <input name="username" placeholder="Benutzername" required maxlength="40" autocomplete="off" />
+  <% if (isAdmin) { %>
+    <!-- Reihenfolge speichern (hidden form) -->
+    <form method="post" action="/kegelkladde/member-order" id="orderForm" style="display: none;">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <input type="hidden" name="memberOrder" id="memberOrder" value="" />
+    </form>
+
+    <!-- Edit Member Modal -->
+    <div class="modal-overlay" id="editMemberModal">
+      <div class="modal" style="max-width: 520px;">
+        <h3>Mitglied bearbeiten</h3>
+        <form method="post" action="/members/admin-update" class="form-grid" id="editMemberForm">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <input type="hidden" name="memberId" id="editMemberId" value="" />
+          <div class="form-row-2">
+            <label>Benutzername
+              <input name="username" id="editUsername" required maxlength="40" />
+            </label>
+            <label>Rolle
+              <select name="role" id="editRole">
+                <option value="user">Benutzer</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row-2">
+            <label>Vorname
+              <input name="firstName" id="editFirstName" required maxlength="60" />
+            </label>
+            <label>Nachname
+              <input name="lastName" id="editLastName" maxlength="60" />
+            </label>
+          </div>
+          <label>Adresse (optional)
+            <textarea name="address" id="editAddress" maxlength="200" rows="3"></textarea>
           </label>
-          <label>Start-Passwort
-            <input type="password" name="password" placeholder="min. 8 Zeichen" required minlength="8" autocomplete="new-password" />
+          <label>E-Mail (optional)
+            <input type="email" name="email" id="editEmail" maxlength="120" />
           </label>
+          <label>Telefone (optional, 1-3, per Komma)
+            <input name="phones" id="editPhones" maxlength="120" />
+          </label>
+          <div class="member-actions">
+            <button type="submit">Speichern</button>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('editMemberModal').classList.remove('active')">Abbrechen</button>
+          </div>
+        </form>
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+          <h4 style="margin: 0 0 0.5rem;">Passwort zuruecksetzen</h4>
+          <form method="post" action="/members/reset-password" class="inline-row">
+            <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+            <input type="hidden" name="memberId" id="resetPwMemberId" value="" />
+            <input type="password" name="newPassword" required minlength="8" placeholder="Neues Passwort" />
+            <button type="submit" class="btn-secondary">Zuruecksetzen</button>
+          </form>
         </div>
-        <div class="form-row-2">
-          <label>Vorname
-            <input name="firstName" placeholder="Vorname" required maxlength="60" />
-          </label>
-          <label>Nachname (optional)
-            <input name="lastName" placeholder="Nachname" maxlength="60" />
-          </label>
-        </div>
-        <div class="form-row-2">
+      </div>
+    </div>
+
+    <!-- Create Member Modal -->
+    <div class="modal-overlay" id="createMemberModal">
+      <div class="modal" style="max-width: 520px;">
+        <h3>Neues Mitglied anlegen</h3>
+        <form method="post" action="/members/create" class="form-grid">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <div class="form-row-2">
+            <label>Benutzername
+              <input name="username" placeholder="Benutzername" required maxlength="40" autocomplete="off" />
+            </label>
+            <label>Start-Passwort
+              <input type="password" name="password" placeholder="min. 8 Zeichen" required minlength="8" autocomplete="new-password" />
+            </label>
+          </div>
+          <div class="form-row-2">
+            <label>Vorname
+              <input name="firstName" placeholder="Vorname" required maxlength="60" />
+            </label>
+            <label>Nachname (optional)
+              <input name="lastName" placeholder="Nachname" maxlength="60" />
+            </label>
+          </div>
           <label>Rolle
             <select name="role">
               <option value="user">Benutzer</option>
               <option value="admin">Administrator</option>
             </select>
           </label>
-          <div class="form-row-btn">
+          <div class="member-actions">
             <button type="submit">Anlegen</button>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('createMemberModal').classList.remove('active')">Abbrechen</button>
           </div>
-        </div>
-      </form>
-
-      <h2>Gast anlegen</h2>
-      <p class="subtle">Gäste können sich nicht einloggen, erscheinen aber in der Kegelkladde.</p>
-      <form method="post" action="/members/create-guest" class="inline-form">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <label>Gast Vorname
-          <input name="firstName" placeholder="Vorname" required maxlength="60" />
-        </label>
-        <label>Gast Nachname (optional)
-          <input name="lastName" placeholder="Nachname" maxlength="60" />
-        </label>
-        <button type="submit">Gast hinzufügen</button>
-      </form>
-
-      <h2>Mitglieder-Reihenfolge</h2>
-      <p class="subtle">Ändere die Spalten-Reihenfolge in der Kegelkladde-Tabelle.</p>
-      <div class="order-box">
-        <form method="post" action="/kegelkladde/member-order" id="orderForm">
-          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-          <input type="hidden" name="memberOrder" id="memberOrder" value="" />
-          <ul class="order-list" id="orderList">
-            <% orderedMembers.forEach((member) => { %>
-              <li data-id="<%= member.id %>">
-                <span><%= member.display_name %></span>
-                <span>
-                  <button type="button" class="move-up btn-sm btn-secondary">&uarr;</button>
-                  <button type="button" class="move-down btn-sm btn-secondary">&darr;</button>
-                </span>
-              </li>
-            <% }) %>
-          </ul>
-          <button type="submit">Reihenfolge speichern</button>
         </form>
       </div>
-    </section>
+    </div>
+
+    <!-- Create Guest Modal -->
+    <div class="modal-overlay" id="createGuestModal">
+      <div class="modal" style="max-width: 420px;">
+        <h3>Gast anlegen</h3>
+        <p class="subtle">Gaeste koennen sich nicht einloggen, erscheinen aber in der Kegelkladde.</p>
+        <form method="post" action="/members/create-guest" class="form-grid">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <div class="form-row-2">
+            <label>Vorname
+              <input name="firstName" placeholder="Vorname" required maxlength="60" />
+            </label>
+            <label>Nachname (optional)
+              <input name="lastName" placeholder="Nachname" maxlength="60" />
+            </label>
+          </div>
+          <div class="member-actions">
+            <button type="submit">Gast hinzufuegen</button>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('createGuestModal').classList.remove('active')">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
   <% } %>
 </section>
+
+<% if (isAdmin) { %>
+<script>
+  // Member data for edit modal
+  const memberData = <%- JSON.stringify(members.map(m => ({
+    id: m.id,
+    username: m.username,
+    role: m.role,
+    first_name: m.first_name,
+    last_name: m.last_name,
+    address: m.address,
+    email: m.email,
+    phones: (m.phones || []).join(", ")
+  }))) %>;
+
+  function openEditMember(id) {
+    const m = memberData.find(x => x.id === id);
+    if (!m) return;
+    document.getElementById('editMemberId').value = m.id;
+    document.getElementById('resetPwMemberId').value = m.id;
+    document.getElementById('editUsername').value = m.username;
+    document.getElementById('editFirstName').value = m.first_name;
+    document.getElementById('editLastName').value = m.last_name;
+    document.getElementById('editAddress').value = m.address || '';
+    document.getElementById('editEmail').value = m.email || '';
+    document.getElementById('editPhones').value = m.phones || '';
+    const roleSelect = document.getElementById('editRole');
+    roleSelect.value = m.role;
+    // Lock role for user ID 1
+    roleSelect.disabled = (m.id === 1);
+    document.getElementById('editMemberModal').classList.add('active');
+  }
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.classList.remove('active');
+    });
+  });
+</script>
+<% } %>
 <%- include("partials/bottom") %>

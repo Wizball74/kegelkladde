@@ -574,7 +574,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     const modal = document.querySelector(".modal-overlay.active");
     if (modal) {
-      modal.remove();
+      modal.classList.remove("active");
     }
 
     // Close mobile nav
@@ -2224,4 +2224,122 @@ document.addEventListener("DOMContentLoaded", () => {
       // Ignore parse errors
     }
   }
+
+  // Avatar upload: show preview + submit button
+  const avatarInput = document.getElementById("avatarInput");
+  const avatarSubmit = document.getElementById("avatarSubmit");
+  const avatarPreview = document.getElementById("avatarPreview");
+  if (avatarInput && avatarSubmit) {
+    avatarInput.addEventListener("change", () => {
+      const file = avatarInput.files[0];
+      if (!file) return;
+      avatarSubmit.style.display = "";
+      if (avatarPreview && file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (avatarPreview.tagName === "IMG") {
+            avatarPreview.src = e.target.result;
+          } else {
+            // Replace initials div with img
+            const img = document.createElement("img");
+            img.src = e.target.result;
+            img.alt = "Avatar";
+            img.className = "profil-avatar-img";
+            img.id = "avatarPreview";
+            avatarPreview.replaceWith(img);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Profile page: activate tab from hash
+  if (window.location.hash) {
+    const hash = window.location.hash.replace("#", "");
+    const tabBtn = document.querySelector('.tab-btn[data-tab="' + hash + '"]');
+    if (tabBtn) tabBtn.click();
+  }
+
+  // Member list: Drag & Drop reorder (admin only)
+  initMemberDragDrop();
+
+  // Copyable fields: click to copy
+  document.querySelectorAll(".member-col.copyable").forEach(el => {
+    el.addEventListener("click", () => {
+      const text = el.textContent.trim();
+      if (!text || text === "–") return;
+      navigator.clipboard.writeText(text).then(() => {
+        el.classList.add("copied");
+        setTimeout(() => el.classList.remove("copied"), 1500);
+      });
+    });
+  });
 });
+
+function initMemberDragDrop() {
+  const memberList = document.querySelector(".member-list-new");
+  const orderForm = document.getElementById("orderForm");
+  const orderInput = document.getElementById("memberOrder");
+  if (!memberList || !orderForm || !orderInput) return;
+
+  let dragItem = null;
+
+  memberList.querySelectorAll(".member-card[draggable]").forEach((card) => {
+    card.addEventListener("dragstart", (e) => {
+      dragItem = card;
+      card.style.opacity = "0.5";
+      e.dataTransfer.effectAllowed = "move";
+    });
+
+    card.addEventListener("dragend", () => {
+      card.style.opacity = "";
+      memberList.querySelectorAll(".member-card").forEach((c) => c.classList.remove("drag-over"));
+      dragItem = null;
+    });
+
+    card.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (dragItem && dragItem !== card) {
+        card.classList.add("drag-over");
+      }
+    });
+
+    card.addEventListener("dragleave", () => {
+      card.classList.remove("drag-over");
+    });
+
+    card.addEventListener("drop", (e) => {
+      e.preventDefault();
+      card.classList.remove("drag-over");
+      if (!dragItem || dragItem === card) return;
+
+      const items = Array.from(memberList.querySelectorAll(".member-card"));
+      const fromIdx = items.indexOf(dragItem);
+      const toIdx = items.indexOf(card);
+
+      if (fromIdx < toIdx) {
+        card.after(dragItem);
+      } else {
+        card.before(dragItem);
+      }
+
+      // Auto-save new order
+      saveMemberOrder();
+    });
+  });
+
+  function saveMemberOrder() {
+    const ids = Array.from(memberList.querySelectorAll(".member-card")).map((c) => c.dataset.id);
+    orderInput.value = ids.join(",");
+    // Submit via fetch for seamless UX
+    const formData = new FormData(orderForm);
+    fetch(orderForm.action, {
+      method: "POST",
+      body: formData
+    })
+    .then((r) => { if (r.ok) showToast("Reihenfolge gespeichert.", "success"); })
+    .catch(() => showToast("Fehler beim Speichern der Reihenfolge.", "error"));
+  }
+}

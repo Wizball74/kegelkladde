@@ -213,6 +213,7 @@
       };
     %>
 
+    <% if (currentUser.id === 1) { %>
     <h2>Letzter Login</h2>
     <div class="records-table-wrap">
       <table class="records-table">
@@ -238,6 +239,7 @@
         </tbody>
       </table>
     </div>
+    <% } %>
 
     <h2 style="margin-top: 2rem;">Letzte Aktionen</h2>
     <% if (auditLog.length > 0) { %>

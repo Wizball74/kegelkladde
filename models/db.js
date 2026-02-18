@@ -286,6 +286,11 @@ if (!userColumns.includes("last_login_at")) {
   db.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT");
 }
 
+// Migration: avatar auf users
+if (!userColumns.includes("avatar")) {
+  db.exec("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT NULL");
+}
+
 // Create indexes for performance
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -347,7 +352,7 @@ function decrypt(payload) {
 // Member helper functions
 function getOrderedMembers() {
   const members = db
-    .prepare("SELECT id, first_name, last_name, role, is_guest FROM users ORDER BY lower(first_name), lower(last_name)")
+    .prepare("SELECT id, first_name, last_name, role, is_guest, avatar FROM users ORDER BY lower(first_name), lower(last_name)")
     .all();
 
   const orderRow = db.prepare("SELECT order_json FROM member_order WHERE id = 1").get();

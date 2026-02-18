@@ -28,6 +28,11 @@ function requireAuth(req, res, next) {
   if (!req.session.userId) {
     return res.redirect("/login");
   }
+  // Track last access: update once per session (flag prevents repeated writes)
+  if (!req.session._accessLogged) {
+    db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(req.session.userId);
+    req.session._accessLogged = true;
+  }
   next();
 }
 

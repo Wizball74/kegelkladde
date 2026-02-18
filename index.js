@@ -33,6 +33,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/uploads/pinnwand", express.static(path.join(__dirname, "data", "uploads", "pinnwand")));
+app.use("/uploads/avatars", express.static(path.join(__dirname, "data", "uploads", "avatars")));
 
 // Session configuration
 app.use(

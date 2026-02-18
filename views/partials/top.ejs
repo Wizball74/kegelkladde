@@ -41,11 +41,20 @@
         <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
       </nav>
 
-      <!-- Desktop logout -->
-      <form method="post" action="/logout" class="logout-form">
-        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-        <button type="submit">Logout</button>
-      </form>
+      <!-- Desktop profile + logout -->
+      <div class="topbar-actions">
+        <a href="/profil" class="profile-link" title="Mein Profil">
+          <% if (currentUser.avatar) { %>
+            <img src="/uploads/avatars/<%= currentUser.avatar %>" alt="Profil" class="topbar-avatar" />
+          <% } else { %>
+            <span class="topbar-avatar topbar-avatar-initials"><%= currentUser.firstName ? currentUser.firstName[0].toUpperCase() : '' %><%= currentUser.lastName ? currentUser.lastName[0].toUpperCase() : '' %></span>
+          <% } %>
+        </a>
+        <form method="post" action="/logout" class="logout-form">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <button type="submit">Logout</button>
+        </form>
+      </div>
 
       <!-- Mobile menu toggle -->
       <button id="menuToggle" class="menu-toggle" aria-label="Menü öffnen">
@@ -66,6 +75,16 @@
       <a href="/pinnwand" class="<%= currentPath === '/pinnwand' ? 'active' : '' %>">Pinnwand</a>
       <a href="/members" class="<%= currentPath === '/members' ? 'active' : '' %>">Mitglieder</a>
       <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
+      <a href="/profil" class="<%= currentPath === '/profil' ? 'active' : '' %>">
+        <span class="mobile-nav-profile">
+          <% if (currentUser.avatar) { %>
+            <img src="/uploads/avatars/<%= currentUser.avatar %>" alt="" class="mobile-nav-avatar" />
+          <% } else { %>
+            <span class="mobile-nav-avatar mobile-nav-avatar-initials"><%= currentUser.firstName ? currentUser.firstName[0].toUpperCase() : '' %><%= currentUser.lastName ? currentUser.lastName[0].toUpperCase() : '' %></span>
+          <% } %>
+          Mein Profil
+        </span>
+      </a>
       <form method="post" action="/logout" style="margin-top: 0.5rem;">
         <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
         <button type="submit" style="width: 100%;">Logout (<%= currentUser.firstName %>)</button>

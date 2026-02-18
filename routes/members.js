@@ -1,15 +1,47 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const { db, encrypt, decrypt, logAudit, getOrderedMembers, withDisplayNames } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize, parsePhones } = require("../utils/helpers");
 
 const router = express.Router();
 
+// Avatar upload setup
+const avatarDir = path.join(__dirname, "..", "data", "uploads", "avatars");
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+}
+
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, avatarDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${req.session.userId}-${Date.now()}${ext}`);
+  }
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [".jpg", ".jpeg", ".png", ".webp"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Nur JPG, PNG und WebP erlaubt."));
+    }
+  }
+});
+
 router.get("/members", requireAuth, (req, res) => {
-  const members = db
-    .prepare("SELECT id, username, role, is_guest, first_name, last_name, address_enc, email_enc, phones_enc FROM users ORDER BY lower(first_name), lower(last_name)")
+  const orderedIds = getOrderedMembers().map((m) => m.id);
+  const allMembers = db
+    .prepare("SELECT id, username, role, is_guest, first_name, last_name, avatar, address_enc, email_enc, phones_enc FROM users ORDER BY lower(first_name), lower(last_name)")
     .all()
     .map((m) => ({
       ...m,
@@ -18,30 +50,38 @@ router.get("/members", requireAuth, (req, res) => {
       phones: JSON.parse(decrypt(m.phones_enc) || "[]")
     }));
 
-  const current = members.find((m) => m.id === req.session.userId);
-  const requestedEditId = Number.parseInt(req.query.editUserId, 10);
-  const editableMember = req.session.role === "admin"
-    ? (
-      Number.isInteger(requestedEditId)
-        ? members.find((m) => m.id === requestedEditId) || members[0]
-        : members[0]
-    )
-    : null;
-  const editError = sanitize(req.query.editError, 140);
-
-  const orderedMembers = withDisplayNames(getOrderedMembers());
+  // Sort members by custom order
+  const memberMap = new Map(allMembers.map((m) => [m.id, m]));
+  const members = [];
+  for (const id of orderedIds) {
+    const m = memberMap.get(id);
+    if (m) { members.push(m); memberMap.delete(id); }
+  }
+  for (const m of memberMap.values()) members.push(m);
 
   res.render("members", {
-    members,
-    orderedMembers,
-    current,
-    error: null,
-    editableMember,
-    editError
+    members
   });
 });
 
-router.post("/members/profile", requireAuth, verifyCsrf, (req, res) => {
+// ===== Profil routes =====
+
+router.get("/profil", requireAuth, (req, res) => {
+  const user = db
+    .prepare("SELECT id, username, first_name, last_name, avatar, address_enc, email_enc, phones_enc FROM users WHERE id = ?")
+    .get(req.session.userId);
+
+  res.render("profil", {
+    profile: {
+      ...user,
+      address: decrypt(user.address_enc),
+      email: decrypt(user.email_enc),
+      phones: JSON.parse(decrypt(user.phones_enc) || "[]")
+    }
+  });
+});
+
+router.post("/profil/update", requireAuth, verifyCsrf, (req, res) => {
   const firstName = sanitize(req.body.firstName, 60);
   const lastName = sanitize(req.body.lastName, 60);
   const address = sanitize(req.body.address, 200);
@@ -50,7 +90,7 @@ router.post("/members/profile", requireAuth, verifyCsrf, (req, res) => {
 
   if (!firstName) {
     req.session.flash = { type: "error", message: "Vorname ist erforderlich." };
-    return res.redirect("/members");
+    return res.redirect("/profil");
   }
 
   db.prepare(
@@ -76,22 +116,48 @@ router.post("/members/profile", requireAuth, verifyCsrf, (req, res) => {
   logAudit(req.session.userId, "PROFILE_UPDATE", "user", req.session.userId);
   req.session.flash = { type: "success", message: "Profil gespeichert." };
 
-  res.redirect("/members");
+  res.redirect("/profil");
 });
 
-router.post("/members/change-password", requireAuth, verifyCsrf, async (req, res) => {
+// multer must run before verifyCsrf (multipart body not parsed until multer runs)
+router.post("/profil/avatar", requireAuth, avatarUpload.single("avatar"), verifyCsrf, (req, res) => {
+  if (!req.file) {
+    req.session.flash = { type: "error", message: "Keine Datei ausgewählt." };
+    return res.redirect("/profil");
+  }
+
+  // Delete old avatar file
+  const old = db.prepare("SELECT avatar FROM users WHERE id = ?").get(req.session.userId);
+  if (old && old.avatar) {
+    const oldPath = path.join(avatarDir, old.avatar);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const filename = req.file.filename;
+  db.prepare("UPDATE users SET avatar = ? WHERE id = ?").run(filename, req.session.userId);
+
+  // Update session
+  req.session.user.avatar = filename;
+
+  logAudit(req.session.userId, "AVATAR_UPDATE", "user", req.session.userId);
+  req.session.flash = { type: "success", message: "Avatar aktualisiert." };
+
+  res.redirect("/profil");
+});
+
+router.post("/profil/password", requireAuth, verifyCsrf, async (req, res) => {
   const currentPassword = String(req.body.currentPassword || "");
   const newPassword = String(req.body.newPassword || "");
   const confirmPassword = String(req.body.confirmPassword || "");
 
   if (newPassword.length < 8) {
     req.session.flash = { type: "error", message: "Neues Passwort muss mindestens 8 Zeichen haben." };
-    return res.redirect("/members");
+    return res.redirect("/profil#passwort");
   }
 
   if (newPassword !== confirmPassword) {
     req.session.flash = { type: "error", message: "Passwörter stimmen nicht überein." };
-    return res.redirect("/members");
+    return res.redirect("/profil#passwort");
   }
 
   const user = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.session.userId);
@@ -99,7 +165,7 @@ router.post("/members/change-password", requireAuth, verifyCsrf, async (req, res
 
   if (!ok) {
     req.session.flash = { type: "error", message: "Aktuelles Passwort ist falsch." };
-    return res.redirect("/members");
+    return res.redirect("/profil#passwort");
   }
 
   const newHash = await bcrypt.hash(newPassword, 12);
@@ -108,7 +174,7 @@ router.post("/members/change-password", requireAuth, verifyCsrf, async (req, res
   logAudit(req.session.userId, "PASSWORD_CHANGE", "user", req.session.userId);
   req.session.flash = { type: "success", message: "Passwort geändert." };
 
-  res.redirect("/members");
+  res.redirect("/profil");
 });
 
 router.post("/members/admin-update", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
@@ -132,12 +198,14 @@ router.post("/members/admin-update", requireAuth, requireAdmin, verifyCsrf, (req
   const phones = parsePhones(req.body.phones);
 
   if (!username || !firstName) {
-    return res.redirect(`/members?editUserId=${memberId}&editError=Benutzername+und+Vorname+sind+Pflicht`);
+    req.session.flash = { type: "error", message: "Benutzername und Vorname sind Pflicht." };
+    return res.redirect("/members");
   }
 
   const duplicate = db.prepare("SELECT id FROM users WHERE username = ? AND id != ?").get(username, memberId);
   if (duplicate) {
-    return res.redirect(`/members?editUserId=${memberId}&editError=Benutzername+bereits+vergeben`);
+    req.session.flash = { type: "error", message: "Benutzername bereits vergeben." };
+    return res.redirect("/members");
   }
 
   db.prepare(
@@ -172,7 +240,7 @@ router.post("/members/admin-update", requireAuth, requireAdmin, verifyCsrf, (req
   logAudit(req.session.userId, "MEMBER_UPDATE", "user", memberId, { username, role });
   req.session.flash = { type: "success", message: "Mitglied aktualisiert." };
 
-  res.redirect(`/members?editUserId=${memberId}`);
+  res.redirect("/members");
 });
 
 router.post("/members/reset-password", requireAuth, requireAdmin, verifyCsrf, async (req, res) => {
@@ -186,7 +254,7 @@ router.post("/members/reset-password", requireAuth, requireAdmin, verifyCsrf, as
 
   if (newPassword.length < 8) {
     req.session.flash = { type: "error", message: "Passwort muss mindestens 8 Zeichen haben." };
-    return res.redirect(`/members?editUserId=${memberId}`);
+    return res.redirect("/members");
   }
 
   const newHash = await bcrypt.hash(newPassword, 12);
@@ -195,7 +263,7 @@ router.post("/members/reset-password", requireAuth, requireAdmin, verifyCsrf, as
   logAudit(req.session.userId, "PASSWORD_RESET", "user", memberId);
   req.session.flash = { type: "success", message: "Passwort zurückgesetzt." };
 
-  res.redirect(`/members?editUserId=${memberId}`);
+  res.redirect("/members");
 });
 
 router.post("/members/create", requireAuth, requireAdmin, verifyCsrf, async (req, res) => {

@@ -8,7 +8,13 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Seed: Fehlende Uploads aus seed/ ins Volume kopieren
+// Seed: DB und Uploads aus seed/ ins Volume kopieren (einmalig)
+const seedDb = path.join(__dirname, "..", "seed", "kegelkladde.db");
+const dbPath = path.join(dataDir, "kegelkladde.db");
+if (fs.existsSync(seedDb) && (!fs.existsSync(dbPath) || fs.statSync(dbPath).size < fs.statSync(seedDb).size)) {
+  console.log("Seed-DB gefunden, kopiere nach data/ ...");
+  fs.copyFileSync(seedDb, dbPath);
+}
 const seedUploads = path.join(__dirname, "..", "seed", "uploads");
 if (fs.existsSync(seedUploads)) {
   const copyRecursive = (src, dest) => {

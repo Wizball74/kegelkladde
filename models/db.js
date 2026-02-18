@@ -8,12 +8,15 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Seed: Falls DB im Volume fehlt, aus seed/ kopieren (einmaliger Erststart)
+// Seed: Falls DB im Volume leer/neu ist, aus seed/ ersetzen (einmaliger Erststart)
 const dbPath = path.join(dataDir, "kegelkladde.db");
 const seedPath = path.join(__dirname, "..", "seed", "kegelkladde.db");
-if (!fs.existsSync(dbPath) && fs.existsSync(seedPath)) {
-  console.log("Seed-DB gefunden, kopiere nach data/ ...");
-  fs.copyFileSync(seedPath, dbPath);
+if (fs.existsSync(seedPath)) {
+  const needsSeed = !fs.existsSync(dbPath) || fs.statSync(dbPath).size < fs.statSync(seedPath).size;
+  if (needsSeed) {
+    console.log("Seed-DB gefunden, kopiere nach data/ ...");
+    fs.copyFileSync(seedPath, dbPath);
+  }
 }
 
 const db = new Database(dbPath);

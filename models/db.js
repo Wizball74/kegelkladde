@@ -12,27 +12,31 @@ if (!fs.existsSync(dataDir)) {
 const seedDb = path.join(__dirname, "..", "seed", "kegelkladde.db");
 const dbFile = path.join(dataDir, "kegelkladde.db");
 
-// Prüfe ob Ziel-DB existiert und Daten hat
+// Prüfe ob Ziel-DB existiert und genuegend Daten hat
 let needsSeed = false;
 if (fs.existsSync(seedDb)) {
   if (!fs.existsSync(dbFile)) {
     needsSeed = true;
     console.log("[DB] Keine DB vorhanden, Seed wird kopiert.");
   } else {
-    // DB existiert — prüfe ob sie leer ist (keine User)
-    const testDb = new Database(dbFile);
-    try {
-      const count = testDb.prepare("SELECT COUNT(*) as c FROM users").get();
-      if (count.c === 0) {
-        needsSeed = true;
-        console.log("[DB] DB ist leer (0 User), Seed wird kopiert.");
-      }
-    } catch (e) {
-      // Tabelle existiert nicht oder DB korrupt
+    // Vergleiche User-Anzahl: Seed vs. aktuelle DB
+    const seedCount = (() => {
+      const sDb = new Database(seedDb);
+      try { const r = sDb.prepare("SELECT COUNT(*) as c FROM users").get(); return r.c; }
+      catch { return 0; }
+      finally { sDb.close(); }
+    })();
+    const targetCount = (() => {
+      const tDb = new Database(dbFile);
+      try { const r = tDb.prepare("SELECT COUNT(*) as c FROM users").get(); return r.c; }
+      catch { return 0; }
+      finally { tDb.close(); }
+    })();
+    console.log(`[DB] Seed hat ${seedCount} User, Ziel-DB hat ${targetCount} User.`);
+    if (seedCount > targetCount) {
       needsSeed = true;
-      console.log("[DB] DB fehlerhaft, Seed wird kopiert:", e.message);
+      console.log("[DB] Ziel-DB hat weniger User als Seed, wird ueberschrieben.");
     }
-    testDb.close();
   }
 }
 

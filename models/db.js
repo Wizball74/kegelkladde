@@ -8,13 +8,39 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Seed: DB und Uploads aus seed/ ins Volume kopieren (einmalig)
+// Seed: DB und Uploads aus seed/ ins Volume kopieren
 const seedDb = path.join(__dirname, "..", "seed", "kegelkladde.db");
-const dbPath = path.join(dataDir, "kegelkladde.db");
-if (fs.existsSync(seedDb) && (!fs.existsSync(dbPath) || fs.statSync(dbPath).size < fs.statSync(seedDb).size)) {
-  console.log("Seed-DB gefunden, kopiere nach data/ ...");
-  fs.copyFileSync(seedDb, dbPath);
+const dbFile = path.join(dataDir, "kegelkladde.db");
+
+// Prüfe ob Ziel-DB existiert und Daten hat
+let needsSeed = false;
+if (fs.existsSync(seedDb)) {
+  if (!fs.existsSync(dbFile)) {
+    needsSeed = true;
+    console.log("[DB] Keine DB vorhanden, Seed wird kopiert.");
+  } else {
+    // DB existiert — prüfe ob sie leer ist (keine User)
+    const testDb = new Database(dbFile);
+    try {
+      const count = testDb.prepare("SELECT COUNT(*) as c FROM users").get();
+      if (count.c === 0) {
+        needsSeed = true;
+        console.log("[DB] DB ist leer (0 User), Seed wird kopiert.");
+      }
+    } catch (e) {
+      // Tabelle existiert nicht oder DB korrupt
+      needsSeed = true;
+      console.log("[DB] DB fehlerhaft, Seed wird kopiert:", e.message);
+    }
+    testDb.close();
+  }
 }
+
+if (needsSeed) {
+  fs.copyFileSync(seedDb, dbFile);
+  console.log("[DB] Seed-DB kopiert nach", dbFile);
+}
+
 const seedUploads = path.join(__dirname, "..", "seed", "uploads");
 if (fs.existsSync(seedUploads)) {
   const copyRecursive = (src, dest) => {
@@ -27,13 +53,12 @@ if (fs.existsSync(seedUploads)) {
     }
   };
   copyRecursive(seedUploads, path.join(dataDir, "uploads"));
-  console.log("Seed-Uploads ins Volume kopiert.");
+  console.log("[DB] Seed-Uploads kopiert.");
 }
 
-const dbFile = path.join(dataDir, "kegelkladde.db");
 const dbExisted = fs.existsSync(dbFile);
 const dbSize = dbExisted ? fs.statSync(dbFile).size : 0;
-console.log(`[DB] Pfad: ${dbFile}, existiert: ${dbExisted}, Groesse: ${dbSize} bytes`);
+console.log(`[DB] Pfad: ${dbFile}, Groesse: ${dbSize} bytes`);
 
 const db = new Database(dbFile);
 db.pragma("journal_mode = WAL");

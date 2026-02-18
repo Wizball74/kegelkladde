@@ -75,6 +75,7 @@ router.post("/login", loginLimiter, verifyCsrf, async (req, res) => {
     role: user.role
   };
 
+  db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
   logAudit(user.id, "LOGIN", "user", user.id);
 
   req.session.flash = { type: "success", message: `Willkommen, ${user.first_name}!` };

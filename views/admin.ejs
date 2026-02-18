@@ -16,6 +16,7 @@
   <div class="tab-nav">
     <button type="button" class="tab-btn active" data-tab="kasse">Kasse</button>
     <button type="button" class="tab-btn" data-tab="anfangswerte">Anfangswerte</button>
+    <button type="button" class="tab-btn" data-tab="aktivitaet">Aktivit&auml;t</button>
   </div>
 
   <!-- Tab: Kasse -->
@@ -137,6 +138,143 @@
       </div>
       <button type="submit" style="margin-top: 1rem;">Anfangswerte speichern</button>
     </form>
+  </div>
+
+  <!-- Tab: Aktivität -->
+  <div id="tab-aktivitaet" class="tab-panel">
+    <%
+      const actionLabels = {
+        LOGIN: "Anmeldung",
+        LOGOUT: "Abmeldung",
+        SETUP_COMPLETE: "Ersteinrichtung",
+        MEMBER_CREATE: "Mitglied erstellt",
+        MEMBER_UPDATE: "Mitglied bearbeitet",
+        MEMBER_DELETE: "Mitglied gel\u00f6scht",
+        MEMBER_ORDER_UPDATE: "Reihenfolge ge\u00e4ndert",
+        GAMEDAY_CREATE: "Spieltag erstellt",
+        GAMEDAY_DELETE: "Spieltag gel\u00f6scht",
+        GAMEDAY_STATUS_CHANGE: "Status ge\u00e4ndert",
+        ATTENDANCE_UPDATE: "Anwesenheit ge\u00e4ndert",
+        FIELD_UPDATE: "Feld ge\u00e4ndert",
+        EXPENSE_CREATE: "Ausgabe erstellt",
+        EXPENSE_EDIT: "Ausgabe bearbeitet",
+        EXPENSE_DELETE: "Ausgabe gel\u00f6scht",
+        KASSENSTAND_START_SET: "Startwert gesetzt",
+        INITIAL_VALUES_UPDATE: "Anfangswerte ge\u00e4ndert",
+        RECORD_CREATE: "Rekord erstellt",
+        RECORD_DELETE: "Rekord gel\u00f6scht",
+        CUSTOM_GAME_CREATE: "Spiel erstellt",
+        CUSTOM_GAME_DELETE: "Spiel gel\u00f6scht",
+        CUSTOM_GAME_RENAME: "Spiel umbenannt",
+        CUSTOM_GAME_VALUE_UPDATE: "Spielwert ge\u00e4ndert",
+        PASSWORD_CHANGE: "Passwort ge\u00e4ndert",
+        GAMEDAY_ENTRY_CREATE: "Eintrag erstellt",
+        GAMEDAY_ENTRY_DELETE: "Eintrag gel\u00f6scht",
+        GAMEDAY_ENTRY_UPDATE: "Eintrag ge\u00e4ndert",
+        PIN_MESSAGE_CREATE: "Pinnwand-Nachricht erstellt",
+        PIN_MESSAGE_DELETE: "Pinnwand-Nachricht gel\u00f6scht",
+        PIN_ADD: "Pinnwand-Nachricht erstellt",
+        PIN_DELETE: "Pinnwand-Nachricht gel\u00f6scht",
+        PIN_UPDATE: "Pinnwand-Nachricht bearbeitet",
+        GAMEDAY_STATUS_ADVANCE: "Status vorger\u00fcckt",
+        GAMEDAY_STATUS_REVERT: "Status zur\u00fcckgesetzt",
+        GAMEDAY_NOTE_UPDATE: "Notiz ge\u00e4ndert",
+        LANE_COST_UPDATE: "Bahnkosten ge\u00e4ndert"
+      };
+
+      const parseDate = (str) => {
+        if (!str) return null;
+        return new Date(str.replace(" ", "T") + (str.includes("+") || str.includes("Z") ? "" : "Z"));
+      };
+
+      const timeAgo = (isoStr) => {
+        const d = parseDate(isoStr);
+        if (!d || isNaN(d)) return "Nie";
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return "Gerade eben";
+        if (diffMin < 60) return `vor ${diffMin} Min.`;
+        const diffH = Math.floor(diffMin / 60);
+        if (diffH < 24) return `vor ${diffH} Std.`;
+        const diffD = Math.floor(diffH / 24);
+        if (diffD === 1) return "Gestern";
+        if (diffD < 30) return `vor ${diffD} Tagen`;
+        const diffM = Math.floor(diffD / 30);
+        if (diffM < 12) return `vor ${diffM} Mon.`;
+        return `vor ${Math.floor(diffM / 12)} J.`;
+      };
+
+      const formatTimestamp = (isoStr) => {
+        const d = parseDate(isoStr);
+        if (!d || isNaN(d)) return "";
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+    %>
+
+    <h2>Letzter Login</h2>
+    <div class="records-table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Benutzername</th>
+            <th>Rolle</th>
+            <th>Letzter Login</th>
+            <th>Erstellt am</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% usersLastLogin.forEach((u) => { %>
+            <tr>
+              <td><%= u.first_name %> <%= u.last_name %></td>
+              <td><%= u.username %></td>
+              <td><%= u.role === "admin" ? "Admin" : "Benutzer" %></td>
+              <td title="<%= u.last_login_at ? formatTimestamp(u.last_login_at) : '' %>"><%= timeAgo(u.last_login_at) %></td>
+              <td><%= formatTimestamp(u.created_at) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top: 2rem;">Letzte Aktionen</h2>
+    <% if (auditLog.length > 0) { %>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Zeitpunkt</th>
+              <th>Benutzer</th>
+              <th>Aktion</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% auditLog.forEach((entry) => { %>
+              <tr>
+                <td><%= formatTimestamp(entry.created_at) %></td>
+                <td><%= entry.first_name %> <%= entry.last_name %></td>
+                <td><%= actionLabels[entry.action] || entry.action %></td>
+                <td class="subtle" style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                  <% if (entry.target_type) { %><%= entry.target_type %><% if (entry.target_id) { %>#<%= entry.target_id %><% } %><% } %>
+                  <% if (entry.details) { %>
+                    <% try { const d = JSON.parse(entry.details); %>
+                      <% if (d.username) { %> &ndash; <%= d.username %><% } %>
+                      <% if (d.description) { %> &ndash; <%= d.description %><% } %>
+                      <% if (d.field) { %> &ndash; <%= d.field %><% } %>
+                    <% } catch(e) { %><%= entry.details %><% } %>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p class="subtle">Noch keine Aktionen aufgezeichnet.</p>
+    <% } %>
   </div>
 
   <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid var(--line);">

@@ -259,6 +259,11 @@ if (!pinColumns.includes("card_style")) {
   db.exec("ALTER TABLE pin_messages ADD COLUMN card_style TEXT NOT NULL DEFAULT ''");
 }
 
+// Migration: last_login_at auf users
+if (!userColumns.includes("last_login_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT");
+}
+
 // Create indexes for performance
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -414,6 +419,25 @@ function getKassenstandForGameday(gamedayId) {
   };
 }
 
+function getRecentAuditLog(limit = 50) {
+  return db.prepare(
+    `SELECT a.*, u.first_name, u.last_name
+     FROM audit_log a
+     JOIN users u ON a.user_id = u.id
+     ORDER BY a.created_at DESC
+     LIMIT ?`
+  ).all(limit);
+}
+
+function getUsersWithLastLogin() {
+  return db.prepare(
+    `SELECT id, username, first_name, last_name, role, last_login_at, created_at
+     FROM users
+     WHERE is_guest = 0
+     ORDER BY last_login_at DESC`
+  ).all();
+}
+
 module.exports = {
   db,
   encrypt,
@@ -423,5 +447,7 @@ module.exports = {
   logAudit,
   getKassenstand,
   getKassenstandDetails,
-  getKassenstandForGameday
+  getKassenstandForGameday,
+  getRecentAuditLog,
+  getUsersWithLastLogin
 };

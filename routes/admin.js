@@ -1,5 +1,5 @@
 const express = require("express");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, getRecentAuditLog, getUsersWithLastLogin } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize, formatEuro } = require("../utils/helpers");
 
@@ -24,13 +24,18 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
     initialMap.set(row.user_id, row);
   }
 
+  const auditLog = getRecentAuditLog(50);
+  const usersLastLogin = getUsersWithLastLogin();
+
   res.render("admin", {
     kassenstand,
     kassenstandStart,
     expenses,
     members,
     initialMap,
-    formatEuro
+    formatEuro,
+    auditLog,
+    usersLastLogin
   });
 });
 

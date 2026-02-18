@@ -30,7 +30,12 @@ if (fs.existsSync(seedUploads)) {
   console.log("Seed-Uploads ins Volume kopiert.");
 }
 
-const db = new Database(path.join(dataDir, "kegelkladde.db"));
+const dbFile = path.join(dataDir, "kegelkladde.db");
+const dbExisted = fs.existsSync(dbFile);
+const dbSize = dbExisted ? fs.statSync(dbFile).size : 0;
+console.log(`[DB] Pfad: ${dbFile}, existiert: ${dbExisted}, Groesse: ${dbSize} bytes`);
+
+const db = new Database(dbFile);
 db.pragma("journal_mode = WAL");
 
 // Schema creation
@@ -464,6 +469,11 @@ function getUsersWithLastLogin() {
      ORDER BY last_login_at DESC`
   ).all();
 }
+
+// Startup-Diagnose
+const userCount = db.prepare("SELECT COUNT(*) as c FROM users").get().c;
+const gamedayCount = db.prepare("SELECT COUNT(*) as c FROM gamedays").get().c;
+console.log(`[DB] Users: ${userCount}, Spieltage: ${gamedayCount}`);
 
 module.exports = {
   db,

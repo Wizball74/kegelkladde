@@ -459,6 +459,61 @@ function renderMarkers(displayEl, value) {
   displayEl.innerHTML = html;
 }
 
+// --- Gag Animations ---
+function gagPudel(anchor) {
+  const texts = ["Pudel!", "Nein!", "Uff!", "Oha!", "Mist!"];
+  const cell = anchor.closest("td") || anchor;
+
+  // 1) Kurzes Wackeln der Zeile
+  const row = cell.closest("tr");
+  if (row && !row.classList.contains("gag-shake")) {
+    row.classList.add("gag-shake");
+    row.addEventListener("animationend", () => row.classList.remove("gag-shake"), { once: true });
+  }
+
+  // 2) Roter Flash auf der Zelle
+  cell.style.position = "relative";
+  const flash = document.createElement("span");
+  flash.className = "gag-cell-flash";
+  cell.appendChild(flash);
+  flash.addEventListener("animationend", () => flash.remove());
+
+  // 3) Text-Bubble poppt hoch (fixed, damit kein overflow clippt)
+  const rect = cell.getBoundingClientRect();
+  const el = document.createElement("span");
+  el.className = "gag-bubble";
+  el.textContent = texts[Math.floor(Math.random() * texts.length)];
+  el.style.left = (rect.left + rect.width / 2) + "px";
+  el.style.top = rect.top + "px";
+  document.body.appendChild(el);
+  el.addEventListener("animationend", () => el.remove());
+}
+
+function gagConfetti(anchor) {
+  const colors = ["#2f8f6d", "#e8d09f", "#ffffff", "#20684f", "#ffd700"];
+  const cell = anchor.closest("td") || anchor;
+  const rect = cell.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  for (let i = 0; i < 22; i++) {
+    const p = document.createElement("div");
+    p.className = "gag-confetti";
+    p.style.left = cx + "px";
+    p.style.top = cy + "px";
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.setProperty("--dx", (Math.random() - 0.5) * 140 + "px");
+    p.style.setProperty("--dy", -(Math.random() * 60 + 40) + "px");
+    p.style.setProperty("--r1", Math.floor(Math.random() * 360) + "deg");
+    p.style.setProperty("--wobble", (Math.random() * 30 + 10) * (Math.random() < 0.5 ? -1 : 1) + "px");
+    p.style.setProperty("--t-burst", (Math.random() * 0.2 + 0.4) + "s");
+    p.style.setProperty("--t-drift", (Math.random() * 1.5 + 2.5) + "s");
+    p.style.width = (Math.random() * 6 + 3) + "px";
+    p.style.height = (Math.random() * 8 + 4) + "px";
+    document.body.appendChild(p);
+    p.addEventListener("animationend", (e) => { if (e.animationName === "gagDrift") p.remove(); });
+  }
+}
+
 document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
   controlsEl.addEventListener("click", (event) => {
     const button = event.target.closest(".mark-btn");
@@ -478,6 +533,13 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
     recalcCosts();
     const row = controlsEl.closest("tr");
     if (row) autoSaveRow(row);
+
+    // Gag animations
+    const kladdeData = document.getElementById("kladdeData");
+    if (kladdeData && kladdeData.dataset.gags === "1" && op === "inc") {
+      if (target === "pudel") gagPudel(controlsEl);
+      if (target === "alle9" || target === "kranz") gagConfetti(controlsEl);
+    }
   });
 });
 

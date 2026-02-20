@@ -46,7 +46,16 @@
       "Bash(node -c:*)",
       "Bash(tasklist:*)",
       "Bash(taskkill:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs\")",
+      "Bash(fnm list:*)",
+      "Bash(cmd.exe /c:*)",
+      "WebFetch(domain:codepen.io)",
+      "Bash(npx kill-port:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(railway:*)",
+      "Bash(git status:*)"
     ]
   }
 }

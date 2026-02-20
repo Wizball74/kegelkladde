@@ -49,14 +49,15 @@ router.get("/pinnwand", requireAuth, (req, res) => {
      ORDER BY p.created_at DESC`
   ).all();
 
-  // Build display names
-  const firstNameCount = new Map();
+  // Build display names — disambiguate by unique user_id per first_name
+  const firstNameUsers = new Map();
   for (const m of messages) {
-    firstNameCount.set(m.first_name, (firstNameCount.get(m.first_name) || 0) + 1);
+    if (!firstNameUsers.has(m.first_name)) firstNameUsers.set(m.first_name, new Set());
+    firstNameUsers.get(m.first_name).add(m.user_id);
   }
   for (const m of messages) {
-    const needsLast = firstNameCount.get(m.first_name) > 1;
-    m.display_name = needsLast && m.last_name ? `${m.first_name} ${m.last_name[0]}.` : m.first_name;
+    const needsLast = firstNameUsers.get(m.first_name).size > 1;
+    m.display_name = needsLast && m.last_name ? `${m.first_name} ${m.last_name[0]}` : m.first_name;
   }
 
   res.render("pinnwand", { messages });

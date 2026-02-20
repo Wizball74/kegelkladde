@@ -27,6 +27,9 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
   const auditLog = getRecentAuditLog(50);
   const usersLastLogin = getUsersWithLastLogin();
 
+  const gagRow = db.prepare("SELECT value FROM settings WHERE key = 'gag_animations'").get();
+  const gagAnimations = gagRow ? gagRow.value : "1";
+
   res.render("admin", {
     kassenstand,
     kassenstandStart,
@@ -35,7 +38,8 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
     initialMap,
     formatEuro,
     auditLog,
-    usersLastLogin
+    usersLastLogin,
+    gagAnimations
   });
 });
 
@@ -146,6 +150,20 @@ router.post("/admin/initial-values", requireAuth, requireAdmin, verifyCsrf, (req
 
   logAudit(req.session.userId, "INITIAL_VALUES_UPDATE", "member_initial_values", null);
   req.session.flash = { type: "success", message: "Anfangswerte gespeichert." };
+  res.redirect("/admin");
+});
+
+// Gag-Animationen an/aus
+router.post("/admin/toggle-gags", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const current = db.prepare("SELECT value FROM settings WHERE key = 'gag_animations'").get();
+  const newVal = (current && current.value === "1") ? "0" : "1";
+
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('gag_animations', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(newVal);
+
+  logAudit(req.session.userId, "GAG_ANIMATIONS_TOGGLE", "settings", null, { enabled: newVal === "1" });
+  req.session.flash = { type: "success", message: newVal === "1" ? "Gag-Animationen aktiviert." : "Gag-Animationen deaktiviert." };
   res.redirect("/admin");
 });
 

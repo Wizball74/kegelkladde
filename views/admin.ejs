@@ -280,6 +280,18 @@
   </div>
 
   <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid var(--line);">
+    <h2 style="margin-top: 0;">Gag-Animationen</h2>
+    <p class="subtle">Kleine Animationen bei Pudel, 9er und Kranz auf der Kladde-Seite.</p>
+    <form method="post" action="/admin/toggle-gags" class="inline-form">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <label class="toggle-label">
+        <input type="checkbox" <%= gagAnimations === "1" ? "checked" : "" %> onchange="this.form.submit()" />
+        <span><%= gagAnimations === "1" ? "Aktiviert" : "Deaktiviert" %></span>
+      </label>
+    </form>
+  </div>
+
+  <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid var(--line);">
     <h2 style="margin-top: 0;">Feuerwerk testen</h2>
     <p class="subtle">Zeigt die Siegesfeier-Animation als Vorschau.</p>
     <button type="button" id="btnTestCelebration">Feuerwerk testen</button>

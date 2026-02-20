@@ -8,7 +8,6 @@
   <% if (isAdmin) { %>
     <div class="member-top-actions">
       <button class="btn" onclick="document.getElementById('createMemberModal').classList.add('active')">Mitglied anlegen</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('createGuestModal').classList.add('active')">Gast anlegen</button>
     </div>
   <% } %>
 
@@ -87,6 +86,7 @@
                 <option value="user">Benutzer</option>
                 <option value="admin">Administrator</option>
               </select>
+              <small id="editRoleHint" class="subtle" style="display:none;"></small>
             </label>
           </div>
           <div class="form-row-2">
@@ -159,28 +159,6 @@
       </div>
     </div>
 
-    <!-- Create Guest Modal -->
-    <div class="modal-overlay" id="createGuestModal">
-      <div class="modal" style="max-width: 420px;">
-        <h3>Gast anlegen</h3>
-        <p class="subtle">Gaeste koennen sich nicht einloggen, erscheinen aber in der Kegelkladde.</p>
-        <form method="post" action="/members/create-guest" class="form-grid">
-          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-          <div class="form-row-2">
-            <label>Vorname
-              <input name="firstName" placeholder="Vorname" required maxlength="60" />
-            </label>
-            <label>Nachname (optional)
-              <input name="lastName" placeholder="Nachname" maxlength="60" />
-            </label>
-          </div>
-          <div class="member-actions">
-            <button type="submit">Gast hinzufuegen</button>
-            <button type="button" class="btn-secondary" onclick="document.getElementById('createGuestModal').classList.remove('active')">Abbrechen</button>
-          </div>
-        </form>
-      </div>
-    </div>
   <% } %>
 </section>
 
@@ -211,8 +189,15 @@
     document.getElementById('editPhones').value = m.phones || '';
     const roleSelect = document.getElementById('editRole');
     roleSelect.value = m.role;
-    // Lock role for user ID 1
-    roleSelect.disabled = (m.id === 1);
+    roleSelect.disabled = false;
+    const roleHint = document.getElementById('editRoleHint');
+    if (m.id === 1) {
+      roleHint.textContent = 'Gruender-Admin – Rolle kann nicht geaendert werden.';
+      roleHint.style.display = '';
+      roleSelect.disabled = true;
+    } else {
+      roleHint.style.display = 'none';
+    }
     document.getElementById('editMemberModal').classList.add('active');
   }
 

@@ -8,41 +8,15 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Seed: DB und Uploads aus seed/ ins Volume kopieren
+// Seed: DB und Uploads aus seed/ ins Volume kopieren (nur bei Ersteinrichtung)
 const seedDb = path.join(__dirname, "..", "seed", "kegelkladde.db");
 const dbFile = path.join(dataDir, "kegelkladde.db");
 
-// Prüfe ob Ziel-DB existiert und genuegend Daten hat
-let needsSeed = false;
-if (fs.existsSync(seedDb)) {
-  if (!fs.existsSync(dbFile)) {
-    needsSeed = true;
-    console.log("[DB] Keine DB vorhanden, Seed wird kopiert.");
-  } else {
-    // Vergleiche User-Anzahl: Seed vs. aktuelle DB
-    const seedCount = (() => {
-      const sDb = new Database(seedDb);
-      try { const r = sDb.prepare("SELECT COUNT(*) as c FROM users").get(); return r.c; }
-      catch { return 0; }
-      finally { sDb.close(); }
-    })();
-    const targetCount = (() => {
-      const tDb = new Database(dbFile);
-      try { const r = tDb.prepare("SELECT COUNT(*) as c FROM users").get(); return r.c; }
-      catch { return 0; }
-      finally { tDb.close(); }
-    })();
-    console.log(`[DB] Seed hat ${seedCount} User, Ziel-DB hat ${targetCount} User.`);
-    if (seedCount > targetCount) {
-      needsSeed = true;
-      console.log("[DB] Ziel-DB hat weniger User als Seed, wird ueberschrieben.");
-    }
-  }
-}
-
-if (needsSeed) {
+if (fs.existsSync(seedDb) && !fs.existsSync(dbFile)) {
   fs.copyFileSync(seedDb, dbFile);
-  console.log("[DB] Seed-DB kopiert nach", dbFile);
+  console.log("[DB] Ersteinrichtung: Seed-DB kopiert nach", dbFile);
+} else if (fs.existsSync(dbFile)) {
+  console.log("[DB] DB existiert bereits, Seed wird NICHT angewendet.");
 }
 
 const seedUploads = path.join(__dirname, "..", "seed", "uploads");

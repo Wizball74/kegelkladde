@@ -94,7 +94,7 @@
           </tr>
         </thead>
         <tbody>
-          <% members.forEach((member) => { %>
+          <% regularMembers.forEach((member) => { %>
             <tr>
               <td class="name-col"><%= member.display_name %></td>
               <td>
@@ -147,7 +147,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
       });
     %>
 
-    <div id="kladdeData" data-csrf="<%= csrfToken %>" data-gameday-id="<%= selectedGameday.id %>" data-status="<%= status %>" data-user-id="<%= currentUser.id %>" data-user-first-name="<%= currentUser.firstName %>">
+    <div id="kladdeData" data-csrf="<%= csrfToken %>" data-gameday-id="<%= selectedGameday.id %>" data-status="<%= status %>" data-user-id="<%= currentUser.id %>" data-user-first-name="<%= currentUser.firstName %>" data-gags="<%= gagAnimations %>">
     <div class="table-shell">
         <table class="kladde-table">
           <colgroup>
@@ -228,11 +228,24 @@ Spieltag starten, um die Kladde zu bearbeiten.
               const canEdit = canEditMarks && hit.present;
               const canEditPaid = status === 2;
             %>
-              <tr data-member-id="<%= member.id %>" class="<%= hit.present ? '' : 'row-inactive' %>">
+              <tr data-member-id="<%= member.id %>" class="<%= hit.present ? '' : 'row-inactive' %><%= member.is_guest ? ' row-guest' : '' %>">
                 <%
                   const carryover = Number(hit.carryover || 0);
                 %>
-                <td class="name-col"><%= member.display_name %></td>
+                <td class="name-col">
+                  <%= member.display_name %>
+                  <% if (member.is_guest) { %>
+                    <span class="badge badge-muted badge-sm">Gast</span>
+                    <% if (isAdmin && status <= 1) { %>
+                      <form method="post" action="/kegelkladde/remove-guest" class="inline-form" data-confirm="Gast <%= member.display_name %> von diesem Spieltag entfernen?">
+                        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                        <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+                        <input type="hidden" name="guestId" value="<%= member.id %>" />
+                        <button type="submit" class="guest-remove-btn" title="Gast entfernen">&times;</button>
+                      </form>
+                    <% } %>
+                  <% } %>
+                </td>
                 <td class="present-col">
                   <label class="present-toggle" title="Anwesend">
                     <input type="checkbox" name="present_<%= member.id %>" <%= hit.present ? "checked" : "" %> <%= isEditable ? "" : "disabled" %> data-present />
@@ -343,6 +356,60 @@ Spieltag starten, um die Kladde zu bearbeiten.
     </div>
     </div>
 
+    <% if (isAdmin && status <= 1) { %>
+    <div class="guest-actions">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('addGuestModal').classList.add('active')">+ Gast hinzufügen</button>
+    </div>
+
+    <!-- Gast hinzufügen Modal -->
+    <div class="modal-overlay" id="addGuestModal">
+      <div class="modal" style="max-width: 500px;">
+        <h3>Gast hinzufügen</h3>
+
+        <% if (availableGuests.length > 0) { %>
+          <div style="margin-bottom: 1.5rem;">
+            <h4 style="margin: 0 0 0.5rem;">Bekannten Gast wählen</h4>
+            <form method="post" action="/kegelkladde/add-guest" class="form-grid">
+              <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+              <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+              <div class="form-row-2">
+                <label>Gast
+                  <select name="guestId" required>
+                    <% availableGuests.forEach((g) => { %>
+                      <option value="<%= g.id %>"><%= g.display_name %></option>
+                    <% }) %>
+                  </select>
+                </label>
+                <div style="display: flex; align-items: flex-end;">
+                  <button type="submit" class="btn btn-sm">Hinzufügen</button>
+                </div>
+              </div>
+            </form>
+          </div>
+          <hr style="border: none; border-top: 1px solid var(--line); margin: 1rem 0;" />
+        <% } %>
+
+        <h4 style="margin: 0 0 0.5rem;">Neuen Gast erstellen</h4>
+        <form method="post" action="/kegelkladde/create-and-add-guest" class="form-grid">
+          <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+          <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
+          <div class="form-row-2">
+            <label>Vorname
+              <input name="firstName" placeholder="Vorname" required maxlength="60" />
+            </label>
+            <label>Nachname (optional)
+              <input name="lastName" placeholder="Nachname" maxlength="60" />
+            </label>
+          </div>
+          <div class="member-actions">
+            <button type="submit">Erstellen & hinzufügen</button>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('addGuestModal').classList.remove('active')">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <% } %>
+
     <!-- Footer: Status + Kassenstand-Aufstellung -->
     <div class="kladde-footer">
       <div class="settle-row">
@@ -440,4 +507,12 @@ Spieltag starten, um die Kladde zu bearbeiten.
   <% } %>
 </section>
 
+<script>
+  // Close modal overlays on backdrop click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.classList.remove('active');
+    });
+  });
+</script>
 <%- include("partials/bottom") %>

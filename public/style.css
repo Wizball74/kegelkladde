@@ -532,6 +532,37 @@ textarea:focus {
   color: var(--muted);
 }
 
+.badge-sm {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  vertical-align: middle;
+}
+
+/* Guest rows & actions */
+.guest-remove-btn {
+  background: none;
+  border: none;
+  color: var(--error);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  line-height: 1;
+  opacity: 0.6;
+  vertical-align: middle;
+}
+.guest-remove-btn:hover {
+  opacity: 1;
+}
+
+.inline-form {
+  display: inline;
+}
+
+.guest-actions {
+  padding: 0.5rem 0;
+  text-align: right;
+}
+
 /* Tables */
 .settle-row {
   display: flex;
@@ -1657,8 +1688,10 @@ td.col-active.cell-empty > * {
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
+  padding: 5rem 0;
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
@@ -1676,9 +1709,12 @@ td.col-active.cell-empty > * {
   padding: 1.5rem;
   max-width: 400px;
   width: 90%;
+  max-height: 86vh;
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
   transform: scale(0.9);
   transition: transform 200ms ease;
+  margin: auto 0;
 }
 
 .modal-overlay.active .modal {
@@ -2583,6 +2619,87 @@ tr.row-locked td.name-col {
   0% { transform: translateY(0) rotate(0deg); opacity: 1; }
   80% { opacity: 1; }
   100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+}
+
+/* Gag animations (Pudel / 9er / Kranz) */
+
+/* Pudel: Zeile wackelt */
+.gag-shake {
+  animation: gagShake 0.4s ease-out;
+}
+
+@keyframes gagShake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-4px); }
+  30% { transform: translateX(4px); }
+  45% { transform: translateX(-3px); }
+  60% { transform: translateX(3px); }
+  75% { transform: translateX(-1px); }
+  90% { transform: translateX(1px); }
+}
+
+/* Pudel: roter Flash in der Zelle */
+.gag-cell-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--error);
+  opacity: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  animation: gagFlash 0.5s ease-out;
+}
+
+@keyframes gagFlash {
+  0% { opacity: 0.25; }
+  100% { opacity: 0; }
+}
+
+/* Pudel: Text-Bubble schwebt hoch */
+.gag-bubble {
+  position: fixed;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 50;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: white;
+  background: var(--error);
+  padding: 2px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+  animation: gagBubbleUp 1.4s cubic-bezier(.2,.6,.3,1) forwards;
+}
+
+@keyframes gagBubbleUp {
+  0% { opacity: 0; transform: translateX(-50%) translateY(0) scale(0.5); }
+  12% { opacity: 1; transform: translateX(-50%) translateY(-4px) scale(1.1); }
+  25% { transform: translateX(-50%) translateY(-8px) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-32px); }
+}
+
+.gag-confetti {
+  position: fixed;
+  z-index: 2001;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: gagBurst var(--t-burst) cubic-bezier(.2,.8,.3,1) forwards,
+             gagDrift var(--t-drift) var(--t-burst) ease-in forwards;
+}
+
+/* Phase 1: Burst nach oben/aussen */
+@keyframes gagBurst {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--r1)); opacity: 1; }
+}
+
+/* Phase 2: Sanftes Trudeln nach unten mit Wobble */
+@keyframes gagDrift {
+  0% { transform: translate(var(--dx), var(--dy)) rotate(var(--r1)); opacity: 1; }
+  25% { transform: translate(calc(var(--dx) + var(--wobble)), calc(var(--dy) + 25vh)) rotate(calc(var(--r1) + 120deg)); opacity: 0.9; }
+  50% { transform: translate(calc(var(--dx) - var(--wobble)), calc(var(--dy) + 50vh)) rotate(calc(var(--r1) + 240deg)); opacity: 0.7; }
+  75% { transform: translate(calc(var(--dx) + var(--wobble)), calc(var(--dy) + 75vh)) rotate(calc(var(--r1) + 400deg)); opacity: 0.4; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + 100vh)) rotate(calc(var(--r1) + 540deg)); opacity: 0; }
 }
 
 /* Rundenverlauf / Round history */

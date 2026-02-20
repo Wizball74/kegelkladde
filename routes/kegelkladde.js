@@ -1,4 +1,6 @@
 const express = require("express");
+const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
@@ -22,7 +24,8 @@ router.get("/", requireAuth, (req, res) => {
 });
 
 router.get("/kegelkladde", requireAuth, (req, res) => {
-  const members = withDisplayNames(getOrderedMembers());
+  const allMembers = withDisplayNames(getOrderedMembers());
+  const regularMembers = allMembers.filter(m => !m.is_guest);
   const gamedays = db
     .prepare(
       `SELECT id, match_date, note, settled
@@ -69,6 +72,17 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
     attendanceMap.set(row.user_id, row);
   }
 
+  // Gäste mit Attendance-Record für diesen Spieltag ermitteln
+  const guestsOnGameday = selectedGameday
+    ? allMembers.filter(m => m.is_guest && attendanceMap.has(m.id))
+    : [];
+  const displayMembers = [...regularMembers, ...guestsOnGameday];
+
+  // Verfügbare Gäste für das Modal (alle Gäste ohne Attendance für diesen Spieltag)
+  const availableGuests = selectedGameday
+    ? allMembers.filter(m => m.is_guest && !attendanceMap.has(m.id))
+    : [];
+
   // Erster Spieltag: Übertrag aus Anfangswerten übernehmen
   if (selectedGameday) {
     const prevDayForCarryover = db.prepare(
@@ -98,8 +112,13 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
 
   const ksGameday = selectedGameday ? getKassenstandForGameday(selectedGameday.id) : null;
 
+  const gagRow = db.prepare("SELECT value FROM settings WHERE key = 'gag_animations'").get();
+  const gagAnimations = gagRow ? gagRow.value : "1";
+
   res.render("kegelkladde", {
-    members,
+    members: displayMembers,
+    regularMembers,
+    availableGuests,
     gamedays,
     selectedGameday,
     attendanceMap,
@@ -108,7 +127,8 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
     isNext,
     customGames,
     customGameValues,
-    ksGameday
+    ksGameday,
+    gagAnimations
   });
 });
 
@@ -189,6 +209,7 @@ router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
 
   const trx = db.transaction(() => {
     for (const m of members) {
+      if (m.is_guest) continue; // Gäste nicht automatisch hinzufügen
       let carryover;
       if (prevDay && prevRestMap.has(m.id)) {
         carryover = prevRestMap.get(m.id);
@@ -447,12 +468,12 @@ router.post("/kegelkladde/custom-game", requireAuth, verifyCsrf, (req, res) => {
   const result = db.prepare("INSERT INTO custom_games (gameday_id, name, sort_order) VALUES (?, ?, ?)").run(gamedayId, name, sortOrder);
   const gameId = result.lastInsertRowid;
 
-  // Initialize values for all members
-  const members = getOrderedMembers();
+  // Initialize values for members with attendance on this gameday
+  const attendees = db.prepare("SELECT user_id FROM attendance WHERE gameday_id = ?").all(gamedayId);
   const insertVal = db.prepare("INSERT OR IGNORE INTO custom_game_values (gameday_id, user_id, custom_game_id, amount) VALUES (?, ?, ?, 0)");
   const trx = db.transaction(() => {
-    for (const m of members) {
-      insertVal.run(gamedayId, m.id, gameId);
+    for (const a of attendees) {
+      insertVal.run(gamedayId, a.user_id, gameId);
     }
   });
   trx();
@@ -656,6 +677,121 @@ router.get("/kegelkladde/locks", requireAuth, (req, res) => {
     }
   }
   res.json({ locks });
+});
+
+// --- Gäste spieltagsbezogen ---
+
+router.post("/kegelkladde/add-guest", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const guestId = Number.parseInt(req.body.guestId, 10);
+
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(guestId)) {
+    req.session.flash = { type: "error", message: "Ungültige Parameter." };
+    return res.redirect("/kegelkladde");
+  }
+
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled > 1) {
+    req.session.flash = { type: "error", message: "Spieltag nicht bearbeitbar." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+
+  const guest = db.prepare("SELECT id, first_name FROM users WHERE id = ? AND is_guest = 1").get(guestId);
+  if (!guest) {
+    req.session.flash = { type: "error", message: "Gast nicht gefunden." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+
+  db.prepare(
+    "INSERT OR IGNORE INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid) VALUES (?, ?, 1, 0, 0, ?, 0, 0, 0, 0, 0)"
+  ).run(gamedayId, guestId, DEFAULT_CONTRIBUTION_EUR);
+
+  // Custom-Game-Werte für den Gast anlegen
+  const customGames = db.prepare("SELECT id FROM custom_games WHERE gameday_id = ?").all(gamedayId);
+  const insertCgv = db.prepare("INSERT OR IGNORE INTO custom_game_values (gameday_id, user_id, custom_game_id, amount) VALUES (?, ?, ?, 0)");
+  for (const cg of customGames) {
+    insertCgv.run(gamedayId, guestId, cg.id);
+  }
+
+  logAudit(req.session.userId, "GUEST_ADD_TO_GAMEDAY", "gameday", gamedayId, { guestId });
+  req.session.flash = { type: "success", message: `Gast ${guest.first_name} hinzugefügt.` };
+
+  res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+});
+
+router.post("/kegelkladde/create-and-add-guest", requireAuth, requireAdmin, verifyCsrf, async (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const firstName = sanitize(req.body.firstName, 60);
+  const lastName = sanitize(req.body.lastName, 60) || "";
+
+  if (!Number.isInteger(gamedayId) || !firstName) {
+    req.session.flash = { type: "error", message: "Spieltag und Vorname erforderlich." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled > 1) {
+    req.session.flash = { type: "error", message: "Spieltag nicht bearbeitbar." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+
+  // Neuen Gast-User erstellen
+  const guestUsername = `gast_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  const guestSecret = crypto.randomBytes(18).toString("base64url");
+  const passwordHash = await bcrypt.hash(guestSecret, 12);
+
+  const result = db.prepare(
+    "INSERT INTO users (username, password_hash, role, is_guest, first_name, last_name) VALUES (?, ?, 'user', 1, ?, ?)"
+  ).run(guestUsername, passwordHash, firstName, lastName);
+
+  const guestId = Number(result.lastInsertRowid);
+
+  // Attendance-Record anlegen
+  db.prepare(
+    "INSERT INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid) VALUES (?, ?, 1, 0, 0, ?, 0, 0, 0, 0, 0)"
+  ).run(gamedayId, guestId, DEFAULT_CONTRIBUTION_EUR);
+
+  // Custom-Game-Werte für den Gast anlegen
+  const customGames = db.prepare("SELECT id FROM custom_games WHERE gameday_id = ?").all(gamedayId);
+  const insertCgv = db.prepare("INSERT OR IGNORE INTO custom_game_values (gameday_id, user_id, custom_game_id, amount) VALUES (?, ?, ?, 0)");
+  for (const cg of customGames) {
+    insertCgv.run(gamedayId, guestId, cg.id);
+  }
+
+  logAudit(req.session.userId, "GUEST_CREATE_AND_ADD", "gameday", gamedayId, { guestId, firstName, lastName });
+  req.session.flash = { type: "success", message: `Gast ${firstName} erstellt und hinzugefügt.` };
+
+  res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+});
+
+router.post("/kegelkladde/remove-guest", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const guestId = Number.parseInt(req.body.guestId, 10);
+
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(guestId)) {
+    req.session.flash = { type: "error", message: "Ungültige Parameter." };
+    return res.redirect("/kegelkladde");
+  }
+
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled > 1) {
+    req.session.flash = { type: "error", message: "Spieltag nicht bearbeitbar." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+
+  const guest = db.prepare("SELECT id, first_name FROM users WHERE id = ? AND is_guest = 1").get(guestId);
+  if (!guest) {
+    req.session.flash = { type: "error", message: "Gast nicht gefunden." };
+    return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+  }
+
+  db.prepare("DELETE FROM custom_game_values WHERE gameday_id = ? AND user_id = ?").run(gamedayId, guestId);
+  db.prepare("DELETE FROM attendance WHERE gameday_id = ? AND user_id = ?").run(gamedayId, guestId);
+
+  logAudit(req.session.userId, "GUEST_REMOVE_FROM_GAMEDAY", "gameday", gamedayId, { guestId });
+  req.session.flash = { type: "success", message: `Gast ${guest.first_name} entfernt.` };
+
+  res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
 });
 
 module.exports = router;

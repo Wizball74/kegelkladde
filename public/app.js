@@ -232,6 +232,7 @@ function recalcCosts() {
 
   updateCompactCells();
   updateMontePoints();
+  updateGameWinners();
 
   // Sync mobile "nach Spiel" display if active
   if (typeof window._syncMobileDisplay === "function") window._syncMobileDisplay();
@@ -388,6 +389,51 @@ function cycleMonteTiebreak(clickedTd) {
   recalcCosts();
   autoSaveRow(above.row);
   autoSaveRow(current.row);
+}
+
+// Lorbeerkranz: highlight lowest value per game column
+function updateGameWinners() {
+  const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+  if (!table) return;
+
+  // Collect all unique game keys from header
+  const gameKeys = new Set();
+  table.querySelectorAll("tbody tr:first-child td[data-game-key]").forEach(td => {
+    gameKeys.add(td.getAttribute("data-game-key"));
+  });
+  // Fallback: scan all rows for game keys
+  if (gameKeys.size === 0) {
+    table.querySelectorAll("tbody td[data-game-key]").forEach(td => {
+      gameKeys.add(td.getAttribute("data-game-key"));
+    });
+  }
+
+  const rows = table.querySelectorAll("tbody tr[data-member-id]");
+
+  gameKeys.forEach(key => {
+    const cells = [];
+    rows.forEach(row => {
+      const td = row.querySelector(`td[data-game-key="${key}"]`);
+      if (!td) return;
+      const isActive = !row.classList.contains("row-inactive");
+      const isStruck = td.classList.contains("cell-struck");
+      const input = td.querySelector(".game-col-input");
+      const value = Number(input?.value || 0);
+      cells.push({ td, value, eligible: isActive && !isStruck });
+    });
+
+    const eligible = cells.filter(c => c.eligible);
+    // Spiel wurde gespielt wenn mindestens ein Wert > 0
+    const gamePlayed = eligible.some(c => c.value > 0);
+    let minVal = Infinity;
+    if (gamePlayed) {
+      minVal = Math.min(...eligible.map(c => c.value));
+    }
+
+    cells.forEach(c => {
+      c.td.classList.toggle("game-winner", gamePlayed && c.eligible && c.value === minVal);
+    });
+  });
 }
 
 // Compact cell mode: display values as text, edit on hover

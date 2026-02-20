@@ -233,7 +233,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                   const carryover = Number(hit.carryover || 0);
                 %>
                 <td class="name-col">
-                  <%= member.display_name %>
+                  <% if (member.avatar) { %><img src="/uploads/avatars/<%= member.avatar %>" alt="" class="kladde-avatar" /><% } %><%= member.display_name %>
                   <% if (member.is_guest) { %>
                     <span class="badge badge-muted badge-sm">Gast</span>
                     <% if (isAdmin && status <= 1) { %>

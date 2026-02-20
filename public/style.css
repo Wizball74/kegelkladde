@@ -696,6 +696,21 @@ textarea:focus {
   margin: 0;
 }
 
+/* Krone for game column winner */
+td.game-winner .money-inline {
+  position: relative;
+}
+td.game-winner .money-inline::before {
+  content: '\1F451';
+  position: absolute;
+  left: 19px;
+  top: -10px;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .custom-game-header-input {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -977,6 +992,16 @@ td.col-active.cell-empty > * {
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kladde-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 4px;
 }
 
 .mark-btn {

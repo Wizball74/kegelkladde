@@ -120,17 +120,29 @@ router.post("/profil/update", requireAuth, verifyCsrf, (req, res) => {
 });
 
 // multer must run before verifyCsrf (multipart body not parsed until multer runs)
-router.post("/profil/avatar", requireAuth, avatarUpload.single("avatar"), verifyCsrf, (req, res) => {
+router.post("/profil/avatar", requireAuth, (req, res, next) => {
+  avatarUpload.single("avatar")(req, res, (err) => {
+    if (err) {
+      req.session.flash = { type: "error", message: err.message || "Upload fehlgeschlagen." };
+      return res.redirect("/profil");
+    }
+    next();
+  });
+}, verifyCsrf, (req, res) => {
   if (!req.file) {
     req.session.flash = { type: "error", message: "Keine Datei ausgewählt." };
     return res.redirect("/profil");
   }
 
-  // Delete old avatar file
-  const old = db.prepare("SELECT avatar FROM users WHERE id = ?").get(req.session.userId);
-  if (old && old.avatar) {
-    const oldPath = path.join(avatarDir, old.avatar);
-    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  // Delete old avatar file (non-fatal on error)
+  try {
+    const old = db.prepare("SELECT avatar FROM users WHERE id = ?").get(req.session.userId);
+    if (old && old.avatar) {
+      const oldPath = path.join(avatarDir, old.avatar);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  } catch (e) {
+    console.error("Alten Avatar löschen fehlgeschlagen:", e.message);
   }
 
   const filename = req.file.filename;

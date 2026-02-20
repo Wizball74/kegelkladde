@@ -554,8 +554,15 @@ textarea:focus {
   opacity: 1;
 }
 
-.inline-form {
+.name-col .inline-form {
   display: inline;
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
 }
 
 .guest-actions {
@@ -697,6 +704,9 @@ textarea:focus {
 }
 
 /* Krone for game column winner */
+td.game-winner {
+  box-shadow: inset 0 0 10px #2f8f6d87;
+}
 td.game-winner .money-inline {
   position: relative;
 }
@@ -709,6 +719,7 @@ td.game-winner .money-inline::before {
   font-size: 0.8rem;
   line-height: 1;
   pointer-events: none;
+  filter: drop-shadow(0 0 2px #fff);
 }
 
 .custom-game-header-input {

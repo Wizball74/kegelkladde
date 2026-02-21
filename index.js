@@ -14,7 +14,7 @@ const adminRoutes = require("./routes/admin");
 const pinnwandRoutes = require("./routes/pinnwand");
 
 // Import middleware
-const { requireInitialized, requireAuth, requireAdmin, flashMiddleware, setLocals } = require("./middleware/auth");
+const { requireInitialized, flashMiddleware, setLocals } = require("./middleware/auth");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,11 +66,6 @@ app.use(recordsRoutes);
 app.use(statisticsRoutes);
 app.use(adminRoutes);
 app.use(pinnwandRoutes);
-
-// TEMP: DB-Export (nach Download wieder entfernen!)
-app.get("/admin/db-export", requireAuth, requireAdmin, (req, res) => {
-  res.download(path.join(__dirname, "data", "kegelkladde.db"));
-});
 
 // Global error handler
 app.use((err, req, res, next) => {

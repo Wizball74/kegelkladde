@@ -6,6 +6,24 @@
   };
 %>
 <script type="application/json" id="celebrateData"><%- JSON.stringify(celebrateItems) %></script>
+<script type="application/json" id="ranglistenData"><%- JSON.stringify({
+  monte: monteRanking.map(p => ({
+    name: p.display_name,
+    total: p.total,
+    wins: p.wins,
+    carryover: p.carryover || 0,
+    perGameday: p.perGameday
+  })),
+  medaillen: medaillenRanking.map(p => ({
+    name: p.display_name,
+    total: p.total,
+    wins: p.wins,
+    carryover: p.carryover || 0,
+    perGameday: p.perGameday
+  })),
+  monteTarget: 100,
+  medaillenTarget: 41
+}) %></script>
 <section class="card fade-in">
   <div class="section-head">
     <h1>Ranglisten</h1>
@@ -13,9 +31,9 @@
   </div>
 
   <% if (gamedays.length > 0) { %>
-    <div class="ranglisten-gameday-select">
+    <div class="ranglisten-gameday-select" style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
       <label style="display:inline-flex; align-items:center; gap:0.5rem; font-size:0.9rem;">
-        Spieltag hervorheben:
+        Spieltag:
         <select id="ranglistenGameday" style="font-weight:600;">
           <option value="">Keiner</option>
           <% gamedays.forEach((gd) => { %>
@@ -24,6 +42,10 @@
             </option>
           <% }) %>
         </select>
+      </label>
+      <label class="ranglisten-view-toggle" style="display:inline-flex; align-items:center; gap:0.5rem; font-size:0.85rem; cursor:pointer;">
+        <input type="checkbox" id="ranglistenSingleDay" style="cursor:pointer;" />
+        Nur ausgew&auml;hlter Spieltag
       </label>
     </div>
   <% } %>

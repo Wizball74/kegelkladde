@@ -217,7 +217,9 @@ function recalcCosts() {
     const paidField = row.querySelector("[data-paid-field]");
     const paidEl = row.querySelector("[data-paid]");
     const paid = paidField ? Number(paidField.value || 0) : Number(paidEl?.dataset.value || paidEl?.value || 0);
-    const toPay = isPresent ? contribution + penalties + costPudel + costOthers + gameCosts + customGameTotal + carryover : contribution + penalties + carryover;
+    const toPay = kladdeStatus === 1
+      ? (isPresent ? costPudel + costOthers + gameCosts + customGameTotal : 0)
+      : (isPresent ? contribution + penalties + costPudel + costOthers + gameCosts + customGameTotal + carryover : contribution + penalties + carryover);
     const rest = toPay - paid;
 
     const toPayEl = row.querySelector("[data-topay]");
@@ -232,6 +234,7 @@ function recalcCosts() {
 
   updateCompactCells();
   updateMontePoints();
+  updateAussteigenMedals();
   updateGameWinners();
 
   // Sync mobile "nach Spiel" display if active
@@ -386,6 +389,134 @@ function cycleMonteTiebreak(clickedTd) {
   if (current.tbInput) current.tbInput.value = current.tiebreak;
 
   // Recalc and auto-save both rows
+  recalcCosts();
+  autoSaveRow(above.row);
+  autoSaveRow(current.row);
+}
+
+// Aussteigen-Rang Anzeige (Gold=1., Silber=2.)
+function updateAussteigenMedals() {
+  const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+  if (!table) return;
+  const rows = table.querySelectorAll("tbody tr[data-member-id]");
+
+  const entries = [];
+  rows.forEach(row => {
+    const td = row.querySelector('td[data-game-key="aussteigen"]');
+    if (!td) return;
+    const isActive = !row.classList.contains("row-inactive");
+    const isStruck = td.classList.contains("cell-struck");
+    const input = td.querySelector(".game-col-input");
+    const value = Number(input?.value || 0);
+    const tbInput = row.querySelector('[data-tiebreak="aussteigen"]');
+    const tiebreak = Number(tbInput?.value || 0);
+    entries.push({ td, row, value, tiebreak, isActive, isStruck });
+  });
+
+  const eligible = entries.filter(e => e.isActive && !e.isStruck);
+  const hasValues = eligible.some(e => e.value > 0);
+
+  const rankMap = new Map(); // td -> { rank, tied }
+  const tiedSet = new Set();
+
+  if (hasValues) {
+    const sorted = [...eligible].sort((a, b) => a.value - b.value || a.tiebreak - b.tiebreak);
+
+    // Build value groups
+    const valueGroups = new Map();
+    sorted.forEach(e => {
+      const arr = valueGroups.get(e.value) || [];
+      arr.push(e);
+      valueGroups.set(e.value, arr);
+    });
+
+    // Assign ranks, detect ties
+    let rank = 1;
+    for (const val of [...new Set(sorted.map(e => e.value))]) {
+      const group = valueGroups.get(val);
+      const isTied = group.length > 1;
+      if (isTied) group.forEach(e => tiedSet.add(e.td));
+      group.forEach((e, i) => {
+        rankMap.set(e.td, rank + i);
+      });
+      rank += group.length;
+    }
+  }
+
+  // Update DOM: show rank badge for gold (1), silver (2), and all tied players
+  entries.forEach(e => {
+    let el = e.td.querySelector(".aussteigen-medal");
+    const rank = rankMap.get(e.td);
+    const isTied = tiedSet.has(e.td);
+    const show = rank != null && (rank <= 2 || isTied);
+    if (show) {
+      if (!el) {
+        el = document.createElement("span");
+        el.className = "aussteigen-medal";
+        const mi = e.td.querySelector(".money-inline");
+        if (mi) mi.append(el);
+      }
+      el.textContent = rank;
+      el.className = "aussteigen-medal";
+      if (rank === 1) el.classList.add("aussteigen-gold");
+      else if (rank === 2) el.classList.add("aussteigen-silver");
+      el.classList.toggle("aussteigen-medal-tie", isTied);
+      el.onclick = isTied ? () => cycleAussteigenTiebreak(e.td) : null;
+    } else if (el) {
+      el.remove();
+    }
+  });
+}
+
+// Cycle Aussteigen tiebreak: swap clicked player one position up within their tie group
+function cycleAussteigenTiebreak(clickedTd) {
+  const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+  if (!table) return;
+
+  const clickedRow = clickedTd.closest("tr[data-member-id]");
+  if (!clickedRow) return;
+  const clickedInput = clickedTd.querySelector(".game-col-input");
+  const clickedValue = Number(clickedInput?.value || 0);
+
+  const rows = table.querySelectorAll("tbody tr[data-member-id]");
+  const group = [];
+  rows.forEach(row => {
+    const td = row.querySelector('td[data-game-key="aussteigen"]');
+    if (!td) return;
+    const isActive = !row.classList.contains("row-inactive");
+    const isStruck = td.classList.contains("cell-struck");
+    const input = td.querySelector(".game-col-input");
+    const value = Number(input?.value || 0);
+    if (!isActive || isStruck) return;
+    if (value !== clickedValue) return;
+    const tbInput = row.querySelector('[data-tiebreak="aussteigen"]');
+    const tiebreak = Number(tbInput?.value || 0);
+    group.push({ row, td, tbInput, tiebreak });
+  });
+
+  if (group.length < 2) return;
+
+  group.sort((a, b) => a.tiebreak - b.tiebreak);
+
+  const allSame = group.every(g => g.tiebreak === group[0].tiebreak);
+  if (allSame) {
+    group.forEach((g, i) => {
+      g.tiebreak = i;
+      if (g.tbInput) g.tbInput.value = i;
+    });
+  }
+
+  const clickedIdx = group.findIndex(g => g.row === clickedRow);
+  if (clickedIdx <= 0) return;
+
+  const above = group[clickedIdx - 1];
+  const current = group[clickedIdx];
+  const tmpTb = above.tiebreak;
+  above.tiebreak = current.tiebreak;
+  current.tiebreak = tmpTb;
+  if (above.tbInput) above.tbInput.value = above.tiebreak;
+  if (current.tbInput) current.tbInput.value = current.tiebreak;
+
   recalcCosts();
   autoSaveRow(above.row);
   autoSaveRow(current.row);
@@ -1967,6 +2098,83 @@ if (ranglistenSelect) {
   ranglistenSelect.addEventListener("change", () => {
     const val = ranglistenSelect.value;
     window.location = val ? "/ranglisten?gamedayId=" + encodeURIComponent(val) : "/ranglisten";
+  });
+}
+
+// Ranglisten: Gesamt / Nur Spieltag Toggle
+const ranglistenSingleDay = document.getElementById("ranglistenSingleDay");
+if (ranglistenSingleDay && ranglistenSelect) {
+  const dataEl = document.getElementById("ranglistenData");
+  let rlData = null;
+  try { rlData = JSON.parse(dataEl?.textContent || "null"); } catch {}
+
+  function renderCrowns(wins) {
+    return wins > 0 ? "\u{1F451}" + wins : "";
+  }
+
+  function rebuildChart(container, players, target) {
+    if (!container || !players || players.length === 0) {
+      if (container) container.innerHTML = '<div class="empty-state"><p>Keine Daten f\u00fcr diesen Spieltag.</p></div>';
+      return;
+    }
+    const maxVal = Math.max(players[0].value, 1);
+    const ceil = Math.max(maxVal, target);
+    container.style.setProperty("--target-pct", (target / ceil) * 100 + "%");
+    container.innerHTML = players.map((p, i) => {
+      const pct = (p.value / ceil) * 100;
+      return '<div class="hbar-row">' +
+        '<div class="hbar-label"><span class="hbar-rank">' + (i + 1) + '</span><span class="hbar-name">' + p.name + '</span></div>' +
+        '<div class="hbar-crowns">' + renderCrowns(p.wins) + '</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;">' +
+        '<div class="hbar-seg hbar-hl" style="flex:1;"></div>' +
+        '<span class="hbar-inline-value">' + p.value + '</span></div>' +
+        '<div class="hbar-target"></div></div></div>';
+    }).join("");
+  }
+
+  function restoreOriginal() {
+    // Reload page to restore server-rendered charts
+    window.location.reload();
+  }
+
+  ranglistenSingleDay.addEventListener("change", () => {
+    if (!rlData) return;
+    const selectedId = Number(ranglistenSelect.value) || 0;
+    if (!selectedId) {
+      ranglistenSingleDay.checked = false;
+      return;
+    }
+
+    if (ranglistenSingleDay.checked) {
+      // Build single-day view
+      const monteDay = rlData.monte
+        .map(p => {
+          const gd = p.perGameday.find(e => e.gamedayId === selectedId);
+          return { name: p.name, wins: p.wins, value: gd ? gd.points : 0 };
+        })
+        .filter(p => p.value > 0)
+        .sort((a, b) => b.value - a.value);
+
+      const medaillenDay = rlData.medaillen
+        .map(p => {
+          const gd = p.perGameday.find(e => e.gamedayId === selectedId);
+          return { name: p.name, wins: p.wins, value: gd ? gd.points : 0 };
+        })
+        .filter(p => p.value > 0)
+        .sort((a, b) => b.value - a.value);
+
+      const monteChart = document.querySelector("#tab-monte .hbar-chart");
+      const medaillenChart = document.querySelector("#tab-medaillen .hbar-chart");
+      const monteLegend = document.querySelector("#tab-monte .hbar-legend");
+      const medaillenLegend = document.querySelector("#tab-medaillen .hbar-legend");
+      if (monteLegend) monteLegend.style.display = "none";
+      if (medaillenLegend) medaillenLegend.style.display = "none";
+
+      rebuildChart(monteChart, monteDay, rlData.monteTarget);
+      rebuildChart(medaillenChart, medaillenDay, rlData.medaillenTarget);
+    } else {
+      restoreOriginal();
+    }
   });
 }
 

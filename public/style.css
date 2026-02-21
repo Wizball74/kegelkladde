@@ -54,10 +54,10 @@ body {
 
 .topbar {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: 0.25rem 0.75rem;
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(8px);
   background: rgba(255, 253, 247, 0.95);
@@ -78,21 +78,19 @@ a.brand {
 }
 
 .brand-mascot {
-  width: 48px;
-  height: 48px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
   transform: rotate(-10deg);
 }
 
 .brand strong {
-  font-size: 1.1rem;
+  font-size: 0.85rem;
 }
 
 .brand small {
-  display: block;
-  color: var(--muted);
-  font-size: 0.8rem;
+  display: none;
 }
 
 /* Mobile menu */
@@ -130,7 +128,7 @@ a.brand {
 .mobile-nav {
   display: none;
   position: fixed;
-  top: 73px;
+  top: 40px;
   left: 0;
   right: 0;
   background: rgba(255, 253, 247, 0.98);
@@ -183,10 +181,11 @@ a.brand {
 .nav-links a {
   text-decoration: none;
   color: var(--ink);
-  padding: 0.5rem 0.75rem;
+  padding: 0.3rem 0.6rem;
   border-radius: var(--radius-sm);
   transition: all var(--transition);
   font-weight: 500;
+  font-size: 0.85rem;
 }
 
 .nav-links a:hover {
@@ -419,7 +418,7 @@ textarea:focus {
 /* Toast notifications */
 .toast-container {
   position: fixed;
-  top: 80px;
+  top: 48px;
   right: 1rem;
   z-index: 1000;
   display: flex;
@@ -602,7 +601,7 @@ textarea:focus {
 
 .kladde-table {
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   table-layout: fixed;
   width: 100%;
 }
@@ -630,11 +629,17 @@ textarea:focus {
 .kladde-table thead tr:first-child th {
   background: linear-gradient(to bottom, #efe9d4, #dddddd);
   border-bottom: 2px solid #d4cebb;
-  height: 70px;
+  height: 120px;
   vertical-align: bottom;
-  padding: 0.25rem 0.15rem;
+  padding: 0.15rem 0.1rem;
   position: sticky;
   top: 0;
+}
+
+/* Alle Header-Inhalte auf feste Höhe begrenzen */
+.kladde-table thead tr:first-child th > * {
+  max-height: 116px;
+  overflow: hidden;
 }
 
 .kladde-table tbody tr:hover {
@@ -783,7 +788,7 @@ td.has-compact .field-display {
   transform: translateY(-50%);
   width: 38px;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   pointer-events: none;
 }
@@ -809,13 +814,13 @@ td.has-compact.col-active input:not(:disabled) ~ .field-display {
 }
 
 td:hover .marker-controls .mark-btn:not(:disabled),
-td.col-active .marker-controls .mark-btn:not(:disabled) {
+td:focus-within .marker-controls .mark-btn:not(:disabled) {
   opacity: 1;
   pointer-events: auto;
 }
 
 td:hover .marker-controls .marker-strip,
-td.col-active .marker-controls .marker-strip {
+td:focus-within .marker-controls .marker-strip {
   visibility: visible !important;
 }
 
@@ -832,8 +837,8 @@ td.cell-empty:focus-within > * {
   pointer-events: auto;
 }
 
-/* Reveal entire column when active (tab navigation) */
-td.col-active.cell-empty > * {
+/* Reveal entire column when active (tab navigation) — exclude marker cells */
+td.col-active.cell-empty:not(.marker-cell) > * {
   opacity: 1;
   pointer-events: auto;
 }
@@ -993,9 +998,10 @@ td.col-active.cell-empty > * {
 /* Marker controls */
 .marker-controls {
   display: grid;
-  grid-template-columns: 10px 40px 18px;
-  gap: 2px;
+  grid-template-columns: 12px 34px 12px;
+  gap: 1px;
   align-items: center;
+  justify-content: center;
 }
 
 .name-col {
@@ -1016,24 +1022,20 @@ td.col-active.cell-empty > * {
 }
 
 .mark-btn {
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   line-height: 1;
   border-radius: 50%;
-  font-size: 0.7rem;
+  font-size: 0.55rem;
   font-weight: 700;
   padding: 0;
 }
 
 .mark-btn:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
 }
 
 .mark-dec {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  font-size: 0;
   opacity: 0.4;
 }
 
@@ -1042,19 +1044,19 @@ td.col-active.cell-empty > * {
 }
 
 .marker-strip {
-  min-height: 18px;
-  width: 40px;
+  min-height: 16px;
+  width: 34px;
   /*border: 1px solid var(--line);*/
-  border-radius: 7px;
-  padding: 1px 3px;
+  border-radius: 6px;
+  padding: 1px 2px;
   background: #00000011;
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   text-align: left;
   overflow: hidden;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 2px;
   color: #333;
 }
 
@@ -1089,6 +1091,7 @@ td.col-active.cell-empty > * {
 .row-inactive [data-custom-game-field],
 .row-inactive .monte-extra-wrap,
 .row-inactive .monte-extra-radio,
+.row-inactive .aussteigen-medal,
 .row-inactive .game-col .field-display {
   display: none;
 }
@@ -2539,6 +2542,35 @@ tr.row-locked td.name-col {
 }
 
 .monte-pts-tie:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Aussteigen-Rang */
+.aussteigen-medal {
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 8px;
+  text-align: center;
+  margin-left: 1px;
+  color: var(--muted);
+}
+
+.aussteigen-gold {
+  color: #b8860b;
+}
+
+.aussteigen-silver {
+  color: #808080;
+}
+
+.aussteigen-medal-tie {
+  cursor: pointer;
+  border-bottom: 1px dashed currentColor;
+}
+
+.aussteigen-medal-tie:hover {
   color: var(--accent);
   border-color: var(--accent);
 }

@@ -314,43 +314,24 @@ function computeMedaillenForGameday(gamedayId, medaillenMap) {
 
   // Wurde Aussteigen gespielt? (mindestens ein Spieler mit aussteigen > 0)
   const played = rows.some((r) => r.aussteigen > 0);
-  if (!played) return;
+  if (!played || rows.length < 2) return;
 
-  // Gold-Kandidaten: aussteigen = 0,00 (Sieger zahlt nichts)
-  const goldCandidates = rows.filter((r) => Math.abs(r.aussteigen) < 0.001);
-  // Silber-Kandidaten: aussteigen = 0,10
-  const silverCandidates = rows.filter((r) => Math.abs(r.aussteigen - 0.10) < 0.001);
-
-  // Gold vergeben (Sieger: 0,00 € → 2 Pkt.)
-  if (goldCandidates.length >= 1) {
-    const winner = goldCandidates[0]; // nach tiebreak sortiert
-    const entry = medaillenMap.get(winner.user_id);
-    if (entry) {
-      entry.medals++;
-      entry.total += 2;
-      entry.perGameday.push({ gamedayId, points: 2 });
-    }
+  // Gold: niedrigster Wert (1. Platz) → 2 Pkt.
+  const winner = rows[0];
+  const winnerEntry = medaillenMap.get(winner.user_id);
+  if (winnerEntry) {
+    winnerEntry.medals++;
+    winnerEntry.total += 2;
+    winnerEntry.perGameday.push({ gamedayId, points: 2 });
   }
 
-  // Silber vergeben (Zweiter: 0,10 € → 1 Pkt.)
-  if (goldCandidates.length >= 2) {
-    // Mehrere mit 0,00 → zweiter bekommt Silber
-    const second = goldCandidates[1];
-    const entry = medaillenMap.get(second.user_id);
-    if (entry) {
-      entry.medals++;
-      entry.total += 1;
-      entry.perGameday.push({ gamedayId, points: 1 });
-    }
-  } else if (goldCandidates.length === 1 && silverCandidates.length >= 1) {
-    // Genau ein Gold → erster Silber-Kandidat bekommt Silber
-    const second = silverCandidates[0];
-    const entry = medaillenMap.get(second.user_id);
-    if (entry) {
-      entry.medals++;
-      entry.total += 1;
-      entry.perGameday.push({ gamedayId, points: 1 });
-    }
+  // Silber: zweitniedrigster Wert (2. Platz) → 1 Pkt.
+  const second = rows[1];
+  const secondEntry = medaillenMap.get(second.user_id);
+  if (secondEntry) {
+    secondEntry.medals++;
+    secondEntry.total += 1;
+    secondEntry.perGameday.push({ gamedayId, points: 1 });
   }
 }
 

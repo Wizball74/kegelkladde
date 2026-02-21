@@ -65,10 +65,10 @@
           <col style="width: 70px;" /><!-- Übertrag -->
           <col style="width: 70px;" /><!-- Beitrag -->
           <col style="width: 52px;" />
-          <col style="width: 80px;" />
-          <col style="width: 80px;" />
-          <col style="width: 80px;" />
-          <col style="width: 80px;" />
+          <col style="width: 64px;" />
+          <col style="width: 64px;" />
+          <col style="width: 64px;" />
+          <col style="width: 64px;" />
           <col style="width: 52px;" />
           <col style="width: 52px;" />
           <col style="width: 52px;" />
@@ -153,13 +153,15 @@ Spieltag starten, um die Kladde zu bearbeiten.
           <colgroup>
             <col style="width: 110px;" /><!-- Name -->
             <col style="width: 44px;" /><!-- Anwesenheit -->
+            <% if (status !== 1) { %>
             <col style="width: 62px;" /><!-- Übertrag -->
             <col style="width: 52px;" /><!-- Beitrag -->
             <col style="width: 52px;" /><!-- Strafen -->
-            <col style="width: 80px;" /><!-- 9er -->
-            <col style="width: 80px;" /><!-- Kranz -->
-            <col style="width: 80px;" /><!-- Triclops -->
-            <col style="width: 80px;" /><!-- Pudel -->
+            <% } %>
+            <col style="width: 60px;" /><!-- 9er -->
+            <col style="width: 60px;" /><!-- Kranz -->
+            <col style="width: 60px;" /><!-- Triclops -->
+            <col style="width: 60px;" /><!-- Pudel -->
             <col style="width: 44px;" /><!-- V+A -->
             <col style="width: 56px;" /><!-- Monte (+ Radio) -->
             <col style="width: 44px;" /><!-- Aussteigen -->
@@ -180,15 +182,17 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <tr>
               <th><span class="head-label">Name</span></th>
               <th><span class="head-label">Anwesend</span></th>
+              <% if (status !== 1) { %>
               <th><span class="head-label">Übertrag</span></th>
               <th><span class="head-label">Beitrag</span></th>
               <th><span class="head-label">Strafen</span></th>
+              <% } %>
               <th title="Alle 9"><span class="head-label">9er</span></th>
               <th title="Kranz"><span class="head-label">Kränze</span></th>
               <th><span class="head-label">Triclops</span></th>
               <th><span class="head-label">Pudel</span></th>
               <th class="game-col"><span class="head-label">V+A</span></th>
-              <th class="game-col"><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt) Punkte</span></span></th>
+              <th class="game-col"><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt)</span></span></th>
               <th class="game-col"><span class="head-label">Aussteigen</span></th>
               <th class="game-col"><span class="head-label">6-Tage-Rennen</span></th>
               <% customGames.forEach((cg) => { %>
@@ -206,7 +210,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <% if (status <= 1) { %>
               <th class="game-col"><input type="text" class="custom-game-header-input" placeholder="Neues Spiel..." data-new-game-header /></th>
               <% } %>
-              <th><span class="head-label">Zu zahlen</span></th>
+              <th><span class="head-label"><%= status === 1 ? 'Kosten Spieltag' : 'Zu zahlen' %></span></th>
               <% if (status >= 2) { %>
               <th><span class="head-label">Gezahlt</span></th>
               <th><span class="head-label">Rest</span></th>
@@ -252,6 +256,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                     <img src="/sheep.png" alt="Anwesend" class="present-icon" />
                   </label>
                 </td>
+                <% if (status !== 1) { %>
                 <td data-label="Übertrag">
                   <span class="money-text" data-carryover data-value="<%= carryover %>"><%= formatEuro(carryover) %> &euro;</span>
                 </td>
@@ -259,10 +264,11 @@ Spieltag starten, um die Kladde zu bearbeiten.
                   <span class="money-text"><%= formatEuro(hit.contribution || 0) %> €</span>
                 </td>
                 <td data-label="Strafen"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= Number(hit.penalties || 0).toFixed(2) %>" name="penalties_<%= member.id %>" class="mini-number no-spin" <%= isEditable ? "" : "disabled" %> data-field data-always-edit />&euro;</span></td>
+                <% } %>
                 <td class="marker-cell" data-label="9er">
                   <div class="marker-controls">
                     <input type="hidden" name="alle9_<%= member.id %>" value="<%= alle9 %>" data-marker-input="alle9" <%= canEdit ? "" : "disabled" %> data-field />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="alle9" data-op="dec" aria-label="Alle 9 verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="alle9" data-op="dec" aria-label="Alle 9 verringern" <%= canEdit ? "" : "disabled" %> data-field-btn>&minus;</button>
                     <span class="marker-strip" data-marker-display="alle9"><%- renderTally(alle9) %></span>
                     <button type="button" class="mark-btn" data-mark-target="alle9" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
                   </div>
@@ -272,7 +278,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                 <td class="marker-cell" data-label="Kränze">
                   <div class="marker-controls">
                     <input type="hidden" name="kranz_<%= member.id %>" value="<%= kranz %>" data-marker-input="kranz" <%= canEdit ? "" : "disabled" %> data-field />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="kranz" data-op="dec" aria-label="Kranz verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="kranz" data-op="dec" aria-label="Kranz verringern" <%= canEdit ? "" : "disabled" %> data-field-btn>&minus;</button>
                     <span class="marker-strip" data-marker-display="kranz"><%- renderTally(kranz) %></span>
                     <button type="button" class="mark-btn" data-mark-target="kranz" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
                   </div>
@@ -282,7 +288,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                 <td class="marker-cell" data-label="Triclops">
                   <div class="marker-controls">
                     <input type="hidden" name="triclops_<%= member.id %>" value="<%= triclops %>" data-marker-input="triclops" <%= canEdit ? "" : "disabled" %> data-field />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="triclops" data-op="dec" aria-label="Triclops verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="triclops" data-op="dec" aria-label="Triclops verringern" <%= canEdit ? "" : "disabled" %> data-field-btn>&minus;</button>
                     <span class="marker-strip" data-marker-display="triclops"><%- renderTally(triclops) %></span>
                     <button type="button" class="mark-btn" data-mark-target="triclops" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
                   </div>
@@ -292,7 +298,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                 <td class="marker-cell" data-label="Pudel">
                   <div class="marker-controls">
                     <input type="hidden" name="pudel_<%= member.id %>" value="<%= pudel %>" data-marker-input="pudel" <%= canEdit ? "" : "disabled" %> data-field />
-                    <button type="button" class="mark-btn mark-dec" data-mark-target="pudel" data-op="dec" aria-label="Pudel verringern" <%= canEdit ? "" : "disabled" %> data-field-btn></button>
+                    <button type="button" class="mark-btn mark-dec" data-mark-target="pudel" data-op="dec" aria-label="Pudel verringern" <%= canEdit ? "" : "disabled" %> data-field-btn>&minus;</button>
                     <span class="marker-strip" data-marker-display="pudel"><%- renderTally(pudel) %></span>
                     <button type="button" class="mark-btn" data-mark-target="pudel" data-op="inc" <%= canEdit ? "" : "disabled" %> data-field-btn>+</button>
                   </div>
@@ -331,10 +337,12 @@ Spieltag starten, um die Kladde zu bearbeiten.
                       customGameTotal += Number(customGameValues.get(member.id + '_' + cg.id) || 0);
                     });
                   }
-                  const toPay = hit.present ? (hit.contribution || 0) + (hit.penalties || 0) + pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + gameCosts + customGameTotal + carryover : (hit.contribution || 0) + (hit.penalties || 0) + carryover;
+                  const toPay = status === 1
+                    ? (hit.present ? pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + gameCosts + customGameTotal : 0)
+                    : (hit.present ? (hit.contribution || 0) + (hit.penalties || 0) + pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + gameCosts + customGameTotal + carryover : (hit.contribution || 0) + (hit.penalties || 0) + carryover);
                   const rest = toPay - paid;
                 %>
-                <td class="topay-col" data-label="Zu zahlen">
+                <td class="topay-col" data-label="<%= status === 1 ? 'Kosten Spieltag' : 'Zu zahlen' %>">
                   <span class="money-text" data-topay><%= formatEuro(toPay) %> &euro;</span>
                 </td>
                 <% if (status >= 2) { %>

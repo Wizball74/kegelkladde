@@ -24,7 +24,7 @@
   %>
 
   <nav class="gameday-nav" id="gamedayNav">
-    <button type="button" class="btn-secondary btn-sm" id="btnPrev" title="Vorheriger Spieltag">&laquo; Zurück</button>
+    <button type="button" id="btnPrev" title="Vorheriger Spieltag">◄</button>
     <select id="gamedaySelect">
       <%
         const statusShort = ['', '', '⏳', '✓'];
@@ -38,7 +38,7 @@
         Nächster Spieltag (<%= formatDateDE(nextDate) %>)
       </option>
     </select>
-    <button type="button" class="btn-secondary btn-sm" id="btnNext" title="Nächster Spieltag">Weiter &raquo;</button>
+    <button type="button" id="btnNext" title="Nächster Spieltag">►</button>
   </nav>
 
   <% if (isNext || (!selectedGameday && !hasGamedays)) { %>

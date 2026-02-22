@@ -34,8 +34,8 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   const medaillenMap = new Map();
 
   members.forEach((m) => {
-    monteMap.set(m.id, { total: 0, wins: 0, perGameday: [], carryover: 0 });
-    medaillenMap.set(m.id, { medals: 0, total: 0, wins: 0, perGameday: [], carryover: 0 });
+    monteMap.set(m.id, { total: 0, wins: 0, perGameday: [], carryover: 0, busted: [], presentGds: [] });
+    medaillenMap.set(m.id, { medals: 0, total: 0, wins: 0, perGameday: [], carryover: 0, presentGds: [] });
   });
 
   // Anfangswerte laden
@@ -112,6 +112,8 @@ router.get("/ranglisten", requireAuth, (req, res) => {
         entry.total = 0;
         entry.perGameday = [];
         entry.carryover = 0;
+        entry.busted = [];
+        entry.presentGds = [];
       }
     }
 
@@ -158,6 +160,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
         entry.medals = 0;
         entry.carryover = 0;
         entry.perGameday = [];
+        entry.presentGds = [];
       }
     }
   });
@@ -169,6 +172,17 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   }
   const monteGamedays = gamedays.filter((gd) => monteGamedayIds.has(gd.id));
   const hasMonteCarryover = [...monteMap.values()].some((e) => e.carryover > 0);
+
+  // Übertrag-Datum: Tag vor dem ersten Spieltag der aktuellen Runde
+  let carryoverDate = null;
+  if (hasMonteCarryover && monteGamedays.length > 0) {
+    const firstDate = new Date(monteGamedays[0].match_date + "T00:00:00");
+    firstDate.setDate(firstDate.getDate() - 1);
+    const dd = String(firstDate.getDate()).padStart(2, "0");
+    const mm = String(firstDate.getMonth() + 1).padStart(2, "0");
+    const yy = String(firstDate.getFullYear()).slice(-2);
+    carryoverDate = `${dd}.${mm}.${yy}`;
+  }
 
   // Spieltage der aktuellen Medaillen-Runde sammeln
   const medaillenGamedayIds = new Set();
@@ -256,6 +270,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     monteGamedays,
     medaillenGamedays,
     hasMonteCarryover,
+    carryoverDate,
     monteHistory,
     medaillenHistory,
     celebrateItems,
@@ -275,6 +290,12 @@ function computeMonteForGameday(gamedayId, monteMap) {
   const played = rows.some((r) => r.monte > 0);
   if (!played) return;
 
+  // Anwesende Spieler tracken
+  rows.forEach((row) => {
+    const entry = monteMap.get(row.user_id);
+    if (entry) entry.presentGds.push(gamedayId);
+  });
+
   // Spieler mit >= 2,00 € ausfiltern
   const eligible = rows.filter((r) => r.monte < MONTE_CUTOFF);
 
@@ -292,13 +313,16 @@ function computeMonteForGameday(gamedayId, monteMap) {
     }
   });
 
-  // Extrapunkt für nicht-eligible Spieler (falls jemand >= 2,00 den EP hat)
+  // Nicht-eligible Spieler (>= 2,00 €): busted markieren + ggf. Extrapunkt
   rows.forEach((row) => {
-    if (row.monte >= MONTE_CUTOFF && row.monte_extra) {
+    if (row.monte >= MONTE_CUTOFF) {
       const entry = monteMap.get(row.user_id);
       if (entry) {
-        entry.total += 1;
-        entry.perGameday.push({ gamedayId, points: 1 });
+        entry.busted.push({ gamedayId, monte: row.monte });
+        if (row.monte_extra) {
+          entry.total += 1;
+          entry.perGameday.push({ gamedayId, points: 1 });
+        }
       }
     }
   });
@@ -315,6 +339,12 @@ function computeMedaillenForGameday(gamedayId, medaillenMap) {
   // Wurde Aussteigen gespielt? (mindestens ein Spieler mit aussteigen > 0)
   const played = rows.some((r) => r.aussteigen > 0);
   if (!played || rows.length < 2) return;
+
+  // Anwesende Spieler tracken
+  rows.forEach((row) => {
+    const entry = medaillenMap.get(row.user_id);
+    if (entry) entry.presentGds.push(gamedayId);
+  });
 
   // Gold: niedrigster Wert (1. Platz) → 2 Pkt.
   const winner = rows[0];

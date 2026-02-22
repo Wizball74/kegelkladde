@@ -13,34 +13,42 @@
     if (rest > 0) html += '|'.repeat(rest);
     return html;
   };
+  // Datum-Formatierung DD.MM.YYYY
+  const formatDateDE = (isoStr) => {
+    const [y, m, d] = isoStr.split("-");
+    return `${d}.${m}.${y}`;
+  };
 %>
-<section class="card fade-in">
-  <%
-    // Datum-Formatierung DD.MM.YYYY
-    const formatDateDE = (isoStr) => {
-      const [y, m, d] = isoStr.split("-");
-      return `${d}.${m}.${y}`;
-    };
-  %>
 
-  <nav class="gameday-nav" id="gamedayNav">
-    <button type="button" id="btnPrev" title="Vorheriger Spieltag">◄</button>
-    <select id="gamedaySelect">
-      <%
-        const statusShort = ['', '', '⏳', '✓'];
-      %>
-      <% gamedays.forEach((day) => { %>
-        <option value="<%= day.id %>" <%= selectedGameday && selectedGameday.id === day.id && !isNext ? "selected" : "" %>>
-          <%= formatDateDE(day.match_date) %><%= day.note ? ` - ${day.note}` : "" %><%= statusShort[day.settled] ? ` ${statusShort[day.settled]}` : "" %>
-        </option>
+<nav class="gameday-nav" id="gamedayNav">
+  <button type="button" id="btnPrev" title="Vorheriger Spieltag">◄</button>
+  <div class="gameday-picker" id="gamedayPicker">
+    <%
+      const statusShort = ['', '', '⏳', '✓'];
+      const allOptions = gamedays.map(day => ({
+        value: String(day.id),
+        label: formatDateDE(day.match_date) + (day.note ? ` - ${day.note}` : '') + (statusShort[day.settled] ? ` ${statusShort[day.settled]}` : ''),
+        selected: selectedGameday && selectedGameday.id === day.id && !isNext
+      }));
+      const nextOpt = {
+        value: 'next',
+        label: `Nächster Spieltag (${formatDateDE(nextDate)})`,
+        selected: isNext || (!selectedGameday && !hasGamedays)
+      };
+      allOptions.push(nextOpt);
+      const currentLabel = (allOptions.find(o => o.selected) || allOptions[allOptions.length - 1]).label;
+    %>
+    <button type="button" class="gameday-picker-toggle" id="gamedayToggle"><%= currentLabel %></button>
+    <div class="gameday-picker-dropdown" id="gamedayDropdown">
+      <% allOptions.forEach((opt) => { %>
+        <button type="button" class="gameday-picker-option<%= opt.selected ? ' is-active' : '' %>" data-value="<%= opt.value %>"><%= opt.label %></button>
       <% }) %>
-      <option value="next" <%= isNext || (!selectedGameday && !hasGamedays) ? "selected" : "" %>>
-        Nächster Spieltag (<%= formatDateDE(nextDate) %>)
-      </option>
-    </select>
-    <button type="button" id="btnNext" title="Nächster Spieltag">►</button>
-  </nav>
+    </div>
+  </div>
+  <button type="button" id="btnNext" title="Nächster Spieltag">►</button>
+</nav>
 
+<section class="card fade-in">
   <% if (isNext || (!selectedGameday && !hasGamedays)) { %>
     <!-- Nächster Spieltag: Vorschau + Starten -->
     <div class="start-gameday-bar">

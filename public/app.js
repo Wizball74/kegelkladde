@@ -88,38 +88,57 @@ document.querySelectorAll("[data-confirm]").forEach((form) => {
   });
 });
 
-// Gameday navigation (Prev/Next + Dropdown)
-const gamedaySelect = document.getElementById("gamedaySelect");
+// Gameday navigation (Prev/Next + Custom Dropdown)
+const gamedayToggle = document.getElementById("gamedayToggle");
+const gamedayDropdown = document.getElementById("gamedayDropdown");
 const btnPrev = document.getElementById("btnPrev");
 const btnNext = document.getElementById("btnNext");
 
-if (gamedaySelect) {
+if (gamedayToggle && gamedayDropdown) {
+  const options = Array.from(gamedayDropdown.querySelectorAll(".gameday-picker-option"));
+  let currentIndex = options.findIndex(o => o.classList.contains("is-active"));
+  if (currentIndex < 0) currentIndex = options.length - 1;
+
   function updateNavButtons() {
-    if (btnPrev) btnPrev.disabled = gamedaySelect.selectedIndex === 0;
-    if (btnNext) btnNext.disabled = gamedaySelect.selectedIndex === gamedaySelect.options.length - 1;
+    if (btnPrev) btnPrev.disabled = currentIndex === 0;
+    if (btnNext) btnNext.disabled = currentIndex === options.length - 1;
   }
 
-  function navigateToSelected() {
-    const val = gamedaySelect.value;
+  function navigateTo(val) {
     window.location = "/kegelkladde?gamedayId=" + encodeURIComponent(val);
   }
 
-  gamedaySelect.addEventListener("change", navigateToSelected);
+  gamedayToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    gamedayDropdown.classList.toggle("is-open");
+    // Scroll active option into view
+    const active = gamedayDropdown.querySelector(".is-active");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  });
+
+  gamedayDropdown.addEventListener("click", (e) => {
+    const opt = e.target.closest(".gameday-picker-option");
+    if (opt) navigateTo(opt.dataset.value);
+  });
+
+  // Close on outside click
+  document.addEventListener("click", () => gamedayDropdown.classList.remove("is-open"));
+  gamedayDropdown.addEventListener("click", (e) => e.stopPropagation());
 
   if (btnPrev) {
     btnPrev.addEventListener("click", () => {
-      if (gamedaySelect.selectedIndex > 0) {
-        gamedaySelect.selectedIndex--;
-        navigateToSelected();
+      if (currentIndex > 0) {
+        currentIndex--;
+        navigateTo(options[currentIndex].dataset.value);
       }
     });
   }
 
   if (btnNext) {
     btnNext.addEventListener("click", () => {
-      if (gamedaySelect.selectedIndex < gamedaySelect.options.length - 1) {
-        gamedaySelect.selectedIndex++;
-        navigateToSelected();
+      if (currentIndex < options.length - 1) {
+        currentIndex++;
+        navigateTo(options[currentIndex].dataset.value);
       }
     });
   }
@@ -2177,6 +2196,350 @@ if (ranglistenSingleDay && ranglistenSelect) {
     }
   });
 }
+
+// Ranglisten: Spieltage segmented-bar view
+(function() {
+  var dataEl = document.getElementById("ranglistenData");
+  if (!dataEl) return;
+  var rlData;
+  try { rlData = JSON.parse(dataEl.textContent); } catch(e) { return; }
+  if (!rlData || !rlData.gamedays) return;
+
+  var ranglistenSelect = document.getElementById("ranglistenGameday");
+  var ranglistenSingleDay = document.getElementById("ranglistenSingleDay");
+
+  // Map gameday id → date string
+  var gdDateMap = {};
+  rlData.gamedays.forEach(function(gd) { gdDateMap[gd.id] = gd.date; });
+
+  // Color palette (vivid, high-contrast, varied hues)
+  var blockColors = [
+    "#e63946", "#2a9d8f", "#e9a820", "#4361ee", "#f77f00",
+    "#7b2d8e", "#06d6a0", "#d62828", "#457b9d", "#f4a261",
+    "#6a4c93", "#1db954", "#ef476f", "#118ab2", "#ffd166",
+    "#8338ec", "#06b6d4", "#ff6b35", "#2ec4b6", "#c1121f"
+  ];
+  function getBlockColor(idx) {
+    return blockColors[idx % blockColors.length];
+  }
+
+  function renderCrownsLocal(wins) {
+    return wins > 0 ? "\u{1F451}" + wins : "";
+  }
+
+  // Save original chart HTML for restoration
+  var originalHTML = {};
+  document.querySelectorAll(".tab-panel").forEach(function(panel) {
+    var chart = panel.querySelector(".hbar-chart");
+    if (chart) {
+      originalHTML[panel.id] = chart.innerHTML;
+    }
+  });
+
+  var spieltageActive = { monte: false, medaillen: false };
+
+  // Track current sort per type
+  var currentSort = { monte: null, medaillen: null };
+
+  function renderTable(chart, players, target, type, sortByGd) {
+    if (!chart) return;
+    var filtered = players.filter(function(p) { return p.total > 0; });
+
+    if (filtered.length === 0) {
+      chart.innerHTML = '<div class="empty-state"><p>Keine Daten vorhanden.</p></div>';
+      return;
+    }
+
+    // Collect ordered gameday IDs that actually have data
+    var allGdIds = [];
+    var gdIdSet = {};
+    rlData.gamedays.forEach(function(gd) {
+      filtered.forEach(function(p) {
+        p.perGameday.forEach(function(pg) {
+          if (pg.gamedayId === gd.id && !gdIdSet[gd.id]) {
+            gdIdSet[gd.id] = true;
+            allGdIds.push(gd.id);
+          }
+        });
+      });
+    });
+    var gdColorIdx = {};
+    allGdIds.forEach(function(id, i) { gdColorIdx[id] = i; });
+
+    // Build per-player gameday lookup (needed for sorting)
+    var pgMaps = {};
+    filtered.forEach(function(p) {
+      var m = {};
+      p.perGameday.forEach(function(pg) { m[pg.gamedayId] = pg.points; });
+      pgMaps[p.name] = m;
+    });
+
+    // Sort
+    var sorted;
+    if (sortByGd === '_carry') {
+      sorted = filtered.slice().sort(function(a, b) { return (b.carryover || 0) - (a.carryover || 0) || b.total - a.total; });
+    } else if (sortByGd === '_total') {
+      sorted = filtered.slice().sort(function(a, b) { return b.total - a.total; });
+    } else if (sortByGd) {
+      sorted = filtered.slice().sort(function(a, b) {
+        return (pgMaps[b.name][sortByGd] || 0) - (pgMaps[a.name][sortByGd] || 0) || b.total - a.total;
+      });
+    } else {
+      sorted = filtered.slice().sort(function(a, b) { return b.total - a.total; });
+    }
+
+    // Check if any player has carryover
+    var hasCarry = sorted.some(function(p) { return p.carryover > 0; });
+
+    // Max points per gameday column (determines column width)
+    var maxPerGd = {};
+    allGdIds.forEach(function(gdId) { maxPerGd[gdId] = 0; });
+    if (hasCarry) maxPerGd._carry = 0;
+    sorted.forEach(function(p) {
+      if (hasCarry && p.carryover > 0 && p.carryover > maxPerGd._carry) {
+        maxPerGd._carry = p.carryover;
+      }
+      p.perGameday.forEach(function(pg) {
+        if (pg.points > maxPerGd[pg.gamedayId]) {
+          maxPerGd[pg.gamedayId] = pg.points;
+        }
+      });
+    });
+
+    // Sum of max values → proportional column widths
+    var sumMax = 0;
+    if (hasCarry) sumMax += maxPerGd._carry;
+    allGdIds.forEach(function(gdId) { sumMax += maxPerGd[gdId]; });
+    if (sumMax === 0) sumMax = 1;
+
+    // Available width for data columns (subtract fixed info + crowns + total)
+    var dataPct = 72; // % of table width for data columns
+
+    // Build colgroup
+    var colgroupHtml = '<colgroup>' +
+      '<col class="st-col-info" style="width:145px;">' +
+      '<col class="st-col-crowns" style="width:36px;">';
+    if (hasCarry) {
+      var cw = (maxPerGd._carry / sumMax) * dataPct;
+      colgroupHtml += '<col style="width:' + cw + '%;">';
+    }
+    allGdIds.forEach(function(gdId) {
+      var cw = (maxPerGd[gdId] / sumMax) * dataPct;
+      colgroupHtml += '<col style="width:' + cw + '%;">';
+    });
+    colgroupHtml += '<col class="st-col-total" style="width:45px;"></colgroup>';
+
+    // Build header row
+    var theadHtml = '<thead><tr class="st-header">' +
+      '<th></th><th></th>'; // info + crowns columns empty
+    if (hasCarry) {
+      var carryActive = sortByGd === '_carry' ? ' st-sort-active' : '';
+      var carryLabel = '\u00dcbertrag' + (rlData.carryoverDate ? ', Stand ' + rlData.carryoverDate : '');
+      theadHtml += '<th class="st-head-cell st-head-sortable' + carryActive + '" data-sort-col="_carry"><span class="st-head-label" style="background:#a8c4b0;">' + carryLabel + '</span></th>';
+    }
+    allGdIds.forEach(function(gdId) {
+      var color = getBlockColor(gdColorIdx[gdId] || 0);
+      var dateStr = gdDateMap[gdId] || '';
+      var shortDate = dateStr.replace(/(\d{2})\.(\d{2})\.\d{2}(\d{2})/, '$1.$2.$3');
+      var isActive = sortByGd === gdId ? ' st-sort-active' : '';
+      theadHtml += '<th class="st-head-cell st-head-sortable' + isActive + '" data-sort-col="' + gdId + '"><span class="st-head-label" style="background:' + color + ';">' + shortDate + '</span></th>';
+    });
+    var totalActive = sortByGd === '_total' ? ' st-sort-active' : '';
+    theadHtml += '<th class="st-head-cell st-head-sortable' + totalActive + '" data-sort-col="_total"><span class="st-head-label" style="background:#555;">\u03A3</span></th>';
+    theadHtml += '</tr></thead>';
+
+    // Build rows
+    var rowsHtml = '';
+    sorted.forEach(function(p, i) {
+      var pgMap = pgMaps[p.name];
+
+      // Busted gamedays as a fast lookup (only for monte)
+      var bustedSet = {};
+      if (type === 'monte' && p.busted) {
+        p.busted.forEach(function(b) { bustedSet[b.gamedayId] = b.monte; });
+      }
+
+      // Present gamedays lookup
+      var presentSet = {};
+      if (p.presentGds) {
+        p.presentGds.forEach(function(gdId) { presentSet[gdId] = true; });
+      }
+
+      var delay = i * 50;
+      rowsHtml += '<tr style="animation-delay:' + delay + 'ms;">';
+      rowsHtml += '<td class="st-info"><span class="hbar-rank">' + (i + 1) +
+        '</span><span class="hbar-name">' + p.name + '</span></td>';
+      rowsHtml += '<td class="st-crowns">' + renderCrownsLocal(p.wins) + '</td>';
+
+      // Carryover column
+      if (hasCarry) {
+        if (p.carryover > 0) {
+          var barW = (p.carryover / maxPerGd._carry) * 100;
+          rowsHtml += '<td class="st-cell"><div class="st-bar" style="width:' + barW +
+            '%;background:#a8c4b0;" title="\u00dcbertrag: ' + p.carryover + ' Pkt."><span class="st-bar-val">' + p.carryover + '</span></div></td>';
+        } else {
+          rowsHtml += '<td class="st-cell"></td>';
+        }
+      }
+
+      // Gameday columns
+      allGdIds.forEach(function(gdId) {
+        var pts = pgMap[gdId] || 0;
+        if (pts > 0) {
+          var barW = (pts / maxPerGd[gdId]) * 100;
+          var color = getBlockColor(gdColorIdx[gdId] || 0);
+          var dateStr = gdDateMap[gdId] || '';
+          var shortDate = dateStr.replace(/(\d{2})\.(\d{2})\.\d{2}(\d{2})/, '$1.$2.$3');
+          rowsHtml += '<td class="st-cell"><div class="st-bar" data-gd="' + gdId +
+            '" style="width:' + barW + '%;background:' + color +
+            ';" title="' + shortDate + ': ' + pts + ' Pkt."><span class="st-bar-val">' + pts + '</span></div></td>';
+        } else if (bustedSet[gdId] != null) {
+          var mVal = bustedSet[gdId].toFixed(2).replace('.', ',');
+          rowsHtml += '<td class="st-cell st-busted" title="\u00fcber 2,00 \u20ac \u2013 busted!"><img src="/sheep_dead.png" alt="" class="st-busted-sheep" /><span class="st-busted-val">' + mVal + '\u20ac</span></td>';
+        } else if (!presentSet[gdId]) {
+          rowsHtml += '<td class="st-cell st-absent"></td>';
+        } else {
+          rowsHtml += '<td class="st-cell"></td>';
+        }
+      });
+
+      // Total column
+      rowsHtml += '<td class="st-total"><span class="hbar-inline-value">' + p.total + '</span></td>';
+      rowsHtml += '</tr>';
+    });
+
+    chart.innerHTML = '<table class="st-table">' + colgroupHtml +
+      theadHtml + '<tbody>' + rowsHtml + '</tbody></table>';
+    chart.classList.add("spieltage-view");
+
+    // Click handler for sortable headers
+    chart.querySelectorAll(".st-head-sortable").forEach(function(th) {
+      th.addEventListener("click", function() {
+        var col = th.getAttribute("data-sort-col");
+        // Toggle: click same column again → reset to default (total)
+        var newSort = (currentSort[type] === col) ? null : col;
+        currentSort[type] = newSort;
+        renderTable(chart, players, target, type, newSort);
+      });
+    });
+
+    if (ranglistenSelect && ranglistenSelect.value) {
+      applySegHighlight(chart, Number(ranglistenSelect.value));
+    }
+  }
+
+  function applySegHighlight(chart, gdId) {
+    var tbl = chart.querySelector(".st-table");
+    if (!tbl) return;
+    var bars = tbl.querySelectorAll(".st-bar[data-gd]");
+    var hasMatch = false;
+    bars.forEach(function(b) {
+      if (Number(b.getAttribute("data-gd")) === gdId) {
+        b.classList.add("seg-hl");
+        hasMatch = true;
+      } else {
+        b.classList.remove("seg-hl");
+      }
+    });
+    if (hasMatch) { tbl.classList.add("has-seg-hl"); }
+    else { tbl.classList.remove("has-seg-hl"); }
+  }
+
+  function clearSegHighlight(chart) {
+    var tbl = chart.querySelector(".st-table");
+    if (!tbl) {
+      chart.querySelectorAll(".has-seg-hl").forEach(function(t) { t.classList.remove("has-seg-hl"); });
+      chart.querySelectorAll(".seg-hl").forEach(function(b) { b.classList.remove("seg-hl"); });
+      return;
+    }
+    tbl.classList.remove("has-seg-hl");
+    tbl.querySelectorAll(".seg-hl").forEach(function(b) { b.classList.remove("seg-hl"); });
+  }
+
+  // Toggle handlers
+  document.querySelectorAll(".ranglisten-mode-toggle").forEach(function(toggle) {
+    var panel = toggle.closest(".tab-panel");
+    if (!panel) return;
+    var type = panel.id === "tab-monte" ? "monte" : "medaillen";
+    var hbarChart = panel.querySelector(".hbar-chart");
+    var hbarLegend = panel.querySelector(".hbar-legend");
+
+    toggle.querySelectorAll(".rmt-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var mode = btn.getAttribute("data-mode");
+        toggle.querySelectorAll(".rmt-btn").forEach(function(b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+
+        if (mode === "spieltage") {
+          spieltageActive[type] = true;
+          if (ranglistenSingleDay) ranglistenSingleDay.disabled = true;
+
+          // Bars drift to the right
+          if (hbarChart) {
+            hbarChart.classList.add("exiting");
+            hbarChart.classList.remove("entering");
+          }
+          if (hbarLegend) {
+            hbarLegend.classList.add("exiting");
+            hbarLegend.classList.remove("entering");
+          }
+
+          setTimeout(function() {
+            if (hbarChart) hbarChart.classList.remove("exiting");
+            if (hbarLegend) {
+              hbarLegend.style.display = "none";
+              hbarLegend.classList.remove("exiting");
+            }
+            // Render segmented bars (same row layout, bars split into gameday segments)
+            renderTable(hbarChart, rlData[type],
+              type === "monte" ? rlData.monteTarget : rlData.medaillenTarget, type);
+          }, 300);
+
+        } else {
+          spieltageActive[type] = false;
+          var otherType = type === "monte" ? "medaillen" : "monte";
+          if (ranglistenSingleDay && !spieltageActive[otherType]) {
+            ranglistenSingleDay.disabled = false;
+          }
+
+          // Segmented bars drift right, original bars grow back in
+          if (hbarChart) {
+            hbarChart.classList.add("exiting");
+          }
+
+          setTimeout(function() {
+            if (hbarChart && originalHTML[panel.id]) {
+              hbarChart.innerHTML = originalHTML[panel.id];
+              hbarChart.classList.remove("spieltage-view", "exiting");
+            }
+            if (hbarLegend) {
+              hbarLegend.style.display = "";
+            }
+          }, 300);
+        }
+      });
+    });
+  });
+
+  // Override dropdown in spieltage mode
+  if (ranglistenSelect) {
+    ranglistenSelect.addEventListener("change", function(e) {
+      var anyActive = spieltageActive.monte || spieltageActive.medaillen;
+      if (anyActive) {
+        e.stopImmediatePropagation();
+        var gdId = Number(ranglistenSelect.value) || 0;
+        ["monte", "medaillen"].forEach(function(type) {
+          if (!spieltageActive[type]) return;
+          var panel = document.getElementById("tab-" + type);
+          var chart = panel ? panel.querySelector(".hbar-chart") : null;
+          if (!chart) return;
+          if (gdId) { applySegHighlight(chart, gdId); }
+          else { clearSegHighlight(chart); }
+        });
+      }
+    }, true);
+  }
+})();
 
 // Celebration overlay for round wins
 function showCelebration(items) {

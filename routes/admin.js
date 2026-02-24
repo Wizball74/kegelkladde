@@ -1,5 +1,7 @@
 const express = require("express");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, getRecentAuditLog, getUsersWithLastLogin } = require("../models/db");
+const path = require("path");
+const fs = require("fs");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, getRecentAuditLog, getUsersWithLastLogin, createBackup, rotateBackups, listBackups, listBackupGamedays, restoreGamedays, backupDir } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize, formatEuro } = require("../utils/helpers");
 
@@ -30,6 +32,8 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
   const gagRow = db.prepare("SELECT value FROM settings WHERE key = 'gag_animations'").get();
   const gagAnimations = gagRow ? gagRow.value : "1";
 
+  const backups = listBackups();
+
   res.render("admin", {
     kassenstand,
     kassenstandStart,
@@ -39,7 +43,8 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
     formatEuro,
     auditLog,
     usersLastLogin,
-    gagAnimations
+    gagAnimations,
+    backups
   });
 });
 
@@ -165,6 +170,104 @@ router.post("/admin/toggle-gags", requireAuth, requireAdmin, verifyCsrf, (req, r
   logAudit(req.session.userId, "GAG_ANIMATIONS_TOGGLE", "settings", null, { enabled: newVal === "1" });
   req.session.flash = { type: "success", message: newVal === "1" ? "Gag-Animationen aktiviert." : "Gag-Animationen deaktiviert." };
   res.redirect("/admin");
+});
+
+// --- Backup-Endpoints ---
+
+// Manuelles Backup erstellen
+router.post("/admin/backup/create", requireAuth, requireAdmin, verifyCsrf, async (req, res) => {
+  try {
+    const userName = req.session.user ? req.session.user.firstName : "Admin";
+    await createBackup(`Manuell (${userName})`);
+    rotateBackups(10);
+    logAudit(req.session.userId, "BACKUP_CREATE", "backup", null);
+    req.session.flash = { type: "success", message: "Sicherung erstellt." };
+  } catch (err) {
+    console.error("[Backup] Fehler:", err.message);
+    req.session.flash = { type: "error", message: "Sicherung fehlgeschlagen: " + err.message };
+  }
+  res.redirect("/admin#sicherung");
+});
+
+// Backup herunterladen
+router.get("/admin/backup/download/:filename", requireAuth, requireAdmin, (req, res) => {
+  const filename = req.params.filename;
+  if (!/^kegelkladde_\d{4}-\d{2}-\d{2}_\d{6}\.db$/.test(filename)) {
+    return res.status(400).send("Ungültiger Dateiname.");
+  }
+  const filePath = path.join(backupDir, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("Backup nicht gefunden.");
+  }
+  res.download(filePath, filename);
+});
+
+// Backup löschen
+router.post("/admin/backup/delete", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const filename = String(req.body.filename || "");
+  if (!/^kegelkladde_\d{4}-\d{2}-\d{2}_\d{6}\.db$/.test(filename)) {
+    req.session.flash = { type: "error", message: "Ungültiger Dateiname." };
+    return res.redirect("/admin#sicherung");
+  }
+  const filePath = path.join(backupDir, filename);
+  if (!fs.existsSync(filePath)) {
+    req.session.flash = { type: "error", message: "Backup nicht gefunden." };
+    return res.redirect("/admin#sicherung");
+  }
+  fs.unlinkSync(filePath);
+  const metaFile = filePath + ".meta.json";
+  if (fs.existsSync(metaFile)) fs.unlinkSync(metaFile);
+  logAudit(req.session.userId, "BACKUP_DELETE", "backup", null, { filename });
+  req.session.flash = { type: "success", message: "Sicherung gelöscht." };
+  res.redirect("/admin#sicherung");
+});
+
+// Spieltage eines Backups auflisten (JSON für Modal)
+router.get("/admin/backup/gamedays/:filename", requireAuth, requireAdmin, (req, res) => {
+  const filename = req.params.filename;
+  if (!/^kegelkladde_\d{4}-\d{2}-\d{2}_\d{6}\.db$/.test(filename)) {
+    return res.status(400).json({ error: "Ungültiger Dateiname." });
+  }
+  try {
+    const gamedays = listBackupGamedays(filename);
+    res.json({ gamedays });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ausgewählte Spieltage aus Backup wiederherstellen
+router.post("/admin/backup/restore", requireAuth, requireAdmin, verifyCsrf, async (req, res) => {
+  const filename = String(req.body.filename || "");
+  if (!/^kegelkladde_\d{4}-\d{2}-\d{2}_\d{6}\.db$/.test(filename)) {
+    return res.status(400).json({ error: "Ungültiger Dateiname." });
+  }
+
+  const raw = req.body.gamedayIds;
+  let gamedayIds;
+  try {
+    const arr = Array.isArray(raw) ? raw : JSON.parse(raw || "[]");
+    gamedayIds = arr.map(Number).filter(Number.isInteger);
+  } catch {
+    return res.status(400).json({ error: "Ungültige Spieltag-IDs." });
+  }
+
+  if (gamedayIds.length === 0) {
+    return res.status(400).json({ error: "Keine Spieltage ausgewählt." });
+  }
+
+  try {
+    const userName = req.session.user ? req.session.user.firstName : "Admin";
+    await createBackup(`Vor Wiederherstellung (${userName})`);
+    rotateBackups(10);
+
+    const result = restoreGamedays(filename, gamedayIds);
+    logAudit(req.session.userId, "BACKUP_RESTORE", "backup", null, { filename, gamedayIds, restoredCount: result.restoredCount });
+    res.json({ ok: true, message: `${result.restoredCount} Spieltag(e) wiederhergestellt.` });
+  } catch (err) {
+    console.error("[Backup] Restore fehlgeschlagen:", err.message);
+    res.status(500).json({ error: "Wiederherstellung fehlgeschlagen: " + err.message });
+  }
 });
 
 // API: Kassenstand als JSON (Spieltag-bezogen)

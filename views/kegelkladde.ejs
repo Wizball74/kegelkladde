@@ -98,7 +98,7 @@
             <th class="game-col"><span class="head-label">Monte</span></th>
             <th class="game-col"><span class="head-label">Aussteigen</span></th>
             <th class="game-col"><span class="head-label">6-Tage</span></th>
-            <th><span class="head-label">Zu zahlen</span></th>
+            <th class="topay-th"><span class="head-label">Zu zahlen</span></th>
           </tr>
         </thead>
         <tbody>
@@ -166,10 +166,10 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <col style="width: 52px;" /><!-- Beitrag -->
             <col style="width: 52px;" /><!-- Strafen -->
             <% } %>
-            <col style="width: 60px;" /><!-- 9er -->
-            <col style="width: 60px;" /><!-- Kranz -->
-            <col style="width: 60px;" /><!-- Triclops -->
-            <col style="width: 60px;" /><!-- Pudel -->
+            <col style="width: <%= status >= 2 ? 40 : 60 %>px;" /><!-- 9er -->
+            <col style="width: <%= status >= 2 ? 40 : 60 %>px;" /><!-- Kranz -->
+            <col style="width: <%= status >= 2 ? 40 : 60 %>px;" /><!-- Triclops -->
+            <col style="width: <%= status >= 2 ? 40 : 60 %>px;" /><!-- Pudel -->
             <col style="width: 44px;" /><!-- V+A -->
             <col style="width: 56px;" /><!-- Monte (+ Radio) -->
             <col style="width: 44px;" /><!-- Aussteigen -->
@@ -179,6 +179,9 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <% }) %>
             <% if (status <= 1) { %>
             <col style="width: 44px;" /><!-- Neue Spalte -->
+            <% } %>
+            <% if (status >= 2) { %>
+            <col style="width: 62px;" /><!-- Spieltag gesamt -->
             <% } %>
             <col style="width: 62px;" /><!-- Zu zahlen -->
             <% if (status >= 2) { %>
@@ -199,13 +202,14 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <th title="Kranz"><span class="head-label">Kränze</span></th>
               <th><span class="head-label">Triclops</span></th>
               <th><span class="head-label">Pudel</span></th>
-              <th class="game-col"><span class="head-label">V+A</span></th>
-              <th class="game-col"><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt)</span></span></th>
-              <th class="game-col"><span class="head-label">Aussteigen</span></th>
-              <th class="game-col"><span class="head-label">6-Tage-Rennen</span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="va" title="Live: V+A"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label">V+A</span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="monte" title="Live: Monte"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt)</span></span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="aussteigen" title="Live: Aussteigen"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label">Aussteigen</span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="sechs_tage" title="Live: 6-Tage-Rennen"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label">6-Tage-Rennen</span></th>
               <% customGames.forEach((cg) => { %>
               <% if (status <= 1) { %>
               <th class="game-col custom-game-th" data-custom-game-th="<%= cg.id %>">
+                <% if (isAdmin) { %><button type="button" class="live-game-btn" data-live-start="cg_<%= cg.id %>" title="Live: <%= cg.name %>"><img src="/live.png" alt="Live" /></button><% } %>
                 <input type="text" class="custom-game-header-input" value="<%= cg.name %>"
                        data-custom-game-rename="<%= cg.id %>" data-original-name="<%= cg.name %>" />
                 <button type="button" class="custom-game-delete-btn" data-custom-game-delete="<%= cg.id %>"
@@ -218,7 +222,10 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <% if (status <= 1) { %>
               <th class="game-col"><input type="text" class="custom-game-header-input" placeholder="Neues Spiel..." data-new-game-header /></th>
               <% } %>
-              <th><span class="head-label"><%= status === 1 ? 'Kosten Spieltag' : 'Zu zahlen' %></span></th>
+              <% if (status >= 2) { %>
+              <th><span class="head-label">Spieltag gesamt</span></th>
+              <% } %>
+              <th class="topay-th"><span class="head-label"><%= status === 1 ? 'Kosten Spieltag' : 'Zu zahlen' %></span></th>
               <% if (status >= 2) { %>
               <th><span class="head-label">Gezahlt</span></th>
               <th><span class="head-label">Rest</span></th>
@@ -237,6 +244,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
               const canEditMarks = status <= 1;
               const canEditPresent = canEditMarks;
               const isEditable = canEditMarks;
+              const canEditPenalties = status <= 2;
               const canEdit = canEditMarks && hit.present;
               const canEditPaid = status === 2;
             %>
@@ -271,7 +279,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                 <td data-label="Beitrag">
                   <span class="money-text"><%= formatEuro(hit.contribution || 0) %> €</span>
                 </td>
-                <td data-label="Strafen"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= Number(hit.penalties || 0).toFixed(2) %>" name="penalties_<%= member.id %>" class="mini-number no-spin" <%= isEditable ? "" : "disabled" %> data-field data-always-edit />&euro;</span></td>
+                <td data-label="Strafen"><span class="money-inline"><input type="number" min="0" max="999" step="0.10" value="<%= (status <= 1 && !hit.present && Number(hit.penalties || 0) === 0) ? '' : Number(hit.penalties || 0).toFixed(2) %>" placeholder="<%= (status <= 1 && !hit.present && Number(hit.penalties || 0) === 0) ? 'TBD' : '' %>" name="penalties_<%= member.id %>" class="mini-number no-spin" <%= canEditPenalties ? "" : "disabled" %> data-field data-always-edit />&euro;</span></td>
                 <% } %>
                 <td class="marker-cell" data-label="9er">
                   <div class="marker-controls">
@@ -350,6 +358,13 @@ Spieltag starten, um die Kladde zu bearbeiten.
                     : (hit.present ? (hit.contribution || 0) + (hit.penalties || 0) + pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + gameCosts + customGameTotal + carryover : (hit.contribution || 0) + (hit.penalties || 0) + carryover);
                   const rest = toPay - paid;
                 %>
+                <% if (status >= 2) {
+                  const gameTotal = hit.present ? pudelCostCalc + alle9CostCalc + kranzCostCalc + triclopsCostCalc + gameCosts + customGameTotal : 0;
+                %>
+                <td data-label="Spieltag gesamt">
+                  <span class="money-text" data-game-total><%= formatEuro(gameTotal) %> &euro;</span>
+                </td>
+                <% } %>
                 <td class="topay-col" data-label="<%= status === 1 ? 'Kosten Spieltag' : 'Zu zahlen' %>">
                   <span class="money-text" data-topay><%= formatEuro(toPay) %> &euro;</span>
                 </td>
@@ -369,6 +384,43 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <% }) %>
           </tbody>
         </table>
+    </div>
+    <div id="liveView" class="live-view" style="display:none;">
+      <div class="live-sidebar">
+        <div class="live-sidebar-header">
+          <span class="live-sidebar-title" id="liveSidebarTitle">Live-Modus</span>
+          <button type="button" class="live-close-btn" id="btnLiveClose" title="Zurück zur Tabelle">&times;</button>
+        </div>
+        <div id="liveShuffle" class="live-shuffle-area"></div>
+        <div id="livePlayers" class="live-players"></div>
+      </div>
+      <div class="live-main">
+        <div class="live-game-nav" id="liveGameNav" style="display:none">
+          <button type="button" class="live-game-prev" id="btnLivePrev" title="Letztes Spiel" style="display:none">&#9664; Zurück</button>
+          <span class="live-game-label" id="liveGameLabel"></span>
+          <button type="button" class="live-game-next" id="btnLiveNext" title="Nächstes Spiel">Weiter &#9654;</button>
+        </div>
+        <div class="live-game-content" id="liveGameContent"></div>
+      </div>
+      <canvas id="liveFxCanvas" class="live-fx-canvas"></canvas>
+      <svg class="electric-svg-defs" aria-hidden="true">
+        <defs>
+          <filter id="electricDisplace" colorInterpolationFilters="sRGB" x="-40%" y="-40%" width="180%" height="180%">
+            <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="4" result="n1" seed="1"/>
+            <feOffset in="n1" dx="0" dy="0" result="on1"><animate attributeName="dy" values="80;0" dur="2.5s" repeatCount="indefinite" calcMode="linear"/></feOffset>
+            <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="4" result="n2" seed="1"/>
+            <feOffset in="n2" dx="0" dy="0" result="on2"><animate attributeName="dy" values="0;-80" dur="2.5s" repeatCount="indefinite" calcMode="linear"/></feOffset>
+            <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="4" result="n3" seed="3"/>
+            <feOffset in="n3" dx="0" dy="0" result="on3"><animate attributeName="dx" values="60;0" dur="3.7s" repeatCount="indefinite" calcMode="linear"/></feOffset>
+            <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="4" result="n4" seed="3"/>
+            <feOffset in="n4" dx="0" dy="0" result="on4"><animate attributeName="dx" values="0;-60" dur="3.7s" repeatCount="indefinite" calcMode="linear"/></feOffset>
+            <feComposite in="on1" in2="on2" result="p1"/>
+            <feComposite in="on3" in2="on4" result="p2"/>
+            <feBlend in="p1" in2="p2" mode="color-dodge" result="combined"/>
+            <feDisplacementMap in="SourceGraphic" in2="combined" scale="10" xChannelSelector="R" yChannelSelector="B"/>
+          </filter>
+        </defs>
+      </svg>
     </div>
     </div>
 
@@ -435,6 +487,9 @@ Spieltag starten, um die Kladde zu bearbeiten.
         </p>
         <div class="settle-actions">
           <% if (isAdmin) { %>
+            <% if (status === 2) { %>
+              <button type="button" class="btn-secondary btn-sm" id="btnPenaltyDetails" data-gameday-id="<%= selectedGameday.id %>">Strafen-Berechnung</button>
+            <% } %>
             <% if (status > 0) { %>
               <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurücksetzen?">
                 <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
@@ -454,6 +509,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
               <button type="submit" class="btn-danger btn-sm">Löschen</button>
             </form>
+            <button type="button" class="btn-new-gameday btn-sm" onclick="location.href='/kegelkladde?gamedayId=next'">+ Neuer Spieltag</button>
           <% } %>
         </div>
       </div>
@@ -520,6 +576,20 @@ Spieltag starten, um die Kladde zu bearbeiten.
       </div>
     </div>
 
+    <% if (isAdmin && status === 2) { %>
+    <!-- Strafen-Modal -->
+    <div class="modal-overlay" id="penaltyModal">
+      <div class="modal" style="max-width: 600px;">
+        <h3>Strafen-Berechnung</h3>
+        <div id="penaltyModalContent"><p style="color: var(--muted);">Lade...</p></div>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn-primary btn-sm" id="btnRecalcPenalties">Strafen neu berechnen</button>
+          <button type="button" class="btn-secondary btn-sm" onclick="document.getElementById('penaltyModal').classList.remove('active')">Schließen</button>
+        </div>
+      </div>
+    </div>
+    <% } %>
+
   <% } %>
 </section>
 
@@ -530,5 +600,105 @@ Spieltag starten, um die Kladde zu bearbeiten.
       if (e.target === overlay) overlay.classList.remove('active');
     });
   });
+
+  // Strafen-Modal Logik
+  (function() {
+    var btn = document.getElementById('btnPenaltyDetails');
+    var modal = document.getElementById('penaltyModal');
+    var content = document.getElementById('penaltyModalContent');
+    var recalcBtn = document.getElementById('btnRecalcPenalties');
+    if (!btn || !modal) return;
+
+    var gamedayId = btn.dataset.gamedayId;
+
+    function formatEuro(val) {
+      return Number(val).toFixed(2).replace('.', ',');
+    }
+
+    function renderDetails(data) {
+      var html = '';
+
+      // Anwesende Spieler mit Kostenaufschlüsselung
+      html += '<h4 style="margin: 0 0 0.5rem; font-size: 0.95rem;">Spielkosten der Anwesenden</h4>';
+      html += '<table class="penalty-detail-table">';
+      html += '<thead><tr><th>Spieler</th><th>9er</th><th>Kränze</th><th>Tricl.</th><th>Pudel</th><th>Spiele</th><th>Gesamt</th></tr></thead>';
+      html += '<tbody>';
+      data.presentPlayers.forEach(function(p) {
+        var isMin = p.total === data.minGameCost && data.minGameCost > 0;
+        html += '<tr' + (isMin ? ' class="penalty-row-min"' : '') + '>';
+        html += '<td>' + p.name + '</td>';
+        html += '<td>' + formatEuro(p.alle9Cost) + '</td>';
+        html += '<td>' + formatEuro(p.kranzCost) + '</td>';
+        html += '<td>' + formatEuro(p.triclopsCost) + '</td>';
+        html += '<td>' + formatEuro(p.pudelCost) + '</td>';
+        html += '<td>' + formatEuro(p.gameCosts) + '</td>';
+        html += '<td><strong>' + formatEuro(p.total) + ' &euro;</strong></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+
+      // Ergebnis
+      if (data.minGameCost > 0 && data.cheapestPlayer) {
+        html += '<p class="penalty-result">Günstigster Spieler: <strong>' + data.cheapestPlayer + '</strong> mit <strong>' + formatEuro(data.minGameCost) + ' &euro;</strong></p>';
+      }
+
+      // Abwesende Spieler
+      if (data.absentPlayers.length > 0) {
+        html += '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.95rem;">Abwesende Spieler</h4>';
+        html += '<table class="penalty-detail-table">';
+        html += '<thead><tr><th>Spieler</th><th>Strafe</th><th>Quelle</th></tr></thead>';
+        html += '<tbody>';
+        data.absentPlayers.forEach(function(a) {
+          html += '<tr>';
+          html += '<td>' + a.name + '</td>';
+          html += '<td><strong>' + formatEuro(a.currentPenalty) + ' &euro;</strong></td>';
+          html += '<td>' + (a.isManual ? '<span class="badge badge-warning">Manuell</span>' : '<span class="badge badge-info">Auto</span>') + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      } else {
+        html += '<p style="color: var(--muted); margin-top: 0.75rem;">Keine abwesenden Spieler.</p>';
+      }
+
+      content.innerHTML = html;
+    }
+
+    function loadDetails() {
+      content.innerHTML = '<p style="color: var(--muted);">Lade...</p>';
+      fetch('/kegelkladde/penalty-details?gamedayId=' + gamedayId)
+        .then(function(r) { return r.json(); })
+        .then(renderDetails)
+        .catch(function() { content.innerHTML = '<p style="color: var(--error);">Fehler beim Laden.</p>'; });
+    }
+
+    btn.addEventListener('click', function() {
+      modal.classList.add('active');
+      loadDetails();
+    });
+
+    recalcBtn.addEventListener('click', function() {
+      recalcBtn.disabled = true;
+      recalcBtn.textContent = 'Berechne...';
+      var csrfToken = document.querySelector('[name="csrfToken"]')?.value || '';
+      fetch('/kegelkladde/recalc-penalties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ gamedayId: Number(gamedayId), csrfToken: csrfToken })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        renderDetails(data);
+        recalcBtn.disabled = false;
+        recalcBtn.textContent = 'Strafen neu berechnen';
+        // Seite aktualisieren um neue Werte in der Tabelle zu zeigen
+        setTimeout(function() { location.reload(); }, 800);
+      })
+      .catch(function() {
+        content.innerHTML = '<p style="color: var(--error);">Fehler beim Neuberechnen.</p>';
+        recalcBtn.disabled = false;
+        recalcBtn.textContent = 'Strafen neu berechnen';
+      });
+    });
+  })();
 </script>
 <%- include("partials/bottom") %>

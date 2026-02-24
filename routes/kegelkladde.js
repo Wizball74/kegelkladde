@@ -1,12 +1,76 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
 const router = express.Router();
 const DEFAULT_CONTRIBUTION_EUR = 4.0;
+
+// Hilfsfunktion: Strafen-Details für einen Spieltag berechnen
+function calculatePenaltyDetails(gamedayId) {
+  const members = getOrderedMembers();
+  const memberMap = new Map();
+  for (const m of members) memberMap.set(m.id, m);
+  // Auch Gäste mit Attendance-Record einbeziehen
+  const allUsers = db.prepare("SELECT id, first_name, last_name, is_guest FROM users").all();
+  for (const u of allUsers) memberMap.set(u.id, u);
+
+  const rows = db.prepare(
+    `SELECT user_id, present, pudel, alle9, kranz, triclops, penalties, va, monte, aussteigen, sechs_tage
+     FROM attendance WHERE gameday_id = ?`
+  ).all(gamedayId);
+
+  const customVals = new Map();
+  const cvRows = db.prepare(
+    `SELECT user_id, SUM(amount) as total FROM custom_game_values WHERE gameday_id = ? GROUP BY user_id`
+  ).all(gamedayId);
+  for (const cv of cvRows) customVals.set(cv.user_id, cv.total || 0);
+
+  let totalAlle9 = 0, totalKranz = 0, totalTriclops = 0;
+  for (const r of rows) {
+    if (r.present) {
+      totalAlle9 += r.alle9;
+      totalKranz += r.kranz;
+      totalTriclops += r.triclops;
+    }
+  }
+
+  const presentPlayers = [];
+  const absentRaw = [];
+
+  for (const r of rows) {
+    const m = memberMap.get(r.user_id);
+    const name = m ? `${m.first_name} ${m.last_name || ''}`.trim() : `Spieler ${r.user_id}`;
+
+    if (r.present) {
+      const pudelCost = Math.round(r.pudel * 10) / 100;
+      const alle9Cost = Math.round((totalAlle9 - r.alle9) * 10) / 100;
+      const kranzCost = Math.round((totalKranz - r.kranz) * 10) / 100;
+      const triclopsCost = Math.round((totalTriclops - r.triclops) * 10) / 100;
+      const gameCosts = Math.round(((r.va || 0) + (r.monte || 0) + (r.aussteigen || 0) + (r.sechs_tage || 0) + (customVals.get(r.user_id) || 0)) * 100) / 100;
+      const total = Math.round((pudelCost + alle9Cost + kranzCost + triclopsCost + gameCosts) * 100) / 100;
+
+      presentPlayers.push({ userId: r.user_id, name, pudelCost, alle9Cost, kranzCost, triclopsCost, gameCosts, total });
+    } else {
+      absentRaw.push({ userId: r.user_id, name, currentPenalty: r.penalties });
+    }
+  }
+
+  presentPlayers.sort((a, b) => a.total - b.total);
+  const minGameCost = presentPlayers.length > 0 ? presentPlayers[0].total : 0;
+  const cheapestPlayer = presentPlayers.length > 0 ? presentPlayers[0].name : null;
+
+  // isManual: Strafe weicht vom berechneten Minimum ab (0 = noch nicht gesetzt, minGameCost = auto)
+  const roundedMin = Math.round(minGameCost * 100) / 100;
+  const absentPlayers = absentRaw.map(a => ({
+    ...a,
+    isManual: a.currentPenalty > 0 && Math.round(a.currentPenalty * 100) / 100 !== roundedMin
+  }));
+
+  return { presentPlayers, absentPlayers, minGameCost, cheapestPlayer };
+}
 
 // In-memory edit locks: key "gamedayId_memberId" → { userId, firstName, lockedAt }
 const editLocks = new Map();
@@ -322,7 +386,8 @@ router.post("/kegelkladde/attendance-auto", requireAuth, verifyCsrf, (req, res) 
     ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, monte_tiebreak, aussteigen_tiebreak, gamedayId, memberId);
   } else if (dayExists.settled === 2) {
     const paid = Math.max(0, Math.round((Number.parseFloat(req.body.paid) || 0) * 100) / 100);
-    db.prepare("UPDATE attendance SET paid = ? WHERE gameday_id = ? AND user_id = ?").run(paid, gamedayId, memberId);
+    const penalties = Math.max(0, Math.min(999, Math.round((Number.parseFloat(req.body.penalties) || 0) * 100) / 100));
+    db.prepare("UPDATE attendance SET paid = ?, penalties = ? WHERE gameday_id = ? AND user_id = ?").run(paid, penalties, gamedayId, memberId);
   }
 
   res.json({ ok: true });
@@ -382,10 +447,27 @@ router.post("/kegelkladde/struck-game", requireAuth, verifyCsrf, (req, res) => {
   res.json({ ok: true, struck: !!struck[gameKey] });
 });
 
+// Strafen automatisch eintragen (günstigster Spieler → Abwesende)
+function applyAutoPenalties(gamedayId) {
+  const details = calculatePenaltyDetails(gamedayId);
+  if (details.minGameCost > 0) {
+    const roundedPenalty = Math.round(details.minGameCost * 100) / 100;
+    const updatePenalty = db.prepare(
+      "UPDATE attendance SET penalties = ? WHERE gameday_id = ? AND user_id = ? AND present = 0 AND penalties = 0"
+    );
+    for (const a of details.absentPlayers) {
+      if (!a.isManual) {
+        updatePenalty.run(roundedPenalty, gamedayId, a.userId);
+      }
+    }
+  }
+  return details;
+}
+
 // Status: 0=Noch nicht begonnen, 1=Gut Holz!, 2=Abrechnung, 3=Archiv
 const STATUS_LABELS = ["Noch nicht begonnen", "Spieltag läuft - gut Holz!", "Abrechnung", "Archiv"];
 
-router.post("/kegelkladde/advance-status", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+router.post("/kegelkladde/advance-status", requireAuth, requireAdmin, verifyCsrf, async (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
     return res.redirect("/kegelkladde");
@@ -396,6 +478,21 @@ router.post("/kegelkladde/advance-status", requireAuth, requireAdmin, verifyCsrf
     return res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
   }
   const newStatus = day.settled + 1;
+
+  // Automatisches Backup vor Status-Wechsel
+  try {
+    const userName = req.session.user ? req.session.user.firstName : "Admin";
+    await createBackup(`Automatisch / Status-Wechsel (${userName})`);
+    rotateBackups(10);
+  } catch (err) {
+    console.error("[Backup] Auto-Backup fehlgeschlagen:", err.message);
+  }
+
+  // Bei Wechsel zu Abrechnung: Strafen für Abwesende automatisch berechnen
+  if (newStatus === 2) {
+    applyAutoPenalties(gamedayId);
+  }
+
   db.prepare("UPDATE gamedays SET settled = ? WHERE id = ?").run(newStatus, gamedayId);
 
   logAudit(req.session.userId, "GAMEDAY_STATUS_ADVANCE", "gameday", gamedayId, { from: day.settled, to: newStatus });
@@ -423,6 +520,41 @@ router.post("/kegelkladde/revert-status", requireAuth, requireAdmin, verifyCsrf,
   res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
 });
 
+// Strafen-Details als JSON (für Modal)
+router.get("/kegelkladde/penalty-details", requireAuth, requireAdmin, (req, res) => {
+  const gamedayId = Number.parseInt(req.query.gamedayId, 10);
+  if (!Number.isInteger(gamedayId)) return res.status(400).json({ error: "Ungültige ID." });
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled < 2) return res.status(400).json({ error: "Nur im Status Abrechnung verfügbar." });
+  res.json(calculatePenaltyDetails(gamedayId));
+});
+
+// Strafen neu berechnen (Reset nicht-manueller Strafen + Neuberechnung)
+router.post("/kegelkladde/recalc-penalties", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  if (!Number.isInteger(gamedayId)) return res.status(400).json({ error: "Ungültige ID." });
+  const day = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!day || day.settled < 2) return res.status(400).json({ error: "Nur im Status Abrechnung verfügbar." });
+
+  // Erst Details berechnen, um zu wissen welche Strafen automatisch gesetzt wurden
+  const before = calculatePenaltyDetails(gamedayId);
+  // Alle nicht-manuellen Strafen (= die dem alten minGameCost entsprechen) auf 0 zurücksetzen
+  const resetStmt = db.prepare(
+    "UPDATE attendance SET penalties = 0 WHERE gameday_id = ? AND user_id = ? AND present = 0"
+  );
+  for (const a of before.absentPlayers) {
+    if (!a.isManual) {
+      resetStmt.run(gamedayId, a.userId);
+    }
+  }
+  // Neu berechnen + eintragen
+  const details = applyAutoPenalties(gamedayId);
+  // Frische Details nach dem Eintragen lesen
+  const after = calculatePenaltyDetails(gamedayId);
+  logAudit(req.session.userId, "PENALTIES_RECALC", "gameday", gamedayId, { penalty: after.minGameCost });
+  res.json(after);
+});
+
 router.post("/kegelkladde/delete", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const gamedayId = Number.parseInt(req.body.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
@@ -434,6 +566,8 @@ router.post("/kegelkladde/delete", requireAuth, requireAdmin, verifyCsrf, (req, 
     return res.redirect("/kegelkladde");
   }
 
+  db.prepare("DELETE FROM monte_rounds WHERE gameday_id = ?").run(gamedayId);
+  db.prepare("DELETE FROM monte_round_meta WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM gameday_entries WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM custom_game_values WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM custom_games WHERE gameday_id = ?").run(gamedayId);
@@ -792,6 +926,85 @@ router.post("/kegelkladde/remove-guest", requireAuth, requireAdmin, verifyCsrf, 
   req.session.flash = { type: "success", message: `Gast ${guest.first_name} entfernt.` };
 
   res.redirect(`/kegelkladde?gamedayId=${gamedayId}`);
+});
+
+// --- Monte-Runden (Live-Modus) ---
+
+router.get("/kegelkladde/monte-rounds", requireAuth, (req, res) => {
+  const gamedayId = Number.parseInt(req.query.gamedayId, 10);
+  if (!Number.isInteger(gamedayId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const rounds = db.prepare("SELECT user_id, round_number, roll_value FROM monte_rounds WHERE gameday_id = ?").all(gamedayId);
+  const meta = db.prepare("SELECT question_value FROM monte_round_meta WHERE gameday_id = ?").get(gamedayId);
+  const { totals, extraWinnerId } = calculateMonteTotals(gamedayId);
+
+  res.json({
+    rounds,
+    questionValue: meta ? meta.question_value : null,
+    totals,
+    extraWinnerId
+  });
+});
+
+router.post("/kegelkladde/monte-round", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const memberId = Number.parseInt(req.body.memberId, 10);
+  const roundNumber = Number.parseInt(req.body.roundNumber, 10);
+  const rawValue = req.body.rollValue;
+  const rollValue = rawValue === null || rawValue === "" || rawValue === undefined ? null : Number.parseInt(rawValue, 10);
+
+  if (!Number.isInteger(gamedayId) || !Number.isInteger(memberId) || !Number.isInteger(roundNumber)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+  if (roundNumber < 1 || roundNumber > 11) {
+    return res.status(400).json({ error: "Ungültige Rundennummer." });
+  }
+
+  const dayExists = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists || dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag nicht bearbeitbar." });
+  }
+
+  if (rollValue === null) {
+    db.prepare("DELETE FROM monte_rounds WHERE gameday_id = ? AND user_id = ? AND round_number = ?").run(gamedayId, memberId, roundNumber);
+  } else {
+    db.prepare(
+      `INSERT INTO monte_rounds (gameday_id, user_id, round_number, roll_value) VALUES (?, ?, ?, ?)
+       ON CONFLICT(gameday_id, user_id, round_number) DO UPDATE SET roll_value = excluded.roll_value`
+    ).run(gamedayId, memberId, roundNumber, rollValue);
+  }
+
+  const { totals, extraWinnerId } = calculateMonteTotals(gamedayId);
+  res.json({ ok: true, totals, extraWinnerId });
+});
+
+router.post("/kegelkladde/monte-question", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const rawValue = req.body.questionValue;
+  const questionValue = rawValue === null || rawValue === "" || rawValue === undefined ? null : Number.parseInt(rawValue, 10);
+
+  if (!Number.isInteger(gamedayId)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const dayExists = db.prepare("SELECT id, settled FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists || dayExists.settled > 1) {
+    return res.status(400).json({ error: "Spieltag nicht bearbeitbar." });
+  }
+
+  if (questionValue === null) {
+    db.prepare("DELETE FROM monte_round_meta WHERE gameday_id = ?").run(gamedayId);
+  } else {
+    db.prepare(
+      `INSERT INTO monte_round_meta (gameday_id, question_value) VALUES (?, ?)
+       ON CONFLICT(gameday_id) DO UPDATE SET question_value = excluded.question_value`
+    ).run(gamedayId, questionValue);
+  }
+
+  const { totals, extraWinnerId } = calculateMonteTotals(gamedayId);
+  res.json({ ok: true, totals, extraWinnerId });
 });
 
 module.exports = router;

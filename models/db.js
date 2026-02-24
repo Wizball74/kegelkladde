@@ -254,6 +254,22 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS monte_rounds (
+    gameday_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    round_number INTEGER NOT NULL,
+    roll_value INTEGER,
+    PRIMARY KEY(gameday_id, user_id, round_number),
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS monte_round_meta (
+    gameday_id INTEGER PRIMARY KEY,
+    question_value INTEGER,
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE
+  );
 `);
 
 // Migration: alte gameday_costs Tabelle entfernen falls vorhanden
@@ -297,6 +313,12 @@ if (!userColumns.includes("last_login_at")) {
 // Migration: avatar auf users
 if (!userColumns.includes("avatar")) {
   db.exec("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT NULL");
+}
+
+// Migration: game-Spalte auf records
+const recordColumns = db.prepare("PRAGMA table_info(records)").all().map((c) => c.name);
+if (!recordColumns.includes("game")) {
+  db.exec("ALTER TABLE records ADD COLUMN game TEXT NOT NULL DEFAULT ''");
 }
 
 // Create indexes for performance
@@ -473,6 +495,232 @@ function getUsersWithLastLogin() {
   ).all();
 }
 
+// Monte-Runden: Totals berechnen und in attendance.monte zurückschreiben
+function calculateMonteTotals(gamedayId) {
+  const rounds = db.prepare("SELECT user_id, round_number, roll_value FROM monte_rounds WHERE gameday_id = ?").all(gamedayId);
+  const meta = db.prepare("SELECT question_value FROM monte_round_meta WHERE gameday_id = ?").get(gamedayId);
+  const questionValue = meta ? meta.question_value : null;
+
+  // Anwesende Spieler ermitteln (present = 1)
+  const presentRows = db.prepare("SELECT user_id FROM attendance WHERE gameday_id = ? AND present = 1").all(gamedayId);
+  const presentIds = new Set(presentRows.map(r => r.user_id));
+
+  // Runden als Map: roundNumber -> Map(userId -> rollValue)
+  const roundMap = new Map();
+  for (const r of rounds) {
+    if (!presentIds.has(r.user_id)) continue;
+    if (!roundMap.has(r.round_number)) roundMap.set(r.round_number, new Map());
+    roundMap.get(r.round_number).set(r.user_id, r.roll_value);
+  }
+
+  const totals = new Map(); // userId -> EUR
+  for (const uid of presentIds) totals.set(uid, 0);
+
+  // Spalten 1-10: Verlierer-Logik mit Skip
+  let skipCount = 0;
+  for (let col = 1; col <= 10; col++) {
+    if (skipCount > 0) { skipCount--; continue; }
+    const colData = roundMap.get(col);
+    if (!colData) continue;
+
+    // Nur Spieler mit gültigem Wurf (nicht null)
+    const entries = [];
+    for (const [uid, val] of colData) {
+      if (val != null && presentIds.has(uid)) entries.push({ uid, val });
+    }
+    if (entries.length === 0) continue;
+
+    const minVal = Math.min(...entries.map(e => e.val));
+    const losers = entries.filter(e => e.val === minVal);
+    const penalty = col * 0.10;
+
+    for (const loser of losers) {
+      totals.set(loser.uid, (totals.get(loser.uid) || 0) + penalty);
+    }
+
+    skipCount = losers.length - 1;
+  }
+
+  // "?"-Spalte (round_number = 11)
+  let extraWinnerId = null;
+  if (questionValue != null) {
+    const qColData = roundMap.get(11);
+    if (qColData) {
+      const entries = [];
+      for (const [uid, val] of qColData) {
+        if (val != null && presentIds.has(uid)) entries.push({ uid, val });
+      }
+      if (entries.length > 0) {
+        // Verlierer: niedrigster Wurf → zahlt questionValue × 0,10€
+        const minVal = Math.min(...entries.map(e => e.val));
+        const losers = entries.filter(e => e.val === minVal);
+        const penalty = questionValue * 0.10;
+        for (const loser of losers) {
+          totals.set(loser.uid, (totals.get(loser.uid) || 0) + penalty);
+        }
+
+        // Gewinner: höchster Wurf → monte_extra = 1
+        const maxVal = Math.max(...entries.map(e => e.val));
+        const winners = entries.filter(e => e.val === maxVal);
+        if (winners.length === 1) {
+          extraWinnerId = winners[0].uid;
+        }
+      }
+    }
+  }
+
+  // In attendance zurückschreiben
+  const updateMonte = db.prepare("UPDATE attendance SET monte = ? WHERE gameday_id = ? AND user_id = ?");
+  const updateExtra = db.prepare("UPDATE attendance SET monte_extra = ? WHERE gameday_id = ? AND user_id = ?");
+  const resetExtras = db.prepare("UPDATE attendance SET monte_extra = 0 WHERE gameday_id = ?");
+
+  const trx = db.transaction(() => {
+    resetExtras.run(gamedayId);
+    for (const [uid, eur] of totals) {
+      const rounded = Math.round(eur * 100) / 100;
+      updateMonte.run(rounded, gamedayId, uid);
+    }
+    if (extraWinnerId) {
+      updateExtra.run(1, gamedayId, extraWinnerId);
+    }
+  });
+  trx();
+
+  // Return als Objekt { userId: eurBetrag }
+  const result = {};
+  for (const [uid, eur] of totals) {
+    result[uid] = Math.round(eur * 100) / 100;
+  }
+  return { totals: result, extraWinnerId };
+}
+
+// Backup functions
+const backupDir = path.join(dataDir, "backups");
+
+async function createBackup(triggeredBy) {
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const backupFile = path.join(backupDir, `kegelkladde_${timestamp}.db`);
+  await db.backup(backupFile);
+
+  // Metadaten speichern (wer, warum)
+  const meta = { triggeredBy: triggeredBy || "unbekannt", createdAt: now.toISOString() };
+  fs.writeFileSync(backupFile + ".meta.json", JSON.stringify(meta));
+
+  console.log(`[Backup] Erstellt: ${backupFile} (von: ${meta.triggeredBy})`);
+  return backupFile;
+}
+
+function rotateBackups(maxCount = 10) {
+  if (!fs.existsSync(backupDir)) return;
+  const files = fs.readdirSync(backupDir)
+    .filter(f => /^kegelkladde_\d{4}-\d{2}-\d{2}_\d{6}\.db$/.test(f))
+    .sort();
+  while (files.length > maxCount) {
+    const oldest = files.shift();
+    fs.unlinkSync(path.join(backupDir, oldest));
+    const metaFile = path.join(backupDir, oldest + ".meta.json");
+    if (fs.existsSync(metaFile)) fs.unlinkSync(metaFile);
+    console.log(`[Backup] Rotiert (gelöscht): ${oldest}`);
+  }
+}
+
+function listBackups() {
+  if (!fs.existsSync(backupDir)) return [];
+  return fs.readdirSync(backupDir)
+    .filter(f => /^kegelkladde_\d{4}-\d{2}-\d{2}_\d{6}\.db$/.test(f))
+    .sort()
+    .reverse()
+    .map(f => {
+      const stat = fs.statSync(path.join(backupDir, f));
+      let triggeredBy = "";
+      const metaFile = path.join(backupDir, f + ".meta.json");
+      try {
+        if (fs.existsSync(metaFile)) {
+          const meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+          triggeredBy = meta.triggeredBy || "";
+        }
+      } catch { /* ignore */ }
+      return { filename: f, size: stat.size, created: stat.mtime, triggeredBy };
+    });
+}
+
+// Spieltage aus einem Backup auflisten (readonly)
+function listBackupGamedays(backupFilename) {
+  const filePath = path.join(backupDir, backupFilename);
+  if (!fs.existsSync(filePath)) {
+    throw new Error("Backup-Datei nicht gefunden.");
+  }
+  const backupDb = new Database(filePath, { readonly: true });
+  try {
+    const rows = backupDb.prepare(
+      `SELECT g.id, g.match_date, g.settled, g.note,
+              (SELECT COUNT(*) FROM attendance a WHERE a.gameday_id = g.id AND a.present = 1) as present_count
+       FROM gamedays g ORDER BY g.match_date ASC, g.id ASC`
+    ).all();
+    return rows;
+  } finally {
+    backupDb.close();
+  }
+}
+
+// Ausgewählte Spieltage aus Backup wiederherstellen
+function restoreGamedays(backupFilename, gamedayIds) {
+  const filePath = path.join(backupDir, backupFilename);
+  if (!fs.existsSync(filePath)) {
+    throw new Error("Backup-Datei nicht gefunden.");
+  }
+  if (!gamedayIds || gamedayIds.length === 0) {
+    throw new Error("Keine Spieltage ausgewählt.");
+  }
+
+  const placeholders = gamedayIds.map(() => "?").join(",");
+
+  db.exec(`ATTACH DATABASE '${filePath.replace(/'/g, "''")}' AS backup_db`);
+
+  try {
+    db.transaction(() => {
+      for (const gid of gamedayIds) {
+        // Bestehende Daten für diesen Spieltag löschen (falls vorhanden)
+        db.prepare("DELETE FROM monte_rounds WHERE gameday_id = ?").run(gid);
+        db.prepare("DELETE FROM monte_round_meta WHERE gameday_id = ?").run(gid);
+        db.prepare("DELETE FROM custom_game_values WHERE gameday_id = ?").run(gid);
+        db.prepare("DELETE FROM custom_games WHERE gameday_id = ?").run(gid);
+        db.prepare("DELETE FROM gameday_entries WHERE gameday_id = ?").run(gid);
+        db.prepare("DELETE FROM attendance WHERE gameday_id = ?").run(gid);
+        db.prepare("DELETE FROM gamedays WHERE id = ?").run(gid);
+      }
+
+      // Spieltage aus Backup kopieren
+      db.prepare(`INSERT INTO gamedays SELECT * FROM backup_db.gamedays WHERE id IN (${placeholders})`).run(...gamedayIds);
+
+      db.prepare(`INSERT INTO attendance SELECT a.* FROM backup_db.attendance a
+                  WHERE a.gameday_id IN (${placeholders}) AND a.user_id IN (SELECT id FROM users)`).run(...gamedayIds);
+
+      db.prepare(`INSERT INTO custom_games SELECT * FROM backup_db.custom_games WHERE gameday_id IN (${placeholders})`).run(...gamedayIds);
+
+      db.prepare(`INSERT INTO custom_game_values SELECT cv.* FROM backup_db.custom_game_values cv
+                  WHERE cv.gameday_id IN (${placeholders}) AND cv.user_id IN (SELECT id FROM users)`).run(...gamedayIds);
+
+      db.prepare(`INSERT INTO gameday_entries SELECT * FROM backup_db.gameday_entries WHERE gameday_id IN (${placeholders})`).run(...gamedayIds);
+
+      db.prepare(`INSERT INTO monte_rounds SELECT mr.* FROM backup_db.monte_rounds mr
+                  WHERE mr.gameday_id IN (${placeholders}) AND mr.user_id IN (SELECT id FROM users)`).run(...gamedayIds);
+
+      db.prepare(`INSERT INTO monte_round_meta SELECT * FROM backup_db.monte_round_meta WHERE gameday_id IN (${placeholders})`).run(...gamedayIds);
+    })();
+  } finally {
+    db.exec("DETACH DATABASE backup_db");
+  }
+
+  console.log(`[Backup] ${gamedayIds.length} Spieltag(e) wiederhergestellt aus ${backupFilename}`);
+  return { restoredCount: gamedayIds.length };
+}
+
 // Startup-Diagnose
 const userCount = db.prepare("SELECT COUNT(*) as c FROM users").get().c;
 const gamedayCount = db.prepare("SELECT COUNT(*) as c FROM gamedays").get().c;
@@ -489,5 +737,12 @@ module.exports = {
   getKassenstandDetails,
   getKassenstandForGameday,
   getRecentAuditLog,
-  getUsersWithLastLogin
+  getUsersWithLastLogin,
+  calculateMonteTotals,
+  createBackup,
+  rotateBackups,
+  listBackups,
+  listBackupGamedays,
+  restoreGamedays,
+  backupDir
 };

@@ -9,7 +9,7 @@ const router = express.Router();
 router.get("/rekorde", requireAuth, (req, res) => {
   const rekorde = db
     .prepare(
-      `SELECT id, title, holder
+      `SELECT id, game, title, holder
        FROM records
        WHERE section = 'rangliste'
        ORDER BY id DESC`
@@ -18,7 +18,7 @@ router.get("/rekorde", requireAuth, (req, res) => {
 
   const kurioses = db
     .prepare(
-      `SELECT id, title, holder
+      `SELECT id, game, title, holder
        FROM records
        WHERE section = 'kurioses'
        ORDER BY id DESC`
@@ -34,6 +34,7 @@ router.get("/kurioses", requireAuth, (req, res) => res.redirect("/rekorde"));
 
 router.post("/records/add", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
   const section = req.body.section === "kurioses" ? "kurioses" : "rangliste";
+  const game = sanitize(req.body.game, 120);
   const record = sanitize(req.body.record, 120);
   const holder = sanitize(req.body.holder, 120);
 
@@ -43,11 +44,11 @@ router.post("/records/add", requireAuth, requireAdmin, verifyCsrf, (req, res) =>
   }
 
   const result = db.prepare(
-    `INSERT INTO records (section, title, holder, created_by)
-     VALUES (?, ?, ?, ?)`
-  ).run(section, record, holder, req.session.userId);
+    `INSERT INTO records (section, game, title, holder, created_by)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(section, game || '', record, holder, req.session.userId);
 
-  logAudit(req.session.userId, "RECORD_ADD", "record", result.lastInsertRowid, { section, record, holder });
+  logAudit(req.session.userId, "RECORD_ADD", "record", result.lastInsertRowid, { section, game, record, holder });
   req.session.flash = { type: "success", message: "Eintrag hinzugefügt." };
 
   res.redirect("/rekorde");
@@ -61,6 +62,7 @@ router.post("/records/edit", requireAuth, requireAdmin, verifyCsrf, (req, res) =
     return res.redirect("/rekorde");
   }
 
+  const game = sanitize(req.body.game, 120);
   const record = sanitize(req.body.record, 120);
   const holder = sanitize(req.body.holder, 120);
 
@@ -71,8 +73,8 @@ router.post("/records/edit", requireAuth, requireAdmin, verifyCsrf, (req, res) =
 
   const existing = db.prepare("SELECT id FROM records WHERE id = ?").get(recordId);
   if (existing) {
-    db.prepare("UPDATE records SET title = ?, holder = ? WHERE id = ?").run(record, holder, recordId);
-    logAudit(req.session.userId, "RECORD_EDIT", "record", recordId, { record, holder });
+    db.prepare("UPDATE records SET game = ?, title = ?, holder = ? WHERE id = ?").run(game || '', record, holder, recordId);
+    logAudit(req.session.userId, "RECORD_EDIT", "record", recordId, { game, record, holder });
     req.session.flash = { type: "success", message: "Eintrag aktualisiert." };
   }
 

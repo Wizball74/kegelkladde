@@ -16,6 +16,7 @@
   <div class="tab-nav">
     <button type="button" class="tab-btn active" data-tab="kasse">Kasse</button>
     <button type="button" class="tab-btn" data-tab="anfangswerte">Anfangswerte</button>
+    <button type="button" class="tab-btn" data-tab="sicherung">Sicherung</button>
     <button type="button" class="tab-btn" data-tab="aktivitaet">Aktivit&auml;t</button>
   </div>
 
@@ -140,6 +141,59 @@
     </form>
   </div>
 
+  <!-- Tab: Sicherung -->
+  <div id="tab-sicherung" class="tab-panel">
+    <p class="subtle">Automatische Sicherung bei jedem Status-Wechsel. Maximal 10 Backups werden aufbewahrt.<br/>
+    Bei der Wiederherstellung werden nur die Spieltage ersetzt &ndash; Mitglieder, Kasse und Einstellungen bleiben erhalten.</p>
+
+    <form method="post" action="/admin/backup/create" style="margin-bottom: 1.5rem;">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <button type="submit">Jetzt sichern</button>
+    </form>
+
+    <% if (backups.length > 0) { %>
+      <h2>Vorhandene Sicherungen</h2>
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Ausl&ouml;ser</th>
+              <th>Gr&ouml;&szlig;e</th>
+              <th class="actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% backups.forEach((b) => {
+              const match = b.filename.match(/kegelkladde_(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})\.db/);
+              const dateStr = match ? `${match[3]}.${match[2]}.${match[1]} ${match[4]}:${match[5]}:${match[6]}` : b.filename;
+              const sizeKB = (b.size / 1024).toFixed(0);
+            %>
+              <tr>
+                <td><%= dateStr %></td>
+                <td class="subtle"><%= b.triggeredBy || "&ndash;" %></td>
+                <td><%= sizeKB %> KB</td>
+                <td class="actions">
+                  <div class="action-btns">
+                    <button type="button" class="btn-sm btn-restore-backup" data-filename="<%= b.filename %>" title="Spieltage wiederherstellen">&#x21BA;</button>
+                    <a href="/admin/backup/download/<%= b.filename %>" class="btn-edit btn-sm" title="Herunterladen">&#x2B73;</a>
+                    <form method="post" action="/admin/backup/delete" data-confirm="Sicherung wirklich l&ouml;schen?">
+                      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                      <input type="hidden" name="filename" value="<%= b.filename %>" />
+                      <button type="submit" class="btn-danger btn-sm">&times;</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p class="subtle">Noch keine Sicherungen vorhanden.</p>
+    <% } %>
+  </div>
+
   <!-- Tab: Aktivität -->
   <div id="tab-aktivitaet" class="tab-panel">
     <%
@@ -179,7 +233,10 @@
         GAMEDAY_STATUS_ADVANCE: "Status vorger\u00fcckt",
         GAMEDAY_STATUS_REVERT: "Status zur\u00fcckgesetzt",
         GAMEDAY_NOTE_UPDATE: "Notiz ge\u00e4ndert",
-        LANE_COST_UPDATE: "Bahnkosten ge\u00e4ndert"
+        LANE_COST_UPDATE: "Bahnkosten ge\u00e4ndert",
+        BACKUP_CREATE: "Sicherung erstellt",
+        BACKUP_DELETE: "Sicherung gel\u00f6scht",
+        BACKUP_RESTORE: "Spieltage wiederhergestellt"
       };
 
       const parseDate = (str) => {
@@ -302,6 +359,139 @@
         showCelebration([{ type: "monte", round: 42, winner: "Testsieger", score: 107 }]);
       }
     });
+  </script>
+
+  <!-- Restore-Modal -->
+  <div class="modal-overlay" id="restoreModal">
+    <div class="modal" style="max-width: 520px;">
+      <h3>Spieltage wiederherstellen</h3>
+      <p id="restoreModalInfo"></p>
+      <div id="restoreModalContent"><p style="color: var(--muted);">Lade Spieltage...</p></div>
+      <div class="modal-actions" style="margin-top: 1rem;">
+        <button type="button" class="btn-primary btn-sm" id="btnRestoreConfirm" disabled>Wiederherstellen</button>
+        <button type="button" class="btn-sm" id="btnRestoreCancel">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var csrfToken = "<%= csrfToken %>";
+    var overlay = document.getElementById("restoreModal");
+    var content = document.getElementById("restoreModalContent");
+    var info = document.getElementById("restoreModalInfo");
+    var btnConfirm = document.getElementById("btnRestoreConfirm");
+    var btnCancel = document.getElementById("btnRestoreCancel");
+    var currentFilename = "";
+
+    var statusLabels = {0: "Nicht begonnen", 1: "Gut Holz!", 2: "Abrechnung", 3: "Archiv"};
+
+    function formatDate(iso) {
+      if (!iso) return "";
+      var p = iso.split("-");
+      return p[2] + "." + p[1] + "." + p[0];
+    }
+
+    function openModal(filename) {
+      currentFilename = filename;
+      btnConfirm.disabled = true;
+      content.innerHTML = '<p style="color: var(--muted);">Lade Spieltage...</p>';
+      var m = filename.match(/kegelkladde_(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})/);
+      info.textContent = m ? "Sicherung vom " + m[3] + "." + m[2] + "." + m[1] + " " + m[4] + ":" + m[5] + ":" + m[6] : filename;
+      overlay.classList.add("active");
+
+      fetch("/admin/backup/gamedays/" + encodeURIComponent(filename))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.gamedays || data.gamedays.length === 0) {
+            content.innerHTML = '<p style="color: var(--muted);">Keine Spieltage im Backup.</p>';
+            return;
+          }
+          var html = '<div style="margin-bottom: 0.5rem;"><label><input type="checkbox" id="restoreSelectAll" /> <strong>Alle ausw&auml;hlen</strong></label></div>';
+          html += '<div class="records-table-wrap"><table class="records-table" style="font-size: 0.85rem;"><thead><tr><th></th><th>Datum</th><th>Status</th><th>Anwesend</th></tr></thead><tbody>';
+          data.gamedays.forEach(function(g) {
+            html += '<tr><td><input type="checkbox" class="restore-cb" value="' + g.id + '" /></td>';
+            html += '<td>' + formatDate(g.match_date) + '</td>';
+            html += '<td>' + (statusLabels[g.settled] || g.settled) + '</td>';
+            html += '<td>' + g.present_count + '</td></tr>';
+          });
+          html += '</tbody></table></div>';
+          content.innerHTML = html;
+
+          var cbs = content.querySelectorAll(".restore-cb");
+          var selectAll = document.getElementById("restoreSelectAll");
+          function updateBtn() {
+            var any = false;
+            cbs.forEach(function(c) { if (c.checked) any = true; });
+            btnConfirm.disabled = !any;
+            if (selectAll) selectAll.checked = cbs.length > 0 && Array.from(cbs).every(function(c) { return c.checked; });
+          }
+          cbs.forEach(function(c) { c.addEventListener("change", updateBtn); });
+          if (selectAll) {
+            selectAll.addEventListener("change", function() {
+              cbs.forEach(function(c) { c.checked = selectAll.checked; });
+              updateBtn();
+            });
+          }
+        })
+        .catch(function() {
+          content.innerHTML = '<p style="color: var(--danger);">Fehler beim Laden.</p>';
+        });
+    }
+
+    function closeModal() {
+      overlay.classList.remove("active");
+      currentFilename = "";
+    }
+
+    btnCancel.addEventListener("click", closeModal);
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) closeModal();
+    });
+
+    btnConfirm.addEventListener("click", function() {
+      var ids = [];
+      content.querySelectorAll(".restore-cb:checked").forEach(function(c) {
+        ids.push(Number(c.value));
+      });
+      if (ids.length === 0) return;
+
+      if (!confirm("Ausgew\u00e4hlte " + ids.length + " Spieltag(e) wiederherstellen?\nVorhandene Daten dieser Spieltage werden \u00fcberschrieben.\n(Vorher wird automatisch ein Backup erstellt.)")) return;
+
+      btnConfirm.disabled = true;
+      btnConfirm.textContent = "Wird wiederhergestellt...";
+
+      fetch("/admin/backup/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ filename: currentFilename, gamedayIds: JSON.stringify(ids) })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            closeModal();
+            if (typeof showToast === "function") showToast(data.message, "success");
+            else alert(data.message);
+            setTimeout(function() { location.reload(); }, 1200);
+          } else {
+            alert(data.error || "Fehler bei der Wiederherstellung.");
+            btnConfirm.disabled = false;
+            btnConfirm.textContent = "Wiederherstellen";
+          }
+        })
+        .catch(function() {
+          alert("Netzwerkfehler.");
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = "Wiederherstellen";
+        });
+    });
+
+    document.querySelectorAll(".btn-restore-backup").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        openModal(btn.dataset.filename);
+      });
+    });
+  })();
   </script>
 
 </section>

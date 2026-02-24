@@ -1,3 +1,10 @@
+// Rechtsklick blockieren (außer auf Inputs, Textareas und Links)
+document.addEventListener("contextmenu", function(e) {
+  var tag = e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || e.target.closest("a")) return;
+  e.preventDefault();
+});
+
 // Mobile menu toggle
 const menuToggle = document.getElementById("menuToggle");
 const mobileNav = document.getElementById("mobileNav");
@@ -240,6 +247,13 @@ function recalcCosts() {
       ? (isPresent ? costPudel + costOthers + gameCosts + customGameTotal : 0)
       : (isPresent ? contribution + penalties + costPudel + costOthers + gameCosts + customGameTotal + carryover : contribution + penalties + carryover);
     const rest = toPay - paid;
+
+    // Spieltag gesamt (reine Spiel- + Bilderkosten)
+    const gameTotalEl = row.querySelector("[data-game-total]");
+    if (gameTotalEl) {
+      const gameTotal = isPresent ? costPudel + costOthers + gameCosts + customGameTotal : 0;
+      gameTotalEl.textContent = formatEuroCost(gameTotal) + " €";
+    }
 
     const toPayEl = row.querySelector("[data-topay]");
     if (toPayEl) toPayEl.textContent = formatEuroCost(toPay) + " €";
@@ -864,14 +878,17 @@ document.querySelectorAll("[data-present]").forEach((cb) => {
       if (el.hasAttribute("data-always-edit")) return;
       el.disabled = !cb.checked;
     });
-    // Auto-Strafe: 1,00 bei Abwesenheit, 0,00 bei Reaktivierung
+    // Auto-Strafe: TBD bei Abwesenheit (wird bei Abrechnung berechnet)
     const penaltyInput = row.querySelector('[name^="penalties_"]');
     if (penaltyInput && !penaltyInput.disabled) {
-      const currentVal = Number(penaltyInput.value) || 0;
-      if (!cb.checked && currentVal === 0) {
-        penaltyInput.value = "1.00";
-      } else if (cb.checked && currentVal === 1) {
-        penaltyInput.value = "0.00";
+      if (!cb.checked && (Number(penaltyInput.value) || 0) === 0) {
+        penaltyInput.value = "";
+        penaltyInput.placeholder = "TBD";
+      } else if (cb.checked) {
+        penaltyInput.placeholder = "";
+        if (!penaltyInput.value) {
+          penaltyInput.value = "0.00";
+        }
       }
     }
     recalcCosts();
@@ -956,6 +973,7 @@ function buildSavePayload(row) {
     payload.aussteigen_tiebreak = row.querySelector(`[name="aussteigen_tiebreak_${memberId}"]`)?.value || 0;
   } else if (kladdeStatus === 2) {
     payload.paid = row.querySelector(`[name="paid_${memberId}"]`)?.value || 0;
+    payload.penalties = row.querySelector(`[name="penalties_${memberId}"]`)?.value || 0;
   }
   return payload;
 }
@@ -1321,17 +1339,20 @@ document.querySelectorAll(".btn-edit").forEach((btn) => {
     const row = btn.closest("tr");
     if (row.classList.contains("editing")) return;
 
+    const gameCell = row.querySelector(".record-game");
     const titleCell = row.querySelector(".record-title");
     const holderCell = row.querySelector(".record-holder");
     const actionsCell = row.querySelector(".actions");
     const actionBtns = actionsCell.querySelector(".action-btns");
     const editForm = actionsCell.querySelector(".edit-form");
 
+    const origGame = gameCell ? gameCell.textContent.trim() : '';
     const origTitle = titleCell.textContent.trim();
     const origHolder = holderCell.textContent.trim();
 
     row.classList.add("editing");
 
+    if (gameCell) gameCell.innerHTML = `<input type="text" class="edit-input" value="${origGame.replace(/"/g, "&quot;")}" maxlength="120" />`;
     titleCell.innerHTML = `<input type="text" class="edit-input" value="${origTitle.replace(/"/g, "&quot;")}" maxlength="120" />`;
     holderCell.innerHTML = `<input type="text" class="edit-input" value="${origHolder.replace(/"/g, "&quot;")}" maxlength="120" />`;
 
@@ -1359,12 +1380,15 @@ document.querySelectorAll(".btn-edit").forEach((btn) => {
     titleCell.querySelector("input").focus();
 
     function doSave() {
+      const newGame = gameCell ? gameCell.querySelector("input").value.trim() : '';
       const newTitle = titleCell.querySelector("input").value.trim();
       const newHolder = holderCell.querySelector("input").value.trim();
       if (!newTitle || !newHolder) {
-        showToast("Beide Felder müssen ausgefüllt sein.", "error");
+        showToast("Rekord und Rekordhalter müssen ausgefüllt sein.", "error");
         return;
       }
+      const gameVal = editForm.querySelector(".edit-game-val");
+      if (gameVal) gameVal.value = newGame;
       editForm.querySelector(".edit-title-val").value = newTitle;
       editForm.querySelector(".edit-holder-val").value = newHolder;
       editForm.submit();
@@ -1372,6 +1396,7 @@ document.querySelectorAll(".btn-edit").forEach((btn) => {
 
     function doCancel() {
       row.classList.remove("editing");
+      if (gameCell) gameCell.textContent = origGame;
       titleCell.textContent = origTitle;
       holderCell.textContent = origHolder;
       actionBtns.style.display = "";
@@ -2053,8 +2078,8 @@ function initEditLocks() {
         const isInactive = row.classList.contains("row-inactive");
         row.querySelectorAll("input, button").forEach((el) => {
           if (kladdeStatus >= 2) {
-            // Abrechnung/Archiv: nur Gezahlt-Feld aktiv
-            el.disabled = !el.hasAttribute("data-paid-field");
+            // Abrechnung/Archiv: Gezahlt-Feld + Strafen (data-always-edit) aktiv
+            el.disabled = !el.hasAttribute("data-paid-field") && !el.hasAttribute("data-always-edit");
           } else if (isInactive && el.hasAttribute("data-field") && !el.hasAttribute("data-always-edit")) {
             el.disabled = true;
           } else {
@@ -3022,3 +3047,3209 @@ function initMemberDragDrop() {
     .catch(() => showToast("Fehler beim Speichern der Reihenfolge.", "error"));
   }
 }
+
+// ==================== LIVE-MODUS ====================
+(function initLiveMode() {
+  const liveView = document.getElementById("liveView");
+  const kladdeDataEl = document.getElementById("kladdeData");
+  if (!liveView || !kladdeDataEl) return;
+
+  const gameBtns = kladdeDataEl.querySelectorAll(".live-game-btn");
+  if (gameBtns.length === 0) return;
+
+  const btnClose = document.getElementById("btnLiveClose");
+  const csrfToken = kladdeDataEl.dataset.csrf;
+  const gamedayId = kladdeDataEl.dataset.gamedayId;
+
+  const playersContainer = document.getElementById("livePlayers");
+  const sidebarTitle = document.getElementById("liveSidebarTitle");
+  const shuffleArea = document.getElementById("liveShuffle");
+  const gameLabel = document.getElementById("liveGameLabel");
+  const gameContent = document.getElementById("liveGameContent");
+  const btnNext = document.getElementById("btnLiveNext");
+  const btnPrev = document.getElementById("btnLivePrev");
+
+  // =============================================
+  // --- Live Effects (Fireworks, Confetti, Explosion) ---
+  // =============================================
+  var liveFx = (function() {
+    var canvas = document.getElementById("liveFxCanvas");
+    var ctx = canvas ? canvas.getContext("2d") : null;
+    var animId = null;
+    var stopTimer = null;
+    var fwState = null; // fireworks state
+    var burstParticles = []; // for confetti/explosion
+
+    function rnd(min, max) { return Math.random() * (max - min) + min; }
+    function dist(x1, y1, x2, y2) { var dx = x1-x2, dy = y1-y2; return Math.sqrt(dx*dx+dy*dy); }
+
+    function resize() {
+      if (!canvas) return;
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+
+    // === FIREWORKS ===
+    function FwRocket(sx, sy, tx, ty, hue) {
+      this.x = sx; this.y = sy; this.sx = sx; this.sy = sy; this.tx = tx; this.ty = ty;
+      this.distTotal = dist(sx, sy, tx, ty); this.distTraveled = 0;
+      this.trail = []; for (var i = 0; i < 3; i++) this.trail.push([sx, sy]);
+      this.angle = Math.atan2(ty - sy, tx - sx);
+      this.speed = 2; this.accel = 1.05;
+      this.hue = hue; this.brightness = rnd(50, 70);
+      this.targetRadius = 1;
+    }
+    FwRocket.prototype.update = function() {
+      this.trail.pop(); this.trail.unshift([this.x, this.y]);
+      if (this.targetRadius < 8) this.targetRadius += 0.3; else this.targetRadius = 1;
+      this.speed *= this.accel;
+      var vx = Math.cos(this.angle) * this.speed, vy = Math.sin(this.angle) * this.speed;
+      this.distTraveled = dist(this.sx, this.sy, this.x + vx, this.y + vy);
+      if (this.distTraveled >= this.distTotal) return true; // explode
+      this.x += vx; this.y += vy; return false;
+    };
+    FwRocket.prototype.draw = function(c) {
+      c.beginPath();
+      c.moveTo(this.trail[this.trail.length-1][0], this.trail[this.trail.length-1][1]);
+      c.lineTo(this.x, this.y);
+      c.strokeStyle = "hsl(" + this.hue + ",100%," + this.brightness + "%)";
+      c.stroke();
+      c.beginPath(); c.arc(this.tx, this.ty, this.targetRadius, 0, Math.PI * 2); c.stroke();
+    };
+
+    function FwSpark(x, y, hue) {
+      this.x = x; this.y = y;
+      this.trail = []; for (var i = 0; i < 5; i++) this.trail.push([x, y]);
+      this.angle = rnd(0, Math.PI * 2);
+      this.speed = rnd(1, 10);
+      this.friction = 0.95; this.gravity = 1;
+      this.hue = rnd(hue - 20, hue + 20);
+      this.brightness = rnd(50, 80); this.alpha = 1;
+      this.decay = rnd(0.015, 0.03);
+    }
+    FwSpark.prototype.update = function() {
+      this.trail.pop(); this.trail.unshift([this.x, this.y]);
+      this.speed *= this.friction;
+      this.x += Math.cos(this.angle) * this.speed;
+      this.y += Math.sin(this.angle) * this.speed + this.gravity;
+      this.alpha -= this.decay;
+      return this.alpha <= this.decay;
+    };
+    FwSpark.prototype.draw = function(c) {
+      c.beginPath();
+      c.moveTo(this.trail[this.trail.length-1][0], this.trail[this.trail.length-1][1]);
+      c.lineTo(this.x, this.y);
+      c.strokeStyle = "hsla(" + this.hue + ",100%," + this.brightness + "%," + this.alpha + ")";
+      c.stroke();
+    };
+
+    // Fireworks state
+    var fwActive = false;
+    var fwRockets = [], fwSparks = [], fwHue = 120;
+    var fwClickHandler = null;
+
+    // Unified render loop — single animId for all effects
+    var loopRunning = false;
+
+    function fwExplode(x, y) {
+      var count = Math.floor(rnd(25, 40));
+      for (var i = 0; i < count; i++) fwSparks.push(new FwSpark(x, y, fwHue));
+    }
+
+    function ensureRenderLoop() {
+      if (loopRunning) return;
+      loopRunning = true;
+      animId = requestAnimationFrame(renderLoop);
+    }
+
+    function renderLoop() {
+      var cw = canvas.width, ch = canvas.height;
+      ctx.clearRect(0, 0, cw, ch);
+      var alive = false;
+
+      // --- Fireworks ---
+      if (fwActive || fwRockets.length > 0 || fwSparks.length > 0) {
+        alive = true;
+        fwHue += 0.5;
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineWidth = 2;
+        for (var i = fwRockets.length - 1; i >= 0; i--) {
+          fwRockets[i].draw(ctx);
+          if (fwRockets[i].update()) { fwExplode(fwRockets[i].tx, fwRockets[i].ty); fwRockets.splice(i, 1); }
+        }
+        for (var j = fwSparks.length - 1; j >= 0; j--) {
+          fwSparks[j].draw(ctx);
+          if (fwSparks[j].update()) fwSparks.splice(j, 1);
+        }
+        ctx.globalCompositeOperation = "source-over";
+        ctx.lineWidth = 1;
+      }
+
+      // --- Burst particles (confetti + explosion) ---
+      if (burstParticles.length > 0) {
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+        burstParticles.forEach(function(group) {
+          if (group.confetti) {
+            for (var ci = group.confetti.length - 1; ci >= 0; ci--) {
+              group.confetti[ci].update(); group.confetti[ci].draw(ctx);
+              if (group.confetti[ci].pos.y > ch) group.confetti.splice(ci, 1);
+            }
+          }
+          if (group.sequins) {
+            for (var si = group.sequins.length - 1; si >= 0; si--) {
+              group.sequins[si].update(); group.sequins[si].draw(ctx);
+              if (group.sequins[si].pos.y > ch) group.sequins.splice(si, 1);
+            }
+          }
+          if (group.explosions) {
+            for (var ei = group.explosions.length - 1; ei >= 0; ei--) {
+              group.explosions[ei].draw(ctx);
+              if (group.explosions[ei].update()) group.explosions.splice(ei, 1);
+            }
+          }
+        });
+        // Remove empty groups
+        burstParticles = burstParticles.filter(function(g) {
+          return (g.confetti && g.confetti.length > 0) ||
+                 (g.sequins && g.sequins.length > 0) ||
+                 (g.explosions && g.explosions.length > 0);
+        });
+        if (burstParticles.length > 0) alive = true;
+        ctx.globalAlpha = 1;
+      }
+
+      if (alive) {
+        animId = requestAnimationFrame(renderLoop);
+      } else {
+        loopRunning = false;
+        animId = null;
+      }
+    }
+
+    function startFireworks(duration) {
+      if (!canvas || !ctx) return;
+      // If already running, just reset timer
+      if (fwActive) {
+        if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
+        if (duration) stopTimer = setTimeout(stopFireworks, duration);
+        return;
+      }
+      resize();
+      fwActive = true;
+      fwRockets = []; fwSparks = []; fwHue = 120;
+      var cw = canvas.width, ch = canvas.height;
+
+      // Launch rockets on click/touch anywhere in liveView (passes through canvas)
+      var parent = canvas.parentElement;
+      fwClickHandler = function(e) {
+        if (!fwActive) return;
+        var cRect = canvas.getBoundingClientRect();
+        var tx = (e.clientX || (e.touches && e.touches[0].clientX) || cRect.left + cw/2) - cRect.left;
+        var ty = (e.clientY || (e.touches && e.touches[0].clientY) || cRect.top + ch/4) - cRect.top;
+        var n = Math.floor(rnd(1, 4));
+        for (var i = 0; i < n; i++) {
+          fwRockets.push(new FwRocket(rnd(cw * 0.2, cw * 0.8), ch, tx + rnd(-30, 30), ty + rnd(-20, 20), fwHue));
+        }
+      };
+      parent.addEventListener("click", fwClickHandler);
+      parent.addEventListener("touchstart", fwClickHandler);
+
+      // Initial salvo (3-5 rockets to random positions)
+      var salvo = Math.floor(rnd(3, 6));
+      for (var s = 0; s < salvo; s++) {
+        (function(delay) {
+          setTimeout(function() {
+            if (fwActive) fwRockets.push(new FwRocket(rnd(cw*0.2, cw*0.8), ch, rnd(cw*0.1, cw*0.9), rnd(ch*0.1, ch*0.5), fwHue));
+          }, delay);
+        })(s * 200);
+      }
+
+      ensureRenderLoop();
+
+      if (duration) {
+        stopTimer = setTimeout(stopFireworks, duration);
+      }
+    }
+
+    function stopFireworks() {
+      fwActive = false; // render loop will drain remaining rockets/sparks
+      if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
+      if (fwClickHandler && canvas) {
+        var parent = canvas.parentElement;
+        parent.removeEventListener("click", fwClickHandler);
+        parent.removeEventListener("touchstart", fwClickHandler);
+        fwClickHandler = null;
+      }
+    }
+
+    // === CONFETTI BURST (randomized count & velocity) ===
+    function Confetto(x, y, power) {
+      var colors = [
+        { f: "#ffc107", b: "#e0a800" },
+        { f: "#ff6f00", b: "#cc5900" },
+        { f: "#ff1744", b: "#d50032" },
+        { f: "#7b5cff", b: "#6245e0" },
+        { f: "#00e676", b: "#00b85c" }
+      ];
+      this.color = colors[Math.floor(rnd(0, colors.length))];
+      this.dim = { x: rnd(5, 10), y: rnd(8, 15) };
+      this.pos = { x: x + rnd(-20, 20), y: y + rnd(-5, 5) };
+      this.rotation = rnd(0, Math.PI * 2);
+      this.scale = { x: 1, y: 1 };
+      this.vel = { x: rnd(-9, 9) * power, y: -(rnd(6, 12) * power) };
+      this.mod = rnd(0, 99);
+    }
+    Confetto.prototype.update = function() {
+      this.vel.x -= this.vel.x * 0.075;
+      this.vel.y = Math.min(this.vel.y + 0.3, 3);
+      this.vel.x += Math.random() > 0.5 ? Math.random() : -Math.random();
+      this.pos.x += this.vel.x; this.pos.y += this.vel.y;
+      this.scale.y = Math.cos((this.pos.y + this.mod) * 0.09);
+    };
+    Confetto.prototype.draw = function(c) {
+      var w = this.dim.x * this.scale.x, h = this.dim.y * this.scale.y;
+      c.save();
+      c.translate(this.pos.x, this.pos.y); c.rotate(this.rotation);
+      c.fillStyle = this.scale.y > 0 ? this.color.f : this.color.b;
+      c.fillRect(-w/2, -h/2, w, h);
+      c.restore();
+    };
+
+    function Sequin(x, y, power) {
+      var cols = ["#ffc107", "#ff6f00", "#7b5cff", "#00e676", "#ff1744"];
+      this.color = cols[Math.floor(rnd(0, cols.length))];
+      this.r = rnd(1, 3);
+      this.pos = { x: x + rnd(-15, 15), y: y + rnd(-5, 5) };
+      this.vel = { x: rnd(-6, 6) * power, y: rnd(-10, -6) * power };
+    }
+    Sequin.prototype.update = function() {
+      this.vel.x -= this.vel.x * 0.02;
+      this.vel.y += 0.55;
+      this.pos.x += this.vel.x; this.pos.y += this.vel.y;
+    };
+    Sequin.prototype.draw = function(c) {
+      c.fillStyle = this.color;
+      c.beginPath(); c.arc(this.pos.x, this.pos.y, this.r, 0, Math.PI * 2); c.fill();
+    };
+
+    function confettiBurst(originEl) {
+      if (!canvas || !ctx) return;
+      resize();
+      var rect = originEl.getBoundingClientRect();
+      var cRect = canvas.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2 - cRect.left;
+      var cy = rect.top + rect.height / 2 - cRect.top;
+      var count = Math.floor(rnd(15, 40));
+      var seqCount = Math.floor(rnd(8, 20));
+      var power = rnd(0.7, 1.5);
+      var pieces = [], seqs = [];
+      for (var i = 0; i < count; i++) pieces.push(new Confetto(cx, cy, power));
+      for (var j = 0; j < seqCount; j++) seqs.push(new Sequin(cx, cy, power));
+      burstParticles.push({ confetti: pieces, sequins: seqs });
+      ensureRenderLoop();
+    }
+
+    // === EXPLOSION BURST (radial particles at click point) ===
+    function ExpParticle(x, y, palette) {
+      var palettes = {
+        accent:  ["#2f8f6d", "#5cb89a", "#1a5c44", "#8fd4b8"],
+        gold:    ["#ffc107", "#ffca28", "#ff8f00", "#fff176"],
+        blue:    ["#007bff", "#42a5f5", "#1565c0", "#90caf9"],
+        brown:   ["#795548", "#a1887f", "#4e342e", "#bcaaa4"],
+        purple:  ["#7b5cff", "#b388ff", "#4a148c", "#ce93d8"],
+        red:     ["#e53935", "#ef5350", "#b71c1c", "#ef9a9a"]
+      };
+      var cols = palettes[palette] || palettes.accent;
+      this.x = x; this.y = y;
+      this.color = cols[Math.floor(rnd(0, cols.length))];
+      var angle = rnd(0, Math.PI * 2);
+      var speed = rnd(2, 12);
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed;
+      this.r = rnd(2, 6);
+      this.alpha = 1;
+      this.decay = rnd(0.015, 0.04);
+      this.gravity = 0.15;
+    }
+    ExpParticle.prototype.update = function() {
+      this.vx *= 0.96; this.vy *= 0.96;
+      this.vy += this.gravity;
+      this.x += this.vx; this.y += this.vy;
+      this.alpha -= this.decay;
+      return this.alpha <= 0;
+    };
+    ExpParticle.prototype.draw = function(c) {
+      c.globalAlpha = Math.max(0, this.alpha);
+      c.fillStyle = this.color;
+      c.beginPath(); c.arc(this.x, this.y, this.r, 0, Math.PI * 2); c.fill();
+    };
+
+    function explosion(originEl, palette, count) {
+      if (!canvas || !ctx) return;
+      resize();
+      var rect = originEl.getBoundingClientRect();
+      var cRect = canvas.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2 - cRect.left;
+      var cy = rect.top + rect.height / 2 - cRect.top;
+      count = count || Math.floor(rnd(20, 50));
+      var exps = [];
+      for (var i = 0; i < count; i++) exps.push(new ExpParticle(cx, cy, palette));
+      burstParticles.push({ explosions: exps });
+      ensureRenderLoop();
+    }
+
+    function stopAll() {
+      // Stop fireworks properly (remove click handlers)
+      stopFireworks();
+      fwRockets = []; fwSparks = [];
+      // Stop burst particles
+      burstParticles = [];
+      // Stop render loop
+      if (animId) { cancelAnimationFrame(animId); animId = null; }
+      loopRunning = false;
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    return {
+      fireworks: startFireworks,
+      confetti: confettiBurst,
+      explosion: explosion,
+      stop: stopAll
+    };
+  })();
+
+  // =============================================
+  // --- Unified Controls Panel (liveControls) ---
+  // =============================================
+  var liveControls = {
+    mode: null,       // "volle" | "abraeumen" | null
+    opts: null,       // callbacks and state for current mode
+    _keyHandler: null,
+
+    // Render Volle picker into shuffleArea (RIGHT side)
+    renderVolle: function(opts) {
+      // opts: { onPick(val, marker, btn), onUndo(), canUndo: bool }
+      this.mode = "volle";
+      this.opts = opts;
+      var html = '<div class="va-phase-container">';
+      html += renderVAPicker();
+      html += '<div class="va-actions-row">';
+      html += '<button type="button" class="va-picker-btn va-picker-clear va-actions-undo" id="liveCtrlUndo"' + (opts.canUndo ? '' : ' disabled') + '>\u00D7 R\u00fcckg\u00e4ngig</button>';
+      html += '</div>';
+      html += '</div>';
+      shuffleArea.innerHTML = html;
+      this._attachVolleHandlers();
+    },
+
+    // Render Abräumen pin diamond into shuffleArea (RIGHT side)
+    renderAbraeumen: function(opts) {
+      // opts: { onConfirm(fallenPins), onUndo(), onInvert(), canUndo, canInvert, fallenCount }
+      this.mode = "abraeumen";
+      this.opts = opts;
+      var html = '<div class="va-phase-container">';
+      html += renderPinDiamond();
+      html += '<div class="va-abraeumen-actions">';
+      html += '<span class="va-fallen-count" id="vaFallenCount">Getroffen: ' + (opts.fallenCount || 0) + '</span>';
+      if (opts.canInvert) html += '<button type="button" class="va-invert-btn" id="vaInvertBtn">Invertieren \u21C4</button>';
+      html += '<button type="button" class="va-confirm-throw" id="vaConfirmThrow">Wurf best\u00e4tigen \u2713</button>';
+      html += '</div>';
+      html += '<div class="va-actions-row">';
+      html += '<button type="button" class="va-picker-clear va-actions-undo" id="liveCtrlUndo"' + (opts.canUndo ? '' : ' disabled') + '>\u00D7 R\u00fcckg\u00e4ngig</button>';
+      html += '</div>';
+      html += '</div>';
+      shuffleArea.innerHTML = html;
+      this._attachAbraeumenHandlers();
+    },
+
+    // Clear controls panel
+    clear: function() {
+      this.mode = null;
+      this.opts = null;
+      this._removeKeyHandler();
+      shuffleArea.innerHTML = '';
+    },
+
+    // Highlight a picker button as "active" (used by Monte's two-step flow)
+    highlightPick: function(value) {
+      shuffleArea.querySelectorAll(".va-picker-btn").forEach(function(b) {
+        b.classList.remove("monte-picker-active");
+      });
+      if (value != null) {
+        var pickVal;
+        if (value === 12) pickVal = "kranz";
+        else if (value === 9) pickVal = "9er";
+        else pickVal = String(value);
+        var btn = shuffleArea.querySelector('.va-picker-btn[data-va-pick="' + pickVal + '"]');
+        if (btn) btn.classList.add("monte-picker-active");
+      }
+    },
+
+    _attachVolleHandlers: function() {
+      var self = this;
+      this._removeKeyHandler();
+
+      // Click handlers on picker buttons
+      shuffleArea.querySelectorAll(".va-picker-btn[data-va-pick]").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          var val = btn.dataset.vaPick;
+          if (val === "clear") {
+            if (self.opts.onUndo) self.opts.onUndo();
+            return;
+          }
+          var throwVal, marker;
+          if (val === "pudel") { throwVal = 0; marker = "pudel"; }
+          else if (val === "triclops") { throwVal = 0; marker = "triclops"; }
+          else if (val === "9er") { throwVal = 9; marker = "alle9"; }
+          else if (val === "kranz") { throwVal = 12; marker = "kranz"; }
+          else { throwVal = Number(val); marker = null; }
+          if (self.opts.onPick) self.opts.onPick(throwVal, marker, btn);
+        });
+      });
+
+      // Undo button
+      var undoBtn = document.getElementById("liveCtrlUndo");
+      if (undoBtn) undoBtn.addEventListener("click", function() {
+        if (self.opts.onUndo) self.opts.onUndo();
+      });
+
+      // Keyboard 0-9, K
+      this._installKeyHandler();
+    },
+
+    _attachAbraeumenHandlers: function() {
+      var self = this;
+      this._removeKeyHandler();
+
+      // Pin toggle (only standing pins are clickable)
+      shuffleArea.querySelectorAll(".pin-btn.pin-standing").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          if (btn.classList.contains("pin-selected")) {
+            btn.classList.remove("pin-selected");
+            btn.classList.add("pin-standing");
+          } else {
+            btn.classList.remove("pin-standing");
+            btn.classList.add("pin-selected");
+          }
+          updateFallenCount();
+        });
+      });
+
+      // Invert button
+      var invertBtn = document.getElementById("vaInvertBtn");
+      if (invertBtn) {
+        invertBtn.addEventListener("click", function() {
+          shuffleArea.querySelectorAll(".pin-btn").forEach(function(btn) {
+            if (btn.classList.contains("pin-selected")) {
+              btn.classList.remove("pin-selected");
+              btn.classList.add("pin-standing");
+            } else if (btn.classList.contains("pin-standing")) {
+              btn.classList.remove("pin-standing");
+              btn.classList.add("pin-selected");
+            }
+          });
+          updateFallenCount();
+        });
+      }
+
+      // Confirm button
+      var confirmBtn = document.getElementById("vaConfirmThrow");
+      if (confirmBtn) {
+        confirmBtn.addEventListener("click", function() {
+          var fallenPins = [];
+          shuffleArea.querySelectorAll(".pin-btn.pin-selected").forEach(function(btn) {
+            fallenPins.push(Number(btn.dataset.pin));
+          });
+          if (self.opts.onConfirm) self.opts.onConfirm(fallenPins);
+        });
+      }
+
+      // Undo button
+      var undoBtn = document.getElementById("liveCtrlUndo");
+      if (undoBtn) undoBtn.addEventListener("click", function() {
+        if (self.opts.onUndo) self.opts.onUndo();
+      });
+    },
+
+    _installKeyHandler: function() {
+      var self = this;
+      this._removeKeyHandler();
+      this._keyHandler = function(e) {
+        if (self.mode !== "volle") return;
+        if (e.key >= "0" && e.key <= "9") {
+          e.preventDefault();
+          var btn;
+          if (e.key === "9") {
+            btn = shuffleArea.querySelector('.va-picker-btn[data-va-pick="9er"]');
+          } else {
+            btn = shuffleArea.querySelector('.va-picker-btn[data-va-pick="' + e.key + '"]');
+          }
+          if (btn) btn.click();
+        } else if (e.key === "k" || e.key === "K") {
+          e.preventDefault();
+          var kBtn = shuffleArea.querySelector('.va-picker-btn[data-va-pick="kranz"]');
+          if (kBtn) kBtn.click();
+        }
+      };
+      document.addEventListener("keydown", this._keyHandler);
+    },
+
+    _removeKeyHandler: function() {
+      if (this._keyHandler) {
+        document.removeEventListener("keydown", this._keyHandler);
+        this._keyHandler = null;
+      }
+    }
+  };
+
+  let players = []; // [{id, name, avatar, row}]
+  let currentGameIdx = 0;
+  let gameHistory = [];   // Stack of visited game indices for back-navigation
+  let monteState = {}; // { rounds: {userId: {round: value}}, questionValue, totals }
+  let monteOverrides = {}; // { userId: eurValue } - manuelle Überschreibungen
+  let activePicker = null;
+
+  // Shuffle + Turn state
+  let gameOrder = [];       // Gemischte Spieler-Reihenfolge [{id, name, avatar, row}]
+  let currentTurnIdx = 0;
+  let pinklerSlots = [];    // [{playerId, returnAfterIdx}]
+
+  // V+A state
+  let vaState = {
+    phase: "volle",           // "volle" | "abraeumen" | "done"
+    currentThrow: 0,          // 0-4
+    volleThrows: [],          // [{val, marker}, ...] per player
+    abraeumenThrows: [],      // [{fallen: [pinIds], count: n}, ...]
+    standingPins: [1,2,3,4,5,6,7,8,9],
+    results: {},              // {playerId: {volle, abraeumen, total}}
+    directEntry: false        // toggle for shortcut mode
+  };
+
+  // Aussteigen state
+  let aussteigenState = {
+    remaining: [],
+    eliminated: [],           // [[{id, round, cost}]] groups per round
+    currentRound: 1,
+    selected: []              // temp selection for current round
+  };
+
+  // --- Live State Persistence (sessionStorage) ---
+  var liveStateKey = "liveState_" + gamedayId;
+
+  function saveLiveState() {
+    var game = GAMES[currentGameIdx];
+    if (!game || (game.type !== "va" && game.type !== "aussteigen" && game.type !== "monte")) return;
+    if (game.type === "monte") { saveMonteState(); return; }
+    if (!gameOrder.length || currentTurnIdx < 0) return;
+
+    var state = {
+      version: 1,
+      timestamp: Date.now(),
+      gameType: game.type,
+      playerIds: players.map(function(p) { return p.id; }),
+      gameOrderIds: gameOrder.map(function(p) { return p.id; }),
+      currentGameIdx: currentGameIdx,
+      gameHistory: gameHistory.slice(),
+      currentTurnIdx: currentTurnIdx,
+      pinklerSlots: pinklerSlots.slice()
+    };
+
+    if (game.type === "va") {
+      state.vaState = {
+        phase: vaState.phase,
+        round: vaState.round,
+        currentThrow: vaState.currentThrow,
+        volleThrows: vaState.volleThrows.slice(),
+        abraeumenThrows: vaState.abraeumenThrows.slice(),
+        standingPins: vaState.standingPins.slice(),
+        results: JSON.parse(JSON.stringify(vaState.results)),
+        directEntry: vaState.directEntry,
+        throwHistory: JSON.parse(JSON.stringify(vaState.throwHistory || {}))
+      };
+    } else if (game.type === "aussteigen") {
+      state.aussteigenState = {
+        remainingIds: aussteigenState.remaining.map(function(p) { return p.id; }),
+        eliminated: JSON.parse(JSON.stringify(aussteigenState.eliminated)),
+        currentRound: aussteigenState.currentRound,
+        selected: aussteigenState.selected.slice()
+      };
+    }
+
+    try { sessionStorage.setItem(liveStateKey, JSON.stringify(state)); } catch(e) {}
+  }
+
+  function clearLiveState() {
+    try { sessionStorage.removeItem(liveStateKey); } catch(e) {}
+  }
+
+  function restoreLiveState() {
+    var raw;
+    try { raw = sessionStorage.getItem(liveStateKey); } catch(e) { return; }
+    if (!raw) return;
+
+    var state;
+    try { state = JSON.parse(raw); } catch(e) { clearLiveState(); return; }
+    if (!state || state.version !== 1) { clearLiveState(); return; }
+
+    // Rebuild players from DOM (present players)
+    var table = document.querySelector(".kladde-table:not(.kladde-preview)");
+    if (!table) { clearLiveState(); return; }
+
+    var presentMap = {};
+    table.querySelectorAll("tbody tr[data-member-id]").forEach(function(row) {
+      var cb = row.querySelector("[data-present]");
+      if (cb && cb.checked) {
+        var nameEl = row.querySelector(".name-col");
+        var name = nameEl ? nameEl.textContent.trim().split("\n")[0].trim() : "?";
+        var avatarImg = row.querySelector(".kladde-avatar");
+        var avatar = avatarImg ? avatarImg.src : null;
+        presentMap[row.dataset.memberId] = { id: row.dataset.memberId, name: name, avatar: avatar, row: row };
+      }
+    });
+
+    // Validate all saved player IDs are still present
+    for (var i = 0; i < state.playerIds.length; i++) {
+      if (!presentMap[state.playerIds[i]]) { clearLiveState(); return; }
+    }
+    for (var j = 0; j < state.gameOrderIds.length; j++) {
+      if (!presentMap[state.gameOrderIds[j]]) { clearLiveState(); return; }
+    }
+
+    // Rebuild player arrays with DOM refs
+    players = state.playerIds.map(function(id) { return presentMap[id]; });
+    gameOrder = state.gameOrderIds.map(function(id) { return presentMap[id]; });
+
+    // Restore navigation state
+    currentGameIdx = state.currentGameIdx;
+    gameHistory = state.gameHistory || [];
+    currentTurnIdx = state.currentTurnIdx;
+    pinklerSlots = state.pinklerSlots || [];
+
+    // Restore game-specific state
+    var game = GAMES[currentGameIdx];
+    if (!game) { clearLiveState(); return; }
+
+    if (game.type === "va" && state.vaState) {
+      vaState = {
+        phase: state.vaState.phase,
+        round: state.vaState.round,
+        currentThrow: state.vaState.currentThrow,
+        volleThrows: state.vaState.volleThrows,
+        abraeumenThrows: state.vaState.abraeumenThrows,
+        standingPins: state.vaState.standingPins,
+        results: state.vaState.results,
+        directEntry: state.vaState.directEntry,
+        throwHistory: state.vaState.throwHistory || {}
+      };
+    } else if (game.type === "aussteigen" && state.aussteigenState) {
+      aussteigenState = {
+        remaining: state.aussteigenState.remainingIds.map(function(id) { return presentMap[id]; }),
+        eliminated: state.aussteigenState.eliminated,
+        currentRound: state.aussteigenState.currentRound,
+        selected: state.aussteigenState.selected || []
+      };
+    } else if (game.type === "monte" && state.monteLive) {
+      // Monte restores its data from server; just restore turn state
+      // monteLive: { pickedValue, editMode }
+      // actual monteState.rounds will be fetched from server in renderMonteGame()
+    } else {
+      clearLiveState();
+      return;
+    }
+
+    // Activate live view DOM
+    renderSidebar();
+    var tableShell = kladdeDataEl.querySelector(".table-shell");
+    if (tableShell) tableShell.style.display = "none";
+    var gamedayNav = document.getElementById("gamedayNav");
+    if (gamedayNav) gamedayNav.style.display = "none";
+    var guestActions = kladdeDataEl.parentElement.querySelector(".guest-actions");
+    if (guestActions) guestActions.style.display = "none";
+    var kladdeFooter = kladdeDataEl.parentElement.querySelector(".kladde-footer");
+    if (kladdeFooter) kladdeFooter.style.display = "none";
+    liveView.style.display = "flex";
+
+    // Set up shuffle sidebar
+    sidebarTitle.textContent = game.label;
+    gameLabel.textContent = game.label;
+
+    if (game.type === "monte") {
+      // Monte builds its own sidebar via renderMonteGame()
+      // We need to restore turn state after fetch completes
+      var savedMonteLive = state.monteLive;
+      var savedTurnIdx = currentTurnIdx;
+      liveView.classList.add("live-shuffle-sidebar");
+      gameContent.innerHTML = '<div class="live-loading">Lade Monte-Daten...</div>';
+      fetch("/kegelkladde/monte-rounds?gamedayId=" + encodeURIComponent(gamedayId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          monteState = {
+            rounds: {},
+            questionValue: data.questionValue,
+            totals: data.totals || {},
+            extraWinnerId: data.extraWinnerId,
+            pickedValue: savedMonteLive.pickedValue,
+            editMode: savedMonteLive.editMode,
+            lastPlacement: null
+          };
+          monteOverrides = {};
+          for (var i = 0; i < (data.rounds || []).length; i++) {
+            var r = data.rounds[i];
+            if (!monteState.rounds[r.user_id]) monteState.rounds[r.user_id] = {};
+            monteState.rounds[r.user_id][r.round_number] = r.roll_value;
+          }
+          players.forEach(function(p) {
+            var monteInput = p.row.querySelector('[name="monte_' + p.id + '"]');
+            if (monteInput) {
+              var kladdeZehntel = Number(monteInput.value) || 0;
+              var kladdeEur = kladdeZehntel / 10;
+              var calcEur = monteState.totals[p.id] || 0;
+              if (Math.abs(kladdeEur - calcEur) > 0.001 && kladdeZehntel > 0) {
+                monteOverrides[p.id] = kladdeEur;
+              }
+            }
+          });
+          currentTurnIdx = savedTurnIdx;
+          buildMonteSidebar();
+          renderMontePlayerUI();
+        })
+        .catch(function() {
+          gameContent.innerHTML = '<div class="live-loading">Fehler beim Laden.</div>';
+        });
+    } else {
+      liveView.classList.add("live-shuffle-sidebar");
+      // V+A: renderVAPlayerUI builds both main + controls.
+      // Aussteigen: score table goes in shuffleArea (right side).
+      if (game.type === "aussteigen") {
+        buildShuffleSidebar();
+      }
+      addSidebarPinkelpause();
+    }
+
+    // Render the correct game phase
+    if (game.type === "va") {
+      if (currentTurnIdx >= gameOrder.length && vaState.round === "abraeumen") {
+        renderVAResults();
+      } else {
+        renderVAPlayerUI();
+        updateShuffleHighlight(currentTurnIdx);
+      }
+    } else if (game.type === "aussteigen") {
+      renderAussteigenRound();
+    }
+
+    showToast("Live-Modus fortgesetzt", "info");
+  }
+
+  // Build GAMES array from DOM
+  function buildGames() {
+    const games = [
+      { key: "va", label: "V+A", type: "va" },
+      { key: "monte", label: "Monte", type: "monte" },
+      { key: "aussteigen", label: "Aussteigen", type: "aussteigen" },
+      { key: "sechs_tage", label: "6-Tage-Rennen", type: "simple", skipShuffle: true }
+    ];
+    // Custom games
+    const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+    if (table) {
+      table.querySelectorAll("th[data-custom-game-th]").forEach(th => {
+        const cgId = th.dataset.customGameTh;
+        const nameInput = th.querySelector("[data-custom-game-rename]");
+        const name = nameInput ? nameInput.value : "Spiel";
+        games.push({ key: "cg_" + cgId, label: name, type: "custom", cgId, skipShuffle: true });
+      });
+    }
+    return games;
+  }
+
+  const GAMES = buildGames();
+
+  // --- Open / Close ---
+  function openLiveMode(startGameKey) {
+    // Collect present players
+    players = [];
+    const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+    if (!table) return;
+    table.querySelectorAll("tbody tr[data-member-id]").forEach(row => {
+      const cb = row.querySelector("[data-present]");
+      if (cb && cb.checked) {
+        const nameEl = row.querySelector(".name-col");
+        const name = nameEl ? nameEl.textContent.trim().split("\n")[0].trim() : "?";
+        const avatarImg = row.querySelector(".kladde-avatar");
+        const avatar = avatarImg ? avatarImg.src : null;
+        players.push({ id: row.dataset.memberId, name, avatar, row });
+      }
+    });
+
+    if (players.length === 0) {
+      showToast("Keine anwesenden Spieler.", "warning");
+      return;
+    }
+
+    renderSidebar();
+
+    // Gewähltes Spiel direkt ansteuern
+    if (startGameKey) {
+      const idx = GAMES.findIndex(g => g.key === startGameKey);
+      if (idx !== -1) {
+        currentGameIdx = idx;
+        renderCurrentGame();
+      } else {
+        currentGameIdx = 0;
+        showGameSelector();
+      }
+    } else {
+      currentGameIdx = GAMES.findIndex(g => !isGamePlayed(g));
+      if (currentGameIdx === -1) {
+        currentGameIdx = 0;
+        showGameSelector();
+      } else {
+        renderCurrentGame();
+      }
+    }
+
+    const tableShell = kladdeDataEl.querySelector(".table-shell");
+    if (tableShell) tableShell.style.display = "none";
+    const gamedayNav = document.getElementById("gamedayNav");
+    if (gamedayNav) gamedayNav.style.display = "none";
+    var guestActions = kladdeDataEl.parentElement.querySelector(".guest-actions");
+    if (guestActions) guestActions.style.display = "none";
+    var kladdeFooter = kladdeDataEl.parentElement.querySelector(".kladde-footer");
+    if (kladdeFooter) kladdeFooter.style.display = "none";
+    liveView.style.display = "flex";
+  }
+
+  function closeLiveMode(opts) {
+    if (!opts || !opts.keepState) clearLiveState();
+    closePicker();
+    liveFx.stop();
+    liveControls.clear();
+    liveView.style.display = "none";
+    sidebarTitle.textContent = "Live-Modus";
+    shuffleArea.style.display = "none";
+    playersContainer.style.display = "";
+    liveView.classList.remove("live-shuffle-active");
+    liveView.classList.remove("live-shuffle-sidebar");
+    removeSidebarPinkelpause();
+    const tableShell = kladdeDataEl.querySelector(".table-shell");
+    if (tableShell) tableShell.style.display = "";
+    const gamedayNav = document.getElementById("gamedayNav");
+    if (gamedayNav) gamedayNav.style.display = "";
+    var guestActions = kladdeDataEl.parentElement.querySelector(".guest-actions");
+    if (guestActions) guestActions.style.display = "";
+    var kladdeFooter = kladdeDataEl.parentElement.querySelector(".kladde-footer");
+    if (kladdeFooter) kladdeFooter.style.display = "";
+    recalcCosts();
+    updateGameBtnStates();
+    // Pulse the active live button if state was preserved
+    if (opts && opts.keepState) highlightActiveLiveBtn();
+  }
+
+  function addSidebarPinkelpause() {
+    removeSidebarPinkelpause();
+    var game = GAMES[currentGameIdx];
+    if (game && game.type === "monte") return; // No pinkelpause for Monte
+    var header = liveView.querySelector(".live-sidebar-header");
+    if (!header) return;
+    var closeBtn = header.querySelector(".live-close-btn");
+    var pinkBtn = document.createElement("button");
+    pinkBtn.type = "button";
+    pinkBtn.className = "pinkelpause-sidebar-btn";
+    pinkBtn.id = "pinkelpauseSidebarBtn";
+    pinkBtn.title = "Pinkelpause";
+    pinkBtn.innerHTML = '<img src="/pee.png" alt="Pinkelpause" class="pinkelpause-img" />';
+    if (closeBtn) {
+      header.insertBefore(pinkBtn, closeBtn);
+    } else {
+      header.appendChild(pinkBtn);
+    }
+    pinkBtn.addEventListener("click", function() {
+      triggerPinkelpause(function() { renderVATurn(); });
+    });
+  }
+
+  function removeSidebarPinkelpause() {
+    var existing = document.getElementById("pinkelpauseSidebarBtn");
+    if (existing) existing.remove();
+  }
+
+  // --- Game-Buttons in Spaltenheadern ---
+  function isGamePlayedDOM(game) {
+    // Prüft direkt die Kladde-Tabelle, unabhängig vom players-Array
+    const table = document.querySelector(".kladde-table:not(.kladde-preview)");
+    if (!table) return false;
+    if (game.type === "monte") {
+      // Monte: prüfe ob irgendein Spieler einen Wert > 0 hat
+      const inputs = table.querySelectorAll('[name^="monte_"]');
+      for (const inp of inputs) {
+        if (inp.type === "radio" || inp.type === "hidden") continue;
+        if (Number(inp.value) > 0) return true;
+      }
+      return false;
+    }
+    const rows = table.querySelectorAll("tbody tr[data-member-id]");
+    for (const row of rows) {
+      const cb = row.querySelector("[data-present]");
+      if (!cb || !cb.checked) continue;
+      if (game.type === "custom") {
+        const input = row.querySelector('[data-custom-game-id="' + game.cgId + '"]');
+        if (input && Number(input.value) > 0) return true;
+      } else {
+        const input = row.querySelector('[name="' + game.key + '_' + row.dataset.memberId + '"]');
+        if (input && Number(input.value) > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  function updateGameBtnStates() {
+    gameBtns.forEach(btn => {
+      const key = btn.dataset.liveStart;
+      const game = GAMES.find(g => g.key === key);
+      const played = game && isGamePlayedDOM(game);
+      btn.classList.toggle("is-played", !!played);
+      const img = btn.querySelector("img");
+      if (img) img.src = played ? "/closed.png" : "/live.png";
+    });
+  }
+
+  gameBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (btn.classList.contains("is-played")) return;
+      var wasPulsing = btn.classList.contains("live-btn-pulse");
+      clearLiveBtnPulse();
+      if (wasPulsing) {
+        restoreLiveState();
+      } else {
+        openLiveMode(btn.dataset.liveStart);
+      }
+    });
+  });
+
+  if (btnClose) btnClose.addEventListener("click", function() { closeLiveMode(); });
+
+  // Initial state
+  updateGameBtnStates();
+
+  // Escape key closes live mode (but not if an input is focused or picker is open)
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && liveView.style.display !== "none") {
+      if (activePicker) { closePicker(); return; }
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return;
+      closeLiveMode();
+    }
+  });
+
+  // --- Sidebar (Marker-zentriert) ---
+  const MARKER_TYPES = [
+    { key: "pudel", label: "Pudel" },
+    { key: "alle9", label: "9er" },
+    { key: "kranz", label: "Kranz" },
+    { key: "triclops", label: "Tri" }
+  ];
+  let activeMarkerTab = "pudel";
+
+  function playerAvatarHtml(p, cssClass) {
+    var cls = cssClass || "live-player-avatar";
+    if (p.avatar) return '<img src="' + p.avatar + '" alt="" class="' + cls + '" />';
+    var initials = getInitials(p.name);
+    var color = initialColor(p.name);
+    return '<span class="' + cls + ' live-player-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
+  }
+
+  function getInitials(name) {
+    var parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+  }
+
+  var INITIAL_COLORS = ["#2f8f6d","#3a7bd5","#e67e22","#9b59b6","#e74c3c","#1abc9c","#34495e","#d35400","#8e44ad","#c0392b"];
+  function initialColor(name) {
+    var hash = 0;
+    for (var i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+    return INITIAL_COLORS[Math.abs(hash) % INITIAL_COLORS.length];
+  }
+
+  function renderSidebar() {
+    let html = '<div class="live-marker-tabs">';
+    MARKER_TYPES.forEach(mt => {
+      html += '<button type="button" class="live-marker-tab' + (activeMarkerTab === mt.key ? ' active' : '') + '" data-marker-tab="' + mt.key + '">' + mt.label + '</button>';
+    });
+    html += '</div>';
+    html += '<div class="live-player-grid">';
+    players.forEach(p => {
+      const input = p.row.querySelector('[data-marker-input="' + activeMarkerTab + '"]');
+      const val = input ? Number(input.value) || 0 : 0;
+      html += '<button type="button" class="live-player-btn" data-lm-member="' + p.id + '">';
+      if (p.avatar) {
+        html += '<img src="' + p.avatar + '" alt="" class="live-player-avatar" />';
+      } else {
+        var initials = getInitials(p.name);
+        var color = initialColor(p.name);
+        html += '<span class="live-player-avatar live-player-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
+      }
+      html += '<span class="live-player-btn-name">' + escHtml(p.name) + '</span>';
+      html += '<span class="live-player-val">' + val + '</span>';
+      html += '</button>';
+    });
+    html += '</div>';
+    playersContainer.innerHTML = html;
+  }
+
+  // Tab clicks
+  playersContainer.addEventListener("click", (e) => {
+    const tab = e.target.closest(".live-marker-tab");
+    if (tab) {
+      activeMarkerTab = tab.dataset.markerTab;
+      renderSidebar();
+      return;
+    }
+  });
+
+  // Player button: tap = +1, long-press = −1
+  let lpTimer = null;
+  let lpFired = false;
+
+  function handlePlayerInc(btn) {
+    const memberId = btn.dataset.lmMember;
+    const player = players.find(p => p.id === memberId);
+    if (!player) return;
+    const realBtn = player.row.querySelector('.mark-btn:not(.mark-dec)[data-mark-target="' + activeMarkerTab + '"]');
+    if (realBtn && !realBtn.disabled) realBtn.click();
+    updatePlayerBtnVal(btn, player);
+    btn.classList.add("live-player-tap");
+    setTimeout(() => btn.classList.remove("live-player-tap"), 150);
+  }
+
+  function handlePlayerDec(btn) {
+    const memberId = btn.dataset.lmMember;
+    const player = players.find(p => p.id === memberId);
+    if (!player) return;
+    const realBtn = player.row.querySelector('.mark-btn.mark-dec[data-mark-target="' + activeMarkerTab + '"]');
+    if (realBtn && !realBtn.disabled) realBtn.click();
+    updatePlayerBtnVal(btn, player);
+    btn.classList.add("live-player-longpress");
+    setTimeout(() => btn.classList.remove("live-player-longpress"), 300);
+  }
+
+  function updatePlayerBtnVal(btn, player) {
+    const input = player.row.querySelector('[data-marker-input="' + activeMarkerTab + '"]');
+    const val = input ? Number(input.value) || 0 : 0;
+    const display = btn.querySelector(".live-player-val");
+    if (display) display.textContent = val;
+  }
+
+  function startLongPress(btn) {
+    lpFired = false;
+    lpTimer = setTimeout(() => {
+      lpFired = true;
+      handlePlayerDec(btn);
+    }, 500);
+  }
+
+  function cancelLongPress() {
+    if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+  }
+
+  // Mouse events for long-press
+  playersContainer.addEventListener("mousedown", (e) => {
+    const btn = e.target.closest(".live-player-btn");
+    if (!btn) return;
+    startLongPress(btn);
+  });
+  playersContainer.addEventListener("mouseup", (e) => {
+    const btn = e.target.closest(".live-player-btn");
+    cancelLongPress();
+    if (btn && !lpFired) handlePlayerInc(btn);
+  });
+  playersContainer.addEventListener("mouseleave", cancelLongPress);
+
+  // Touch events for long-press
+  playersContainer.addEventListener("touchstart", (e) => {
+    const btn = e.target.closest(".live-player-btn");
+    if (!btn) return;
+    startLongPress(btn);
+  }, { passive: true });
+  playersContainer.addEventListener("touchend", (e) => {
+    const btn = e.target.closest(".live-player-btn");
+    cancelLongPress();
+    if (btn && !lpFired) {
+      e.preventDefault();
+      handlePlayerInc(btn);
+    }
+  });
+  playersContainer.addEventListener("touchcancel", cancelLongPress);
+
+  // --- Game Navigation ---
+  btnNext.addEventListener("click", () => {
+    // Nächstes ungespieltes Spiel finden
+    let next = -1;
+    for (let i = currentGameIdx + 1; i < GAMES.length; i++) {
+      if (!isGamePlayed(GAMES[i])) { next = i; break; }
+    }
+    if (next !== -1) {
+      gameHistory.push(currentGameIdx);
+      currentGameIdx = next;
+      renderCurrentGame();
+    } else {
+      gameHistory.push(currentGameIdx);
+      showGameSelector();
+    }
+  });
+
+  btnPrev.addEventListener("click", () => {
+    if (gameHistory.length > 0) {
+      currentGameIdx = gameHistory.pop();
+      renderCurrentGame();
+    }
+  });
+
+  function updatePrevButton() {
+    btnPrev.style.display = gameHistory.length > 0 ? "" : "none";
+  }
+
+  function renderCurrentGame() {
+    const game = GAMES[currentGameIdx];
+    sidebarTitle.textContent = game.label;
+    gameLabel.textContent = game.label;
+    shuffleArea.innerHTML = "";
+    shuffleArea.style.display = "none";
+    playersContainer.style.display = "";
+    liveView.classList.remove("live-shuffle-active");
+    liveView.classList.remove("live-shuffle-sidebar");
+    removeSidebarPinkelpause();
+    liveControls.clear();
+
+    if (game.type === "monte") {
+      renderShufflePhase(game, function() { renderMonteGame(); });
+    } else if (game.type === "va") {
+      renderShufflePhase(game, function() { renderVAGame(); });
+    } else if (game.type === "aussteigen") {
+      renderShufflePhase(game, function() { renderAussteigenGame(); });
+    } else {
+      renderSimpleGame(game);
+    }
+  }
+
+  function showGameSelector() {
+    let html = '<div class="live-game-selector">';
+    html += '<h3>Spiel wählen</h3>';
+    GAMES.forEach((g, i) => {
+      const played = isGamePlayed(g);
+      html += '<button type="button" class="live-game-select-btn' + (played ? ' live-game-played' : '') + '"' + (played ? ' disabled' : ' data-game-idx="' + i + '"') + '>' + escHtml(g.label) + (played ? ' \u2713' : '') + '</button>';
+    });
+    html += '</div>';
+    gameContent.innerHTML = html;
+    sidebarTitle.textContent = "Live-Modus";
+    gameLabel.textContent = "Spielauswahl";
+    shuffleArea.innerHTML = "";
+    shuffleArea.style.display = "none";
+  }
+
+  gameContent.addEventListener("click", (e) => {
+    const selectBtn = e.target.closest("[data-game-idx]");
+    if (selectBtn && !selectBtn.disabled) {
+      gameHistory.push(currentGameIdx);
+      currentGameIdx = Number(selectBtn.dataset.gameIdx);
+      renderCurrentGame();
+    }
+  });
+
+  function isGamePlayed(game) {
+    if (game.type === "monte") {
+      // Check if any monte rounds exist
+      return monteState.rounds && Object.keys(monteState.rounds).length > 0;
+    }
+    for (const p of players) {
+      if (game.type === "custom") {
+        const input = p.row.querySelector('[data-custom-game-id="' + game.cgId + '"]');
+        if (input && Number(input.value) > 0) return true;
+      } else {
+        const input = p.row.querySelector('[name="' + game.key + '_' + p.id + '"]');
+        if (input && Number(input.value) > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  // --- Simple Games (V+A, Aussteigen, 6-Tage, Custom) ---
+  function renderSimpleGame(game) {
+    let html = '<div class="live-simple-game">';
+    players.forEach(p => {
+      let val = 0;
+      if (game.type === "custom") {
+        const input = p.row.querySelector('[data-custom-game-id="' + game.cgId + '"]');
+        val = input ? Number(input.value) || 0 : 0;
+      } else {
+        const input = p.row.querySelector('[name="' + game.key + '_' + p.id + '"]');
+        val = input ? Number(input.value) || 0 : 0;
+      }
+      html += '<div class="live-simple-row" data-live-simple-member="' + p.id + '">';
+      html += playerAvatarHtml(p, "live-simple-avatar");
+      html += '<span class="live-simple-name">' + escHtml(p.name) + '</span>';
+      html += '<input type="number" min="0" max="999" step="1" value="' + val + '" class="live-simple-input" data-live-game="' + game.key + '" data-live-member="' + p.id + '"' + (game.type === "custom" ? ' data-live-cg="' + game.cgId + '"' : '') + ' />';
+      html += '</div>';
+    });
+    html += '</div>';
+    gameContent.innerHTML = html;
+  }
+
+  // Simple game input changes → write back to kladde table
+  gameContent.addEventListener("input", (e) => {
+    const input = e.target.closest(".live-simple-input");
+    if (!input) return;
+    const memberId = input.dataset.liveMember;
+    const gameKey = input.dataset.liveGame;
+    const cgId = input.dataset.liveCg;
+    const player = players.find(p => p.id === memberId);
+    if (!player) return;
+
+    let realInput;
+    if (cgId) {
+      realInput = player.row.querySelector('[data-custom-game-id="' + cgId + '"]');
+    } else {
+      realInput = player.row.querySelector('[name="' + gameKey + '_' + memberId + '"]');
+    }
+    if (realInput) {
+      realInput.value = input.value;
+      realInput.dispatchEvent(new Event("input", { bubbles: true }));
+      realInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+
+  // =============================================
+  // --- Shuffle-System ---
+  // =============================================
+  function fisherYatesShuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function renderShufflePhase(game, onReady) {
+    gameOrder = [];
+
+    // Build initial list + buttons layout
+    var html = '<div class="shuffle-layout">';
+    html += '<div class="shuffle-list-col">';
+    html += '<div class="shuffle-list" id="shuffleList">';
+    players.forEach(function(p, i) {
+      var initials = getInitials(p.name);
+      var color = initialColor(p.name);
+      html += '<div class="shuffle-list-item" data-player-id="' + p.id + '">';
+      html += '<span class="shuffle-num">' + (i + 1) + '.</span>';
+      if (p.avatar) {
+        html += '<img src="' + p.avatar + '" class="shuffle-card-avatar" />';
+      } else {
+        html += '<span class="shuffle-card-avatar shuffle-card-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
+      }
+      html += '<span class="shuffle-name">' + escHtml(p.name) + '</span>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+    html += '<div class="shuffle-btn-col">';
+    html += '<button type="button" class="shuffle-start-btn" id="shuffleStartBtn">';
+    html += '<img src="/start.png" alt="Mischen" class="shuffle-start-img" />';
+    html += '</button>';
+    html += '<div class="shuffle-start-label">Mischen!</div>';
+    html += '<button type="button" class="shuffle-go-btn" id="shuffleGoBtn" style="display:none">Los geht\'s &#9654;</button>';
+    html += '</div></div>';
+
+    shuffleArea.innerHTML = html;
+    shuffleArea.style.display = "block";
+    playersContainer.style.display = "none";
+    gameContent.innerHTML = "";
+    liveView.classList.add("live-shuffle-active");
+
+    var shuffleBtn = document.getElementById("shuffleStartBtn");
+    var goBtn = document.getElementById("shuffleGoBtn");
+    var listEl = document.getElementById("shuffleList");
+
+    // Prepare DOM refs for animation
+    var itemEls = {};
+    players.forEach(function(p) {
+      var el = listEl.querySelector('[data-player-id="' + p.id + '"]');
+      if (el) itemEls[p.id] = el;
+    });
+
+    goBtn.addEventListener("click", function() {
+      liveView.classList.remove("live-shuffle-active");
+      liveView.classList.add("live-shuffle-sidebar");
+      shuffleArea.style.display = ""; // Clear inline style so CSS flex takes effect
+      // Each game type sets up its own main/controls layout.
+      // Aussteigen uses the V+A score table on the right (shuffleArea),
+      // V+A and Monte build their own layout in onReady().
+      var game = GAMES[currentGameIdx];
+      if (game && game.type === "aussteigen") {
+        buildShuffleSidebar();
+      }
+      addSidebarPinkelpause();
+      currentTurnIdx = 0;
+      pinklerSlots = [];
+      onReady();
+    });
+
+    shuffleBtn.addEventListener("click", doShuffle);
+
+    var hasShuffled = false;
+    function doShuffle() {
+      if (hasShuffled && !confirm("Wirklich erneut mischen?")) return;
+      hasShuffled = true;
+      gameOrder = fisherYatesShuffle(players);
+      shuffleBtn.disabled = true;
+      shuffleBtn.classList.add("shuffle-spinning");
+      goBtn.style.display = "none";
+
+      // Measure item height + gap
+      var items = listEl.querySelectorAll('.shuffle-list-item');
+      var gap = parseFloat(getComputedStyle(listEl).gap) || 5;
+      var itemH = items[0].offsetHeight + gap;
+
+      // Switch to absolute positioning if not already
+      if (!listEl.classList.contains('shuffle-physics')) {
+        listEl.classList.add('shuffle-physics');
+        listEl.style.height = (players.length * itemH - gap) + 'px';
+        players.forEach(function(p, i) {
+          var el = itemEls[p.id];
+          el.style.position = 'absolute';
+          el.style.left = '0';
+          el.style.right = '0';
+          el.style.top = (i * itemH) + 'px';
+        });
+      }
+
+      var roundTimings = [280, 200, 150, 120, 120, 150, 200, 300, 500];
+      var totalRounds = roundTimings.length;
+      var currentRound = 0;
+
+      function runRound() {
+        var isLast = currentRound === totalRounds - 1;
+        var duration = roundTimings[currentRound];
+        var newOrder = isLast ? gameOrder : fisherYatesShuffle(players);
+
+        newOrder.forEach(function(p, newIdx) {
+          var el = itemEls[p.id];
+          var currentTop = parseFloat(el.style.top) || 0;
+          var targetTop = newIdx * itemH;
+          var delta = targetTop - currentTop;
+          var arcX = delta !== 0 ? (delta > 0 ? 1 : -1) * (6 + Math.random() * 14) : 0;
+
+          el.style.transition = 'top ' + duration + 'ms cubic-bezier(.4,0,.2,1), transform ' + duration + 'ms cubic-bezier(.25,.46,.45,.94)';
+          el.style.top = targetTop + 'px';
+          el.style.transform = 'translateX(' + arcX + 'px)';
+          el.querySelector('.shuffle-num').textContent = (newIdx + 1) + '.';
+        });
+
+        currentRound++;
+
+        setTimeout(function() {
+          var snapDur = Math.max(duration * 0.25, 60);
+          newOrder.forEach(function(p) {
+            var el = itemEls[p.id];
+            el.style.transition = 'transform ' + snapDur + 'ms ease-out';
+            el.style.transform = 'translateX(0)';
+          });
+
+          if (currentRound < totalRounds) {
+            setTimeout(runRound, snapDur + 20);
+          } else {
+            setTimeout(function() {
+              newOrder.forEach(function(p, i) {
+                setTimeout(function() {
+                  var el = itemEls[p.id];
+                  el.style.transition = 'transform 0.3s cubic-bezier(.34,1.56,.64,1)';
+                  el.style.transform = 'scale(1.05)';
+                  setTimeout(function() {
+                    el.style.transition = 'transform 0.25s ease';
+                    el.style.transform = 'scale(1)';
+                  }, 180);
+                }, i * 70);
+              });
+
+              var delay = newOrder.length * 70 + 400;
+              setTimeout(function() {
+                shuffleBtn.disabled = false;
+                shuffleBtn.classList.remove("shuffle-spinning");
+                goBtn.style.display = "";
+                goBtn.classList.add("shuffle-go-animate");
+              }, delay);
+            }, 250);
+          }
+        }, duration);
+      }
+
+      setTimeout(runRound, 150);
+    }
+  }
+
+  // =============================================
+  // --- Turn-System + Pinkelpause ---
+  // =============================================
+  function renderTurnHeader(container) {
+    if (currentTurnIdx >= gameOrder.length) return '';
+    var current = gameOrder[currentTurnIdx];
+    var nextIdx = getNextTurnIdx(currentTurnIdx);
+    var next = nextIdx >= 0 ? gameOrder[nextIdx] : null;
+
+    var html = '<div class="turn-header">';
+    html += '<div class="turn-current">';
+    html += '<span class="turn-label">Am Zug:</span>';
+    html += playerAvatarHtml(current, "turn-avatar");
+    html += '<span class="turn-name">' + escHtml(current.name) + '</span>';
+    html += '</div>';
+    html += '<div class="turn-actions">';
+    html += '<button type="button" class="pinkelpause-btn" id="pinkelpauseBtn" title="Pinkelpause"><img src="/pee.png" alt="Pinkelpause" class="pinkelpause-img" /></button>';
+    html += '</div>';
+    if (next) {
+      html += '<div class="turn-next">';
+      html += playerAvatarHtml(next, "turn-avatar-sm");
+      html += '<span class="turn-next-label">' + escHtml(next.name) + '</span>';
+      html += '</div>';
+    }
+    // Show pinkler info
+    if (pinklerSlots.length > 0) {
+      html += '<div class="turn-pinkler-info">';
+      pinklerSlots.forEach(function(ps) {
+        var p = gameOrder.find(function(g) { return g.id === ps.playerId; });
+        if (p) html += '<span class="pinkler-badge">' + escHtml(p.name) + ' \uD83D\uDEBD</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    if (container) {
+      var existing = container.querySelector(".turn-header");
+      if (existing) {
+        existing.outerHTML = html;
+      } else {
+        container.insertAdjacentHTML("afterbegin", html);
+      }
+    }
+    return html;
+  }
+
+  function getNextTurnIdx(fromIdx) {
+    // Check pinkler returns first
+    for (var i = 0; i < pinklerSlots.length; i++) {
+      if (pinklerSlots[i].returnAfterIdx === fromIdx) {
+        return -2; // special: pinkler returns
+      }
+    }
+    if (fromIdx + 1 < gameOrder.length) return fromIdx + 1;
+    return -1;
+  }
+
+  function advanceTurn(onTurnChange) {
+    // Check if any pinkler should return after this turn
+    var returning = [];
+    pinklerSlots = pinklerSlots.filter(function(ps) {
+      if (ps.returnAfterIdx === currentTurnIdx) {
+        returning.push(ps);
+        return false;
+      }
+      return true;
+    });
+
+    if (returning.length > 0) {
+      // Pinkler returns — they go next before advancing
+      var pinklerPlayer = gameOrder.find(function(p) { return p.id === returning[0].playerId; });
+      if (pinklerPlayer) {
+        // Insert pinkler right after current position
+        var pinklerIdx = gameOrder.indexOf(pinklerPlayer);
+        if (pinklerIdx > currentTurnIdx + 1) {
+          gameOrder.splice(pinklerIdx, 1);
+          gameOrder.splice(currentTurnIdx + 1, 0, pinklerPlayer);
+        }
+        showToast(pinklerPlayer.name + " ist zur\u00fcck!", "success");
+      }
+    }
+
+    currentTurnIdx++;
+    if (currentTurnIdx < gameOrder.length) {
+      if (onTurnChange) onTurnChange();
+    } else {
+      if (onTurnChange) onTurnChange(); // will detect end
+    }
+  }
+
+  function triggerPinkelpause(onTurnChange) {
+    var current = gameOrder[currentTurnIdx];
+    pinklerSlots.push({
+      playerId: current.id,
+      returnAfterIdx: currentTurnIdx // return after the next player
+    });
+
+    showToast(current.name + " ist auf Pinkelpause \uD83D\uDEBD", "info");
+
+    // Remove from gameOrder and reinsert later
+    var removed = gameOrder.splice(currentTurnIdx, 1)[0];
+    // Insert after next player (currentTurnIdx now points to next player)
+    var insertAt = Math.min(currentTurnIdx + 1, gameOrder.length);
+    gameOrder.splice(insertAt, 0, removed);
+
+    // Update pinkler returnAfterIdx to the new next player's position
+    pinklerSlots[pinklerSlots.length - 1].returnAfterIdx = currentTurnIdx;
+
+    if (onTurnChange) onTurnChange();
+  }
+
+  // =============================================
+  // --- V+A (Volle und Abräumen) ---
+  // =============================================
+  function renderVAGame() {
+    // Reset V+A state
+    vaState = {
+      phase: "volle",
+      round: "volle",           // "volle" → alle Spieler Volle, dann "abraeumen" → alle Abräumen
+      currentThrow: 0,
+      volleThrows: [],
+      abraeumenThrows: [],
+      standingPins: [1,2,3,4,5,6,7,8,9],
+      results: {},
+      directEntry: false,
+      throwHistory: {}          // {playerId: {volleThrows, abraeumenThrows}}
+    };
+
+    // Initialize results for all players
+    gameOrder.forEach(function(p) {
+      vaState.results[p.id] = { volle: 0, abraeumen: 0, total: 0 };
+    });
+
+    currentTurnIdx = 0;
+    renderVATurn();
+  }
+
+  function buildShuffleSidebarHtml() {
+    var html = '<div class="shuffle-sidebar-table-wrap">';
+    html += '<table class="shuffle-sidebar-table" id="shuffleSidebarTable">';
+    html += '<thead><tr>';
+    html += '<th class="sst-player">Spieler</th>';
+    html += '<th class="sst-marker" data-sst-col="alle9">9</th>';
+    html += '<th class="sst-marker" data-sst-col="kranz">K</th>';
+    html += '<th class="sst-marker" data-sst-col="triclops">T</th>';
+    html += '<th class="sst-marker" data-sst-col="pudel">P</th>';
+    html += '<th class="sst-game">V</th>';
+    html += '<th class="sst-game">A</th>';
+    html += '</tr></thead><tbody>';
+    gameOrder.forEach(function(p, i) {
+      var initials = getInitials(p.name);
+      var color = initialColor(p.name);
+      var avatarHtml = p.avatar
+        ? '<img src="' + p.avatar + '" class="sst-avatar" />'
+        : '<span class="sst-avatar sst-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
+      html += '<tr class="sst-row" data-player-id="' + p.id + '">';
+      html += '<td class="sst-player-cell">';
+      html += '<span class="sst-num">' + (i + 1) + '.</span>';
+      html += avatarHtml;
+      html += '<span class="sst-name">' + escHtml(p.name) + '</span>';
+      html += '</td>';
+      html += '<td class="sst-marker-cell" data-sst-col="alle9"></td>';
+      html += '<td class="sst-marker-cell" data-sst-col="kranz"></td>';
+      html += '<td class="sst-marker-cell" data-sst-col="triclops"></td>';
+      html += '<td class="sst-marker-cell" data-sst-col="pudel"></td>';
+      html += '<td class="sst-game-cell" data-sst-col="volle"></td>';
+      html += '<td class="sst-game-cell" data-sst-col="abraeumen"></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function buildShuffleSidebar() {
+    shuffleArea.innerHTML = buildShuffleSidebarHtml();
+  }
+
+  // Editable V+A sidebar cells — handler works on both containers
+  // (score table is in gameContent for V+A, in shuffleArea for Aussteigen)
+  function handleSstCellClick(e) {
+    var cell = e.target.closest(".sst-game-cell");
+    if (!cell || cell.querySelector("input")) return;
+
+    var row = cell.closest(".sst-row");
+    if (!row) return;
+    var playerId = row.dataset.playerId;
+    var col = cell.dataset.sstCol; // "volle" or "abraeumen"
+    if (!playerId || !col) return;
+    if (!vaState || !vaState.results || !vaState.results[playerId]) return;
+
+    var currentVal = col === "volle" ? vaState.results[playerId].volle : vaState.results[playerId].abraeumen;
+    var input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.max = "999";
+    input.step = "1";
+    input.className = "sst-inline-edit";
+    input.value = currentVal;
+    cell.textContent = "";
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+      var newVal = Number(input.value) || 0;
+      if (col === "volle") {
+        vaState.results[playerId].volle = newVal;
+      } else {
+        vaState.results[playerId].abraeumen = newVal;
+      }
+      vaState.results[playerId].total = vaState.results[playerId].volle + vaState.results[playerId].abraeumen;
+      var player = gameOrder.find(function(p) { return p.id === playerId; });
+      if (player && vaState.results[playerId].abraeumen > 0) {
+        syncVAPlayerToKladde(player, vaState.results[playerId].total);
+      }
+      updateShuffleScores();
+      saveLiveState();
+    }
+
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", function(ev) {
+      if (ev.key === "Enter") { input.blur(); }
+      if (ev.key === "Escape") { input.value = currentVal; input.blur(); }
+    });
+  }
+  shuffleArea.addEventListener("click", handleSstCellClick);
+  gameContent.addEventListener("click", handleSstCellClick);
+
+  function getPlayerMarkerVal(player, markerType) {
+    var input = player.row ? player.row.querySelector('[data-marker-input="' + markerType + '"]') : null;
+    return input ? (Number(input.value) || 0) : 0;
+  }
+
+  function updateShuffleHighlight(idx) {
+    var table = document.getElementById("shuffleSidebarTable");
+    if (!table) return;
+    var rows = table.querySelectorAll(".sst-row");
+    rows.forEach(function(r) { r.classList.remove("shuffle-active-player"); });
+    if (idx >= 0 && idx < gameOrder.length) {
+      var activeRow = table.querySelector('.sst-row[data-player-id="' + gameOrder[idx].id + '"]');
+      if (activeRow) {
+        activeRow.classList.add("shuffle-active-player");
+        activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+    updateShuffleScores();
+  }
+
+  function updateShuffleScores() {
+    var table = document.getElementById("shuffleSidebarTable");
+    if (!table) return;
+    // Highlight active game column header
+    var ths = table.querySelectorAll("th.sst-game");
+    ths.forEach(function(th) { th.classList.remove("sst-game-active"); });
+    if (vaState && vaState.round) {
+      var activeIdx = vaState.round === "volle" ? 0 : 1;
+      if (ths[activeIdx]) ths[activeIdx].classList.add("sst-game-active");
+    }
+
+    gameOrder.forEach(function(p, i) {
+      var row = table.querySelector('.sst-row[data-player-id="' + p.id + '"]');
+      if (!row) return;
+
+      // Marker values from Kladde
+      var markers = ["alle9", "kranz", "triclops", "pudel"];
+      markers.forEach(function(m) {
+        var cell = row.querySelector('[data-sst-col="' + m + '"]');
+        if (cell) {
+          var val = getPlayerMarkerVal(p, m);
+          cell.textContent = val > 0 ? val : "";
+        }
+      });
+
+      // V+A scores
+      if (vaState && vaState.results && vaState.results[p.id]) {
+        var r = vaState.results[p.id];
+        var volleCell = row.querySelector('[data-sst-col="volle"]');
+        var abraeumenCell = row.querySelector('[data-sst-col="abraeumen"]');
+        if (volleCell) {
+          var showVolle = r.volle > 0 || (vaState.round === "abraeumen") || (vaState.round === "volle" && i < currentTurnIdx);
+          volleCell.textContent = showVolle ? r.volle : "";
+        }
+        if (abraeumenCell) {
+          var showAbr = r.abraeumen > 0 || (vaState.round === "abraeumen" && i < currentTurnIdx);
+          abraeumenCell.textContent = showAbr ? r.abraeumen : "";
+        }
+      }
+
+      // Pinkler badge
+      var nameCell = row.querySelector(".sst-name");
+      if (nameCell) {
+        var badge = nameCell.querySelector(".shuffle-pinkler-badge");
+        var isPinkler = pinklerSlots.some(function(ps) { return ps.playerId === p.id; });
+        if (isPinkler && !badge) {
+          nameCell.insertAdjacentHTML("beforeend", '<span class="shuffle-pinkler-badge"> \uD83D\uDEBD</span>');
+        } else if (!isPinkler && badge) {
+          badge.remove();
+        }
+      }
+    });
+  }
+
+  function renderVATurn() {
+    if (currentTurnIdx >= gameOrder.length) {
+      if (vaState.round === "volle") {
+        // Alle haben Volle geworfen → jetzt Abräumen-Runde starten
+        vaState.round = "abraeumen";
+        currentTurnIdx = 0;
+        renderVATurn();
+        return;
+      }
+      // Abräumen auch fertig → Ergebnis zeigen
+      updateShuffleHighlight(-1);
+      renderVAResults();
+      return;
+    }
+
+    updateShuffleHighlight(currentTurnIdx);
+
+    var player = gameOrder[currentTurnIdx];
+    vaState.phase = vaState.round;
+    vaState.currentThrow = 0;
+    vaState.directEntry = false;
+
+    if (vaState.round === "volle") {
+      vaState.volleThrows = [];
+    } else {
+      vaState.abraeumenThrows = [];
+      vaState.standingPins = [1,2,3,4,5,6,7,8,9];
+    }
+
+    renderVAPlayerUI();
+  }
+
+  function renderVAScoreboard() {
+    var html = '<div class="va-scoreboard">';
+    html += '<table class="va-scoreboard-table"><thead><tr><th>Spieler</th><th>Volle</th><th>Abr.</th><th>&sum;</th></tr></thead><tbody>';
+    gameOrder.forEach(function(p, i) {
+      var r = vaState.results[p.id];
+      var isCurrent = i === currentTurnIdx;
+      var volleStr = r.volle > 0 || (vaState.round === "abraeumen") || (vaState.round === "volle" && i < currentTurnIdx) ? String(r.volle) : "";
+      var abraeumenStr = r.abraeumen > 0 || (vaState.round === "abraeumen" && i < currentTurnIdx) ? String(r.abraeumen) : "";
+      var totalStr = r.total > 0 ? String(r.total) : (volleStr && abraeumenStr ? "0" : "");
+      html += '<tr' + (isCurrent ? ' class="va-sb-current"' : '') + '>';
+      html += '<td class="va-sb-name-cell">' + playerAvatarHtml(p, "va-sb-avatar") + ' ' + escHtml(p.name) + '</td>';
+      html += '<td>' + volleStr + '</td>';
+      html += '<td>' + abraeumenStr + '</td>';
+      html += '<td class="va-sb-total">' + totalStr + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderVAPlayerUI() {
+    var player = gameOrder[currentTurnIdx];
+    var mainHtml = '';
+
+    // Player heading always on main side (LEFT)
+    mainHtml += '<div class="va-player-heading">' + escHtml(player.name) + '</div>';
+
+    if (vaState.directEntry) {
+      mainHtml += renderVADirectEntry(player);
+      mainHtml += buildShuffleSidebarHtml();
+      gameContent.innerHTML = mainHtml;
+      liveControls.clear();
+      attachVADirectEntryHandlers();
+    } else if (vaState.phase === "volle") {
+      mainHtml += renderVAVolleMain(player);
+      mainHtml += '<button type="button" class="va-direct-btn" id="vaDirectBtn">Direkt eingeben \u270F\uFE0F</button>';
+      mainHtml += buildShuffleSidebarHtml();
+      gameContent.innerHTML = mainHtml;
+      liveControls.renderVolle({
+        onPick: vaOnVollePick,
+        onUndo: vaOnVolleUndo,
+        canUndo: vaState.currentThrow > 0 || currentTurnIdx > 0
+      });
+    } else if (vaState.phase === "abraeumen") {
+      mainHtml += renderVAAbraeumenMain(player);
+      mainHtml += '<button type="button" class="va-direct-btn" id="vaDirectBtn">Direkt eingeben \u270F\uFE0F</button>';
+      mainHtml += buildShuffleSidebarHtml();
+      gameContent.innerHTML = mainHtml;
+      liveControls.renderAbraeumen({
+        onConfirm: vaOnAbraeumenConfirm,
+        onUndo: vaOnAbraeumenUndo,
+        onInvert: vaOnAbraeumenInvert,
+        canUndo: vaState.abraeumenThrows.length > 0,
+        canInvert: vaState.standingPins.length === 9,
+        fallenCount: 0
+      });
+    }
+
+    // "Direkt eingeben" handler (now on LEFT side)
+    var directBtn = document.getElementById("vaDirectBtn");
+    if (directBtn) {
+      directBtn.addEventListener("click", function() {
+        vaState.directEntry = true;
+        renderVAPlayerUI();
+      });
+    }
+
+    updateShuffleHighlight(currentTurnIdx);
+    updateShuffleScores();
+    saveLiveState();
+  }
+
+  // Returns only the LEFT side HTML for Volle phase (throw slots)
+  function renderVAVolleMain(player) {
+    var sum = vaState.volleThrows.reduce(function(a, b) { return a + b.val; }, 0);
+    var html = '<div class="va-phase-title">5 in die Vollen, Wurf ' + (vaState.currentThrow + 1) + '/5:</div>';
+    html += '<div class="va-throw-slots">';
+    for (var i = 0; i < 5; i++) {
+      var entry = vaState.volleThrows[i];
+      var filled = entry !== undefined;
+      var isCurrent = i === vaState.currentThrow;
+      var displayVal = '';
+      if (filled) {
+        if (entry.marker === "kranz") displayVal = 'K(12)';
+        else if (entry.marker === "pudel") displayVal = 'P';
+        else if (entry.marker === "triclops") displayVal = 'T(3)';
+        else if (entry.marker === "alle9") displayVal = '9';
+        else displayVal = String(entry.val);
+      }
+      html += '<div class="va-throw-slot' + (filled ? ' filled' : '') + (isCurrent ? ' current' : '') + '">';
+      html += '<div class="va-throw-val">' + displayVal + '</div>';
+      html += '</div>';
+    }
+    html += '<div class="va-throw-sum">= ' + sum + '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // Returns only the LEFT side HTML for Abräumen phase (previous throws)
+  function renderVAAbraeumenMain(player) {
+    var throwNum = vaState.abraeumenThrows.length;
+    var html = '<div class="va-phase-title">5 Abr\u00e4umen, Wurf ' + (throwNum + 1) + '/5:</div>';
+    if (vaState.abraeumenThrows.length > 0) {
+      html += '<div class="va-prev-throws">Bisherige W\u00fcrfe: ';
+      vaState.abraeumenThrows.forEach(function(t) {
+        html += '<span class="va-prev-throw-badge">' + t.count + '</span>';
+      });
+      html += '</div>';
+    }
+    return html;
+  }
+
+  // --- V+A Volle callbacks ---
+  function vaOnVollePick(throwVal, marker, btn) {
+    vaState.volleThrows.push({ val: throwVal, marker: marker });
+    vaState.currentThrow = vaState.volleThrows.length;
+
+    // Trigger marker if applicable
+    if (marker) triggerAutoMarker(gameOrder[currentTurnIdx], marker, 1);
+
+    // Visual effects
+    if (marker === "kranz") {
+      liveFx.stop(); liveFx.confetti(btn);
+      setTimeout(function() { liveFx.fireworks(20000); }, 600);
+    } else if (marker === "alle9") {
+      liveFx.fireworks(20000);
+    } else if (marker === "pudel") {
+      liveFx.stop(); liveFx.explosion(btn, "brown");
+    } else if (marker === "triclops") {
+      liveFx.stop(); liveFx.explosion(btn, "purple");
+    }
+
+    if (vaState.currentThrow >= 5) {
+      // Volle done for this player -> next
+      var player = gameOrder[currentTurnIdx];
+      vaState.results[player.id].volle = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
+      vaState.throwHistory[player.id] = vaState.throwHistory[player.id] || {};
+      vaState.throwHistory[player.id].volleThrows = vaState.volleThrows.slice();
+      currentTurnIdx++;
+      renderVATurn();
+      return;
+    }
+    renderVAPlayerUI();
+  }
+
+  function vaOnVolleUndo() {
+    if (vaState.volleThrows.length > 0) {
+      var lastEntry = vaState.volleThrows.pop();
+      vaState.currentThrow = vaState.volleThrows.length;
+      if (lastEntry.marker) triggerAutoMarker(gameOrder[currentTurnIdx], lastEntry.marker, -1);
+    } else if (currentTurnIdx > 0) {
+      // Cross-player undo
+      currentTurnIdx--;
+      var prevPlayer = gameOrder[currentTurnIdx];
+      var hist = vaState.throwHistory[prevPlayer.id];
+      if (hist && hist.volleThrows && hist.volleThrows.length > 0) {
+        vaState.volleThrows = hist.volleThrows.slice();
+        if (vaState.volleThrows[0] && vaState.volleThrows[0].direct) {
+          vaState.directEntry = true;
+          vaState.volleThrows = [];
+          vaState.currentThrow = 0;
+        } else {
+          var lastEntry = vaState.volleThrows.pop();
+          vaState.currentThrow = vaState.volleThrows.length;
+          if (lastEntry.marker) triggerAutoMarker(prevPlayer, lastEntry.marker, -1);
+        }
+        vaState.results[prevPlayer.id].volle = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
+      } else {
+        vaState.volleThrows = [];
+        vaState.currentThrow = 0;
+      }
+      vaState.phase = "volle";
+      updateShuffleHighlight(currentTurnIdx);
+    }
+    renderVAPlayerUI();
+  }
+
+  // --- V+A Abräumen callbacks ---
+  function vaOnAbraeumenConfirm(fallenPins) {
+    var standingPinsBefore = vaState.standingPins.slice();
+
+    // Remove fallen pins from standing
+    vaState.standingPins = vaState.standingPins.filter(function(p) {
+      return fallenPins.indexOf(p) === -1;
+    });
+
+    var wasAlle9 = vaState.standingPins.length === 0;
+    var wasKranz = vaState.standingPins.length === 1 && vaState.standingPins[0] === 5;
+    var rebuild = wasAlle9 || wasKranz;
+    var fromFull = standingPinsBefore.length === 9;
+    var count = (wasKranz && fromFull) ? 12 : fallenPins.length;
+
+    var confirmBtn = document.getElementById("vaConfirmThrow");
+    if (wasAlle9 && fromFull) {
+      triggerAutoMarker(gameOrder[currentTurnIdx], "alle9", 1);
+      liveFx.fireworks(20000);
+    } else if (wasKranz && fromFull) {
+      triggerAutoMarker(gameOrder[currentTurnIdx], "kranz", 1);
+      if (confirmBtn) liveFx.confetti(confirmBtn);
+    } else if (count > 0 && confirmBtn) {
+      liveFx.explosion(confirmBtn, "accent", count * 5);
+    }
+
+    if (rebuild) {
+      vaState.standingPins = [1,2,3,4,5,6,7,8,9];
+    }
+
+    vaState.abraeumenThrows.push({ fallen: fallenPins, count: count, standingPinsBefore: standingPinsBefore, wasAlle9: wasAlle9, wasKranz: wasKranz, fromFull: fromFull });
+
+    if (vaState.abraeumenThrows.length >= 5) {
+      finishVAPlayer();
+    } else {
+      renderVAPlayerUI();
+    }
+  }
+
+  function vaOnAbraeumenUndo() {
+    if (vaState.abraeumenThrows.length > 0) {
+      var lastThrow = vaState.abraeumenThrows.pop();
+      vaState.standingPins = lastThrow.standingPinsBefore;
+      if (lastThrow.wasAlle9 && lastThrow.fromFull) triggerAutoMarker(gameOrder[currentTurnIdx], "alle9", -1);
+      if (lastThrow.wasKranz && lastThrow.fromFull) triggerAutoMarker(gameOrder[currentTurnIdx], "kranz", -1);
+    }
+    renderVAPlayerUI();
+  }
+
+  function vaOnAbraeumenInvert() {
+    shuffleArea.querySelectorAll(".pin-btn").forEach(function(btn) {
+      if (btn.classList.contains("pin-selected")) {
+        btn.classList.remove("pin-selected");
+        btn.classList.add("pin-standing");
+      } else if (btn.classList.contains("pin-standing")) {
+        btn.classList.remove("pin-standing");
+        btn.classList.add("pin-selected");
+      }
+    });
+    updateFallenCount();
+  }
+
+  function renderPinDiamond() {
+    // Kegel-Aufstellung (Raute von oben gesehen):
+    //     1
+    //    2 3
+    //   4 5 6
+    //    7 8
+    //     9
+    var rows = [[1], [2,3], [4,5,6], [7,8], [9]];
+    var html = '<div class="pin-diamond">';
+    rows.forEach(function(row) {
+      html += '<div class="pin-row">';
+      row.forEach(function(pin) {
+        var standing = vaState.standingPins.indexOf(pin) !== -1;
+        html += '<button type="button" class="pin-btn' + (standing ? ' pin-standing' : ' pin-fallen') + '" data-pin="' + pin + '">' + pin + '</button>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderVAPicker() {
+    // 2-row × 7-column grid:
+    // Row 1: [0]     [1][2][3][4]  [ ][9er]
+    // Row 2: [Pudel] [5][6][7][8]  [Tri][K]
+    var html = '<div class="va-picker-grid">';
+    // Row 1
+    html += '<button type="button" class="va-picker-btn" data-va-pick="0">0</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="1">1</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="2">2</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="3">3</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="4">4</button>';
+    html += '<span class="va-picker-spacer"></span>';
+    html += '<button type="button" class="va-picker-btn va-picker-9er" data-va-pick="9er">9</button>';
+    // Row 2
+    html += '<button type="button" class="va-picker-btn va-picker-pudel" data-va-pick="pudel">Pudel</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="5">5</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="6">6</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="7">7</button>';
+    html += '<button type="button" class="va-picker-btn" data-va-pick="8">8</button>';
+    html += '<button type="button" class="va-picker-btn va-picker-tri" data-va-pick="triclops"><span class="tri-pins"><span></span><span></span><span></span></span></button>';
+    html += '<button type="button" class="va-picker-btn va-picker-kranz" data-va-pick="kranz">K</button>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderVADirectEntry(player) {
+    var html = '<div class="va-direct-container">';
+    if (vaState.round === "volle") {
+      var volleSum = vaState.results[player.id] ? vaState.results[player.id].volle : 0;
+      if (vaState.volleThrows.length > 0) {
+        volleSum = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
+      }
+      html += '<h3 class="va-direct-title">Volle direkt eingeben</h3>';
+      html += '<div class="va-direct-fields">';
+      html += '<div class="va-direct-field">';
+      html += '<label>Volle</label>';
+      html += '<input type="number" min="0" max="999" step="1" id="vaDirectVolle" value="' + volleSum + '" class="va-direct-input" autofocus />';
+      html += '</div>';
+      html += '</div>';
+    } else {
+      var abraeumenSum = vaState.results[player.id] ? vaState.results[player.id].abraeumen : 0;
+      html += '<h3 class="va-direct-title">Abr\u00e4umen direkt eingeben</h3>';
+      html += '<div class="va-direct-fields">';
+      html += '<div class="va-direct-field">';
+      html += '<label>Abr\u00e4umen</label>';
+      html += '<input type="number" min="0" max="999" step="1" id="vaDirectAbraeumen" value="' + abraeumenSum + '" class="va-direct-input" autofocus />';
+      html += '</div>';
+      html += '</div>';
+    }
+    html += '<div class="va-direct-actions">';
+    html += '<button type="button" class="va-direct-save" id="vaDirectSave">\u00dcbernehmen \u2713</button>';
+    html += '<button type="button" class="va-direct-back" id="vaDirectBack">Wurf f\u00fcr Wurf \u25B6</button>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function attachVADirectEntryHandlers() {
+    // Direct entry back to throw-by-throw
+    var backBtn = document.getElementById("vaDirectBack");
+    if (backBtn) {
+      backBtn.addEventListener("click", function() {
+        vaState.directEntry = false;
+        renderVAPlayerUI();
+      });
+    }
+
+    // Direct entry save
+    var saveBtn = document.getElementById("vaDirectSave");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", function() {
+        var player = gameOrder[currentTurnIdx];
+        vaState.throwHistory[player.id] = vaState.throwHistory[player.id] || {};
+        if (vaState.round === "volle") {
+          var volleVal = Number(document.getElementById("vaDirectVolle").value) || 0;
+          vaState.results[player.id].volle = volleVal;
+          vaState.throwHistory[player.id].volleThrows = [{ val: volleVal, marker: null, direct: true }];
+        } else {
+          var abraeumenVal = Number(document.getElementById("vaDirectAbraeumen").value) || 0;
+          vaState.results[player.id].abraeumen = abraeumenVal;
+          vaState.results[player.id].total = vaState.results[player.id].volle + abraeumenVal;
+          syncVAPlayerToKladde(player, vaState.results[player.id].total);
+          vaState.throwHistory[player.id].abraeumenThrows = [{ fallen: [], count: abraeumenVal, direct: true }];
+        }
+        currentTurnIdx++;
+        renderVATurn();
+      });
+    }
+  }
+
+  function updateFallenCount() {
+    var count = shuffleArea.querySelectorAll(".pin-btn.pin-selected").length;
+    var el = document.getElementById("vaFallenCount");
+    if (el) el.textContent = "Getroffen: " + count;
+  }
+
+  function finishVAPlayer() {
+    var player = gameOrder[currentTurnIdx];
+    var abraeumenSum = vaState.abraeumenThrows.reduce(function(a,b) { return a + b.count; }, 0);
+    vaState.results[player.id].abraeumen = abraeumenSum;
+    vaState.results[player.id].total = vaState.results[player.id].volle + abraeumenSum;
+
+    vaState.throwHistory[player.id] = vaState.throwHistory[player.id] || {};
+    vaState.throwHistory[player.id].abraeumenThrows = vaState.abraeumenThrows.map(function(t) {
+      return { fallen: t.fallen.slice(), count: t.count, standingPinsBefore: t.standingPinsBefore ? t.standingPinsBefore.slice() : [], wasAlle9: !!t.wasAlle9 };
+    });
+
+    // Write to Kladde
+    syncVAPlayerToKladde(player, vaState.results[player.id].total);
+
+    currentTurnIdx++;
+    renderVATurn();
+  }
+
+  function syncVAPlayerToKladde(player, total) {
+    var input = player.row.querySelector('[name="va_' + player.id + '"]');
+    if (input) {
+      input.value = total;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  function triggerAutoMarker(player, markerType, delta) {
+    // delta: +1 or -1
+    var selector = delta > 0
+      ? '.mark-btn:not(.mark-dec)[data-mark-target="' + markerType + '"]'
+      : '.mark-btn.mark-dec[data-mark-target="' + markerType + '"]';
+    var btn = player.row.querySelector(selector);
+    if (btn && !btn.disabled) btn.click();
+
+    // Update old sidebar display (for non-V+A modes)
+    var sidebarBtn = playersContainer.querySelector('[data-lm-member="' + player.id + '"]');
+    if (sidebarBtn && activeMarkerTab === markerType) {
+      updatePlayerBtnVal(sidebarBtn, player);
+    }
+    // Update shuffle sidebar table marker cell
+    var table = document.getElementById("shuffleSidebarTable");
+    if (table) {
+      var row = table.querySelector('.sst-row[data-player-id="' + player.id + '"]');
+      if (row) {
+        var cell = row.querySelector('[data-sst-col="' + markerType + '"]');
+        if (cell) {
+          var val = getPlayerMarkerVal(player, markerType);
+          cell.textContent = val > 0 ? val : "";
+        }
+      }
+    }
+  }
+
+  function calcVARankCosts(scoreKey) {
+    var sorted = gameOrder.slice().sort(function(a, b) {
+      return (vaState.results[a.id][scoreKey] || 0) - (vaState.results[b.id][scoreKey] || 0);
+    });
+    var n = sorted.length;
+    var losers = Math.ceil(n / 2);
+    var costs = {};
+    sorted.forEach(function(p, i) {
+      if (i < losers) {
+        if (i > 0 && vaState.results[p.id][scoreKey] === vaState.results[sorted[i - 1].id][scoreKey]) {
+          costs[p.id] = costs[sorted[i - 1].id];
+        } else {
+          costs[p.id] = (losers - i) * 2;
+        }
+      } else {
+        costs[p.id] = 0;
+      }
+    });
+    return costs;
+  }
+
+  function renderVAResults() {
+    // Kosten separat für Volle und Abräumen berechnen
+    var volleCosts = calcVARankCosts("volle");
+    var abraeumenCosts = calcVARankCosts("abraeumen");
+    var costs = {};
+    gameOrder.forEach(function(p) {
+      costs[p.id] = (volleCosts[p.id] || 0) + (abraeumenCosts[p.id] || 0);
+    });
+
+    // Sort by total descending for display
+    var display = gameOrder.slice().sort(function(a, b) {
+      return vaState.results[b.id].total - vaState.results[a.id].total;
+    });
+
+    var fmtCost = function(z) { return z > 0 ? (z / 10).toFixed(2).replace(".", ",") + " \u20ac" : "\u2014"; };
+
+    var html = '<div class="va-results">';
+    html += '<h3 class="va-results-title">Volle + Abräumen \u2014 Ergebnis</h3>';
+    html += '<table class="va-results-table">';
+    html += '<thead><tr><th>#</th><th>Spieler</th><th class="va-gap"></th><th class="va-block-v">V</th><th class="va-block-v">€</th><th class="va-gap"></th><th class="va-block-a">A</th><th class="va-block-a">€</th><th class="va-gap"></th><th class="va-block-sum">&sum; €</th></tr></thead>';
+    html += '<tbody>';
+    display.forEach(function(p, i) {
+      var r = vaState.results[p.id];
+      var cost = costs[p.id];
+      var vC = volleCosts[p.id] || 0;
+      var aC = abraeumenCosts[p.id] || 0;
+      html += '<tr' + (cost > 0 ? ' class="va-result-loser"' : '') + '>';
+      html += '<td>' + (i + 1) + '.</td>';
+      html += '<td class="va-sb-name-cell">' + playerAvatarHtml(p, "va-sb-avatar") + ' ' + escHtml(p.name) + '</td>';
+      html += '<td class="va-gap"></td>';
+      html += '<td class="va-block-v">' + r.volle + '</td>';
+      html += '<td class="va-block-v va-result-cost">' + fmtCost(vC) + '</td>';
+      html += '<td class="va-gap"></td>';
+      html += '<td class="va-block-a">' + r.abraeumen + '</td>';
+      html += '<td class="va-block-a va-result-cost">' + fmtCost(aC) + '</td>';
+      html += '<td class="va-gap"></td>';
+      html += '<td class="va-block-sum va-result-cost va-result-total" data-va-cost-id="' + p.id + '">' + fmtCost(cost) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="va-results-actions">';
+    html += '<button type="button" class="va-results-accept" id="vaAcceptBtn">\u00dcbernehmen \u2713</button>';
+    html += '<button type="button" class="va-results-edit" id="vaEditCostsBtn">Kosten anpassen \u270F\uFE0F</button>';
+    html += '</div>';
+    html += '</div>';
+
+    gameContent.innerHTML = html;
+    liveControls.clear(); // Clear controls panel for results view
+
+    // Store costs for later
+    vaState.costs = costs;
+
+    document.getElementById("vaAcceptBtn").addEventListener("click", function() {
+      syncVACostsToKladde();
+      showToast("V+A \u00fcbernommen!", "success");
+      closeLiveMode();
+    });
+
+    document.getElementById("vaEditCostsBtn").addEventListener("click", function() {
+      // Make cost cells editable
+      gameContent.querySelectorAll("[data-va-cost-id]").forEach(function(td) {
+        var pid = td.dataset.vaCostId;
+        var zehntel = vaState.costs[pid] || 0;
+        td.innerHTML = '<input type="number" min="0" max="999" step="1" class="va-cost-input" data-va-cost-edit="' + pid + '" value="' + zehntel + '" />';
+      });
+      // Replace edit button with save
+      document.getElementById("vaEditCostsBtn").textContent = "Speichern";
+      document.getElementById("vaEditCostsBtn").addEventListener("click", function() {
+        gameContent.querySelectorAll("[data-va-cost-edit]").forEach(function(inp) {
+          vaState.costs[inp.dataset.vaCostEdit] = Number(inp.value) || 0;
+        });
+        renderVAResults(); // re-render with new costs
+      }, { once: true });
+    });
+
+    saveLiveState();
+  }
+
+  function syncVACostsToKladde() {
+    gameOrder.forEach(function(p) {
+      var total = vaState.results[p.id] ? vaState.results[p.id].total : 0;
+      syncVAPlayerToKladde(p, total);
+    });
+    recalcCosts();
+  }
+
+  // =============================================
+  // --- Aussteigen ---
+  // =============================================
+  function renderAussteigenGame() {
+    aussteigenState = {
+      remaining: gameOrder.slice(),
+      eliminated: [],
+      currentRound: 1,
+      selected: []
+    };
+    renderAussteigenRound();
+  }
+
+  function renderAussteigenRound() {
+    if (aussteigenState.remaining.length <= 1) {
+      renderAussteigenResults();
+      return;
+    }
+
+    var html = '<div class="aussteigen-container">';
+    html += '<div class="aussteigen-header">';
+    html += '<span class="aussteigen-round">Aussteigen \u2014 Runde ' + aussteigenState.currentRound + '</span>';
+    html += '<span class="aussteigen-count">Noch dabei: ' + aussteigenState.remaining.length + '</span>';
+    html += '</div>';
+    html += '<div class="aussteigen-prompt">Wer fliegt raus?</div>';
+
+    html += '<div class="aussteigen-player-grid">';
+    aussteigenState.remaining.forEach(function(p) {
+      var selected = aussteigenState.selected.indexOf(p.id) !== -1;
+      html += '<button type="button" class="aussteigen-card' + (selected ? ' selected' : '') + '" data-aussteigen-id="' + p.id + '">';
+      html += playerAvatarHtml(p, "aussteigen-card-avatar");
+      html += '<span class="aussteigen-card-name">' + escHtml(p.name) + '</span>';
+      if (selected) html += '<span class="aussteigen-check">\u2713</span>';
+      html += '</button>';
+    });
+    html += '</div>';
+
+    if (aussteigenState.selected.length > 0) {
+      var names = aussteigenState.selected.map(function(id) {
+        var p = aussteigenState.remaining.find(function(r) { return r.id === id; });
+        return p ? p.name : "?";
+      });
+      html += '<div class="aussteigen-selection">Ausgew\u00e4hlt: ' + names.join(", ") + '</div>';
+    }
+
+    html += '<div class="aussteigen-actions">';
+    html += '<button type="button" class="aussteigen-eliminate-btn' + (aussteigenState.selected.length === 0 ? ' disabled' : '') + '" id="aussteigenEliminateBtn"' + (aussteigenState.selected.length === 0 ? ' disabled' : '') + '>Raus! \uD83C\uDF0A</button>';
+    html += '</div>';
+    html += '</div>';
+
+    gameContent.innerHTML = html;
+
+    // Card click handlers
+    gameContent.querySelectorAll(".aussteigen-card").forEach(function(card) {
+      card.addEventListener("click", function() {
+        var id = card.dataset.aussteigenId;
+        var idx = aussteigenState.selected.indexOf(id);
+        if (idx === -1) {
+          aussteigenState.selected.push(id);
+        } else {
+          aussteigenState.selected.splice(idx, 1);
+        }
+        renderAussteigenRound();
+      });
+    });
+
+    // Eliminate button
+    var elimBtn = document.getElementById("aussteigenEliminateBtn");
+    if (elimBtn && aussteigenState.selected.length > 0) {
+      elimBtn.addEventListener("click", function() {
+        eliminateSelected();
+      });
+    }
+
+    saveLiveState();
+  }
+
+  function eliminateSelected() {
+    var selectedIds = aussteigenState.selected.slice();
+    var eliminatedGroup = [];
+    var totalPlayers = gameOrder.length;
+
+    selectedIds.forEach(function(id) {
+      eliminatedGroup.push({
+        id: id,
+        round: aussteigenState.currentRound
+      });
+    });
+
+    aussteigenState.eliminated.push(eliminatedGroup);
+
+    // Animate out
+    selectedIds.forEach(function(id) {
+      var card = gameContent.querySelector('[data-aussteigen-id="' + id + '"]');
+      if (card) card.classList.add("aussteigen-eliminated");
+    });
+
+    // After animation, update state
+    setTimeout(function() {
+      aussteigenState.remaining = aussteigenState.remaining.filter(function(p) {
+        return selectedIds.indexOf(p.id) === -1;
+      });
+      aussteigenState.selected = [];
+      aussteigenState.currentRound++;
+      renderAussteigenRound();
+    }, 700);
+  }
+
+  function renderAussteigenResults() {
+    var totalPlayers = gameOrder.length;
+    var costs = calcAussteigenCosts(aussteigenState.eliminated, totalPlayers);
+    var winner = aussteigenState.remaining[0];
+
+    var html = '<div class="aussteigen-results">';
+    html += '<h3 class="aussteigen-results-title">Aussteigen \u2014 Ergebnis</h3>';
+
+    if (winner) {
+      html += '<div class="aussteigen-winner">';
+      html += '<span class="aussteigen-trophy">\uD83C\uDFC6</span> Gewinner: <strong>' + escHtml(winner.name) + '</strong> (0,00 \u20ac)';
+      html += '</div>';
+    }
+
+    html += '<div class="aussteigen-rounds-list">';
+    aussteigenState.eliminated.forEach(function(group) {
+      var round = group[0].round;
+      var names = group.map(function(e) {
+        var p = gameOrder.find(function(g) { return g.id === e.id; });
+        var cost = costs[e.id] || 0;
+        var costStr = (cost / 10).toFixed(2).replace(".", ",") + " \u20ac";
+        return (p ? p.name : "?") + " (" + costStr + ")";
+      });
+      var prefix = group.length > 1 ? "je " : "";
+      html += '<div class="aussteigen-round-result">Runde ' + round + ': ' + names.join(", ") + '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="aussteigen-results-actions">';
+    html += '<button type="button" class="aussteigen-accept-btn" id="aussteigenAcceptBtn">\u00dcbernehmen \u2713</button>';
+    html += '<button type="button" class="aussteigen-edit-btn" id="aussteigenEditBtn">Kosten anpassen \u270F\uFE0F</button>';
+    html += '</div>';
+    html += '</div>';
+
+    gameContent.innerHTML = html;
+
+    // Store costs
+    aussteigenState.costs = costs;
+
+    document.getElementById("aussteigenAcceptBtn").addEventListener("click", function() {
+      syncAussteigenToKladde();
+      showToast("Aussteigen \u00fcbernommen!", "success");
+      closeLiveMode();
+    });
+
+    document.getElementById("aussteigenEditBtn").addEventListener("click", function() {
+      // Show editable cost fields in a simple list
+      var editHtml = '<div class="aussteigen-edit-costs">';
+      editHtml += '<h3>Kosten anpassen (Zehntel-Euro)</h3>';
+      gameOrder.forEach(function(p) {
+        var cost = costs[p.id] || 0;
+        editHtml += '<div class="aussteigen-edit-row">';
+        editHtml += '<span class="aussteigen-edit-name">' + playerAvatarHtml(p, "aussteigen-edit-avatar") + ' ' + escHtml(p.name) + '</span>';
+        editHtml += '<input type="number" min="0" max="999" step="1" class="aussteigen-cost-input" data-aussteigen-cost-id="' + p.id + '" value="' + cost + '" />';
+        editHtml += '</div>';
+      });
+      editHtml += '<div class="aussteigen-edit-actions">';
+      editHtml += '<button type="button" id="aussteigenSaveCosts">Speichern \u2713</button>';
+      editHtml += '</div>';
+      editHtml += '</div>';
+      gameContent.innerHTML = editHtml;
+
+      document.getElementById("aussteigenSaveCosts").addEventListener("click", function() {
+        gameContent.querySelectorAll("[data-aussteigen-cost-id]").forEach(function(inp) {
+          aussteigenState.costs[inp.dataset.aussteigenCostId] = Number(inp.value) || 0;
+        });
+        costs = aussteigenState.costs;
+        renderAussteigenResults();
+      });
+    });
+
+    saveLiveState();
+  }
+
+  function calcAussteigenCosts(eliminatedGroups, totalPlayers) {
+    var costs = {};
+    var position = 0;
+    for (var i = 0; i < eliminatedGroups.length; i++) {
+      var group = eliminatedGroups[i];
+      var costZehntel = totalPlayers - 1 - position;
+      if (costZehntel < 0) costZehntel = 0;
+      for (var j = 0; j < group.length; j++) {
+        costs[group[j].id] = costZehntel;
+      }
+      position += group.length;
+    }
+    // Winner (remaining) = 0
+    return costs;
+  }
+
+  function syncAussteigenToKladde() {
+    var costs = aussteigenState.costs;
+    gameOrder.forEach(function(p) {
+      var zehntel = costs[p.id] || 0;
+      var input = p.row.querySelector('[name="aussteigen_' + p.id + '"]');
+      if (input) {
+        input.value = zehntel;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+    recalcCosts();
+  }
+
+  // =============================================
+  // --- Monte Game (Live Mode) ---
+  // =============================================
+
+  function renderMonteGame() {
+    gameContent.innerHTML = '<div class="live-loading">Lade Monte-Daten...</div>';
+    fetch("/kegelkladde/monte-rounds?gamedayId=" + encodeURIComponent(gamedayId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        // Build local state
+        monteState = {
+          rounds: {},
+          questionValue: data.questionValue,
+          totals: data.totals || {},
+          extraWinnerId: data.extraWinnerId,
+          pickedValue: null,
+          editMode: false,
+          lastPlacement: null
+        };
+        monteOverrides = {};
+        for (var i = 0; i < (data.rounds || []).length; i++) {
+          var r = data.rounds[i];
+          if (!monteState.rounds[r.user_id]) monteState.rounds[r.user_id] = {};
+          monteState.rounds[r.user_id][r.round_number] = r.roll_value;
+        }
+        // Detect existing manual overrides: compare kladde value vs calculated total
+        players.forEach(function(p) {
+          var monteInput = p.row.querySelector('[name="monte_' + p.id + '"]');
+          if (monteInput) {
+            var kladdeZehntel = Number(monteInput.value) || 0;
+            var kladdeEur = kladdeZehntel / 10;
+            var calcEur = monteState.totals[p.id] || 0;
+            if (Math.abs(kladdeEur - calcEur) > 0.001 && kladdeZehntel > 0) {
+              monteOverrides[p.id] = kladdeEur;
+            }
+          }
+        });
+
+        // Enable sidebar layout (table big, picker small)
+        buildMonteSidebar();
+        shuffleArea.style.display = "";
+        liveView.classList.add("live-shuffle-sidebar");
+
+        // Start turn-based flow
+        currentTurnIdx = 0;
+        skipFilledMontePlayers();
+        renderMontePlayerUI();
+      })
+      .catch(function() {
+        gameContent.innerHTML = '<div class="live-loading">Fehler beim Laden.</div>';
+      });
+  }
+
+  function getMonteEmptyCells(uid) {
+    var empty = [];
+    for (var round = 1; round <= 11; round++) {
+      var val = monteState.rounds[uid] ? monteState.rounds[uid][round] : undefined;
+      if (val == null) empty.push(round);
+    }
+    return empty;
+  }
+
+  function skipFilledMontePlayers() {
+    var checked = 0;
+    while (currentTurnIdx < gameOrder.length && checked < gameOrder.length) {
+      var player = gameOrder[currentTurnIdx];
+      var emptyCells = getMonteEmptyCells(player.id);
+      if (emptyCells.length > 0) return;
+      currentTurnIdx++;
+      checked++;
+    }
+  }
+
+  function isMonteComplete() {
+    for (var i = 0; i < gameOrder.length; i++) {
+      if (getMonteEmptyCells(gameOrder[i].id).length > 0) return false;
+    }
+    return true;
+  }
+
+  // --- Monte Table (rendered in gameContent = LEFT side) ---
+  function buildMonteSidebar() {
+    var cols = [];
+    for (var i = 1; i <= 10; i++) cols.push({ num: i, label: String(i) });
+    cols.push({ num: 11, label: "?" });
+
+    // Player heading + phase title + edit area (updated dynamically by renderMontePlayerUI)
+    var html = '<div id="montePlayerHeading" class="va-player-heading"></div>';
+    html += '<div id="montePhaseTitle" class="va-phase-title"></div>';
+    html += '<div id="monteEditArea" class="monte-edit-area"></div>';
+
+    // Monte table
+    html += '<div class="monte-sidebar-wrap" id="monteSidebarWrap">';
+    html += '<table class="monte-sidebar-table" id="monteSidebarTable"><thead><tr>';
+    html += '<th class="mst-player">Spieler</th>';
+    cols.forEach(function(c) {
+      if (c.num === 11) {
+        var qv = monteState.questionValue != null ? monteState.questionValue : "";
+        html += '<th class="mst-q"><input type="number" min="0" max="12" step="1" class="monte-question-input" id="monteQuestionInput" value="' + qv + '" placeholder="?" /></th>';
+      } else {
+        html += '<th class="mst-round">' + c.label + '</th>';
+      }
+    });
+    html += '<th class="mst-total">Ges.</th>';
+    html += '</tr></thead><tbody>';
+
+    gameOrder.forEach(function(p, idx) {
+      var uid = p.id;
+      var initials = getInitials(p.name);
+      var color = initialColor(p.name);
+      var avatarHtml = p.avatar
+        ? '<img src="' + p.avatar + '" class="mst-avatar" />'
+        : '<span class="mst-avatar mst-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
+
+      html += '<tr class="mst-row" data-monte-uid="' + uid + '">';
+      html += '<td class="mst-player-cell">';
+      html += '<span class="mst-num">' + (idx + 1) + '.</span>';
+      html += avatarHtml;
+      html += '<span class="mst-name">' + escHtml(p.name) + '</span>';
+      html += '</td>';
+      cols.forEach(function(c) {
+        var val = monteState.rounds[uid] ? monteState.rounds[uid][c.num] : undefined;
+        var display = val != null ? (val === 12 ? "K" : String(val)) : "";
+        html += '<td class="monte-cell" data-monte-uid="' + uid + '" data-monte-round="' + c.num + '">' + display + '</td>';
+      });
+      var hasOverride = monteOverrides[uid] != null;
+      var total = hasOverride ? monteOverrides[uid] : (monteState.totals[uid] || 0);
+      html += '<td class="monte-total-cell' + (hasOverride ? ' monte-total-override' : '') + '" data-monte-total="' + uid + '">' + formatMonteEur(total) + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    gameContent.innerHTML = html;
+
+    highlightMonteLosers();
+    attachMonteSidebarHandlers();
+  }
+
+  function attachMonteSidebarHandlers() {
+    // Question input handler
+    var qInput = document.getElementById("monteQuestionInput");
+    if (qInput) {
+      qInput.addEventListener("change", function() {
+        var raw = qInput.value.trim();
+        var parsed = Number(raw);
+        var val = raw === "" ? null : (isNaN(parsed) ? null : parsed);
+        if (raw !== "" && isNaN(parsed)) { qInput.value = ""; }
+        monteState.questionValue = val;
+        fetch("/kegelkladde/monte-question", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ csrfToken: csrfToken, gamedayId: gamedayId, questionValue: val })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            monteState.totals = data.totals;
+            monteState.extraWinnerId = data.extraWinnerId;
+            updateMonteTotals();
+            highlightMonteLosers();
+            syncMonteToKladde();
+          }
+        });
+      });
+    }
+
+    // Delegated click handler for sidebar cells
+    var sidebarWrap = document.getElementById("monteSidebarWrap");
+    if (sidebarWrap) {
+      sidebarWrap.addEventListener("click", function(e) {
+        // Click on monte cell
+        var cell = e.target.closest(".monte-cell");
+        if (cell) {
+          if (cell.classList.contains("monte-skipped")) return;
+          var uid = cell.dataset.monteUid;
+          var round = Number(cell.dataset.monteRound);
+
+          if (monteState.editMode) {
+            // Edit mode: open modal picker for any cell
+            showPicker(cell);
+            return;
+          }
+
+          // Normal turn-based mode: only place if pickedValue is set and cell is placeable
+          if (monteState.pickedValue != null && cell.classList.contains("monte-placeable")) {
+            placeMonteValue(uid, round, cell);
+          }
+          return;
+        }
+
+        // Click on total cell → inline edit for manual override
+        var totalCell = e.target.closest(".monte-total-cell");
+        if (totalCell && !totalCell.querySelector(".monte-total-input")) {
+          var tuid = totalCell.dataset.monteTotal;
+          var hasOverride = monteOverrides[tuid] != null;
+          var currentVal = hasOverride ? monteOverrides[tuid] : (monteState.totals[tuid] || 0);
+          var zehntel = Math.round(currentVal * 10);
+
+          var input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.max = "999";
+          input.step = "1";
+          input.value = zehntel;
+          input.className = "monte-total-input";
+          input.title = "Wert in Zehntel-Euro (z.B. 15 = 1,50 \u20ac). Leer = automatisch berechnen";
+          totalCell.textContent = "";
+          totalCell.appendChild(input);
+          input.focus();
+          input.select();
+
+          var cancelled = false;
+          function commitOverride() {
+            if (cancelled) return;
+            var rawVal = input.value.trim();
+            if (rawVal === "" || rawVal === "0") {
+              delete monteOverrides[tuid];
+            } else {
+              var z = Number(rawVal) || 0;
+              monteOverrides[tuid] = Math.round(z) / 10;
+            }
+            updateMonteTotals();
+            syncMonteToKladde();
+          }
+          input.addEventListener("blur", commitOverride);
+          input.addEventListener("keydown", function(ev) {
+            if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+            if (ev.key === "Escape") {
+              ev.stopPropagation();
+              cancelled = true;
+              input.remove();
+              updateMonteTotals();
+            }
+          });
+        }
+      });
+    }
+  }
+
+  function updateMonteSidebarHighlight() {
+    var table = document.getElementById("monteSidebarTable");
+    if (!table) return;
+    var rows = table.querySelectorAll(".mst-row");
+    rows.forEach(function(r) { r.classList.remove("monte-active-player"); });
+
+    // Clear all placeable highlights
+    table.querySelectorAll(".monte-cell").forEach(function(c) {
+      c.classList.remove("monte-placeable");
+    });
+
+    if (monteState.editMode) return;
+    if (currentTurnIdx >= gameOrder.length) return;
+
+    var activePlayer = gameOrder[currentTurnIdx];
+    var activeRow = table.querySelector('.mst-row[data-monte-uid="' + activePlayer.id + '"]');
+    if (activeRow) {
+      activeRow.classList.add("monte-active-player");
+      activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+
+      // If a value is picked, highlight empty non-skipped cells
+      if (monteState.pickedValue != null) {
+        activeRow.querySelectorAll(".monte-cell").forEach(function(c) {
+          var val = monteState.rounds[activePlayer.id] ? monteState.rounds[activePlayer.id][Number(c.dataset.monteRound)] : undefined;
+          if (val == null && !c.classList.contains("monte-skipped")) {
+            c.classList.add("monte-placeable");
+          }
+        });
+      }
+    }
+  }
+
+  // --- Monte Player UI (picker in shuffleArea = RIGHT side) ---
+  function renderMontePlayerUI() {
+    if (monteState.editMode) {
+      renderMonteEditUI();
+      return;
+    }
+
+    if (currentTurnIdx >= gameOrder.length || isMonteComplete()) {
+      renderMonteDone();
+      return;
+    }
+
+    var player = gameOrder[currentTurnIdx];
+    var playerNum = currentTurnIdx + 1;
+    var totalPlayers = gameOrder.length;
+
+    // Update heading in gameContent (LEFT side, above Monte table)
+    var headingEl = document.getElementById("montePlayerHeading");
+    var titleEl = document.getElementById("montePhaseTitle");
+    if (headingEl) headingEl.textContent = player.name;
+    if (titleEl) titleEl.textContent = 'Monte, Spieler ' + playerNum + '/' + totalPlayers + ':';
+
+    // "Bearbeiten" button on LEFT side
+    var editArea = document.getElementById("monteEditArea");
+    if (editArea) {
+      editArea.innerHTML = '<button type="button" class="va-direct-btn" id="monteEditBtn">Bearbeiten \u270F\uFE0F</button>';
+      document.getElementById("monteEditBtn").addEventListener("click", function() {
+        monteState.editMode = true;
+        monteState.pickedValue = null;
+        renderMontePlayerUI();
+      });
+    }
+
+    // RIGHT side: unified Volle picker
+    var canUndo = monteState.pickedValue != null || monteState.lastPlacement != null;
+    liveControls.renderVolle({
+      onPick: monteOnPick,
+      onUndo: monteOnUndo,
+      canUndo: canUndo
+    });
+
+    // Highlight previously picked value
+    if (monteState.pickedValue != null) {
+      liveControls.highlightPick(monteState.pickedValue);
+    }
+
+    updateMonteSidebarHighlight();
+    saveMonteState();
+  }
+
+  // --- Monte callbacks for unified picker ---
+  function monteOnPick(val, marker, btn) {
+    monteState.pickedValue = val;
+    liveControls.highlightPick(val);
+    updateMonteSidebarHighlight();
+
+    // Visual effects for special markers
+    if (marker === "kranz") {
+      liveFx.stop(); liveFx.confetti(btn);
+      setTimeout(function() { liveFx.fireworks(20000); }, 600);
+    } else if (marker === "alle9") {
+      liveFx.fireworks(20000);
+    } else if (marker === "pudel") {
+      liveFx.stop(); liveFx.explosion(btn, "brown");
+    } else if (marker === "triclops") {
+      liveFx.stop(); liveFx.explosion(btn, "purple");
+    }
+  }
+
+  function monteOnUndo() {
+    if (monteState.pickedValue != null) {
+      monteState.pickedValue = null;
+      renderMontePlayerUI();
+    } else if (monteState.lastPlacement) {
+      var lp = monteState.lastPlacement;
+      selectMonteValue(lp.uid, lp.round, null, null);
+      monteState.lastPlacement = null;
+      if (currentTurnIdx > 0) currentTurnIdx--;
+      var prevPlayer = gameOrder[currentTurnIdx];
+      if (prevPlayer && String(prevPlayer.id) !== String(lp.uid)) {
+        for (var i = 0; i < gameOrder.length; i++) {
+          if (String(gameOrder[i].id) === String(lp.uid)) {
+            currentTurnIdx = i;
+            break;
+          }
+        }
+      }
+      renderMontePlayerUI();
+    }
+  }
+
+  function renderMonteEditUI() {
+    // Update heading in gameContent (LEFT side)
+    var headingEl = document.getElementById("montePlayerHeading");
+    var titleEl = document.getElementById("montePhaseTitle");
+    if (headingEl) { headingEl.textContent = "Bearbeiten"; headingEl.style.fontSize = "1.4rem"; }
+    if (titleEl) titleEl.textContent = 'Klicke auf eine Zelle in der Tabelle, um den Wert zu \u00e4ndern.';
+
+    // "Fertig" button on LEFT side
+    var editArea = document.getElementById("monteEditArea");
+    if (editArea) {
+      editArea.innerHTML = '<button type="button" class="va-confirm-throw" id="monteEditDoneBtn">Fertig \u2713</button>';
+      document.getElementById("monteEditDoneBtn").addEventListener("click", function() {
+        monteState.editMode = false;
+        monteState.pickedValue = null;
+        if (headingEl) headingEl.style.fontSize = "";
+        skipFilledMontePlayers();
+        renderMontePlayerUI();
+      });
+    }
+
+    liveControls.clear();
+    updateMonteSidebarHighlight();
+  }
+
+  function renderMonteDone() {
+    // Update heading in gameContent (LEFT side)
+    var headingEl = document.getElementById("montePlayerHeading");
+    var titleEl = document.getElementById("montePhaseTitle");
+    if (headingEl) { headingEl.textContent = "Monte abgeschlossen"; headingEl.style.fontSize = "1.4rem"; }
+    if (titleEl) titleEl.textContent = 'Alle Werte eingetragen.';
+
+    // "Bearbeiten" button on LEFT side
+    var editArea = document.getElementById("monteEditArea");
+    if (editArea) {
+      editArea.innerHTML = '<button type="button" class="va-direct-btn" id="monteEditBtn2">Bearbeiten \u270F\uFE0F</button>';
+      document.getElementById("monteEditBtn2").addEventListener("click", function() {
+        monteState.editMode = true;
+        monteState.pickedValue = null;
+        if (headingEl) headingEl.style.fontSize = "";
+        renderMontePlayerUI();
+      });
+    }
+
+    liveControls.clear();
+    updateMonteSidebarHighlight();
+  }
+
+  function placeMonteValue(uid, round, cell) {
+    var value = monteState.pickedValue;
+    if (value == null) return;
+
+    // Save placement for undo
+    monteState.lastPlacement = { uid: uid, round: round, value: value };
+    monteState.pickedValue = null;
+
+    // Update local state + cell display + server
+    selectMonteValue(uid, round, value, cell);
+
+    // Advance turn
+    currentTurnIdx++;
+    skipFilledMontePlayers();
+
+    // Check if we wrapped past end
+    if (currentTurnIdx >= gameOrder.length) {
+      // Reset to beginning and check if any empty cells remain
+      currentTurnIdx = 0;
+      skipFilledMontePlayers();
+    }
+
+    renderMontePlayerUI();
+  }
+
+  // --- Monte Modal Picker (for edit mode) ---
+  function showPicker(cell) {
+    closePicker();
+    var uid = cell.dataset.monteUid;
+    var round = Number(cell.dataset.monteRound);
+
+    var player = players.find(function(p) { return p.id === String(uid); });
+    var playerName = player ? player.name : "";
+    var roundLabel = round === 11 ? "?" : String(round);
+
+    var modalOverlay = document.createElement("div");
+    modalOverlay.className = "monte-picker-overlay";
+
+    var modal = document.createElement("div");
+    modal.className = "monte-picker-modal";
+
+    var header = document.createElement("div");
+    header.className = "monte-picker-header";
+    header.textContent = playerName + " \u2013 Runde " + roundLabel;
+    modal.appendChild(header);
+
+    var grid = document.createElement("div");
+    grid.className = "monte-picker-grid";
+
+    var values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, null];
+    var labels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "K", "\u00D7"];
+    var currentVal = monteState.rounds[uid] ? monteState.rounds[uid][round] : undefined;
+
+    values.forEach(function(v, i) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "monte-picker-btn";
+      if (v === currentVal) btn.classList.add("monte-picker-selected");
+      if (v === null) btn.classList.add("monte-picker-clear");
+      btn.textContent = labels[i];
+      btn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        selectMonteValue(uid, round, v, cell);
+        closePicker();
+      });
+      grid.appendChild(btn);
+    });
+
+    modal.appendChild(grid);
+    modalOverlay.appendChild(modal);
+
+    modalOverlay.addEventListener("click", function(e) {
+      if (e.target === modalOverlay) closePicker();
+    });
+
+    liveView.appendChild(modalOverlay);
+    activePicker = { overlay: modalOverlay, cell: cell };
+  }
+
+  function closePicker() {
+    if (activePicker) {
+      activePicker.overlay.remove();
+      activePicker = null;
+    }
+  }
+
+  function selectMonteValue(uid, round, value, cell) {
+    if (!monteState.rounds[uid]) monteState.rounds[uid] = {};
+    if (value === null) {
+      delete monteState.rounds[uid][round];
+    } else {
+      monteState.rounds[uid][round] = value;
+    }
+
+    // Update cell display in Monte table
+    if (cell) {
+      cell.textContent = value != null ? (value === 12 ? "K" : String(value)) : "";
+    } else {
+      // Find cell in Monte table (now in gameContent)
+      var monteWrap = document.getElementById("monteSidebarWrap");
+      var searchEl = monteWrap || gameContent;
+      var foundCell = searchEl.querySelector('.monte-cell[data-monte-uid="' + uid + '"][data-monte-round="' + round + '"]');
+      if (foundCell) foundCell.textContent = value != null ? (value === 12 ? "K" : String(value)) : "";
+    }
+
+    fetch("/kegelkladde/monte-round", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrfToken: csrfToken, gamedayId: gamedayId, memberId: uid, roundNumber: round, rollValue: value })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        monteState.totals = data.totals;
+        monteState.extraWinnerId = data.extraWinnerId;
+        updateMonteTotals();
+        highlightMonteLosers();
+        syncMonteToKladde();
+      }
+    });
+  }
+
+  function updateMonteTotals() {
+    var monteWrap = document.getElementById("monteSidebarWrap");
+    gameOrder.forEach(function(p) {
+      var el = monteWrap ? monteWrap.querySelector('[data-monte-total="' + p.id + '"]') : null;
+      if (el) {
+        var hasOverride = monteOverrides[p.id] != null;
+        var total = hasOverride ? monteOverrides[p.id] : (monteState.totals[p.id] || 0);
+        if (!el.querySelector(".monte-total-input")) {
+          el.textContent = formatMonteEur(total);
+        }
+        el.classList.toggle("monte-total-override", hasOverride);
+      }
+    });
+  }
+
+  function highlightMonteLosers() {
+    var presentIds = gameOrder.map(function(p) { return Number(p.id); });
+    var container = document.getElementById("monteSidebarWrap") || gameContent;
+
+    container.querySelectorAll(".monte-cell").forEach(function(c) {
+      c.classList.remove("monte-loser", "monte-skipped", "monte-winner");
+    });
+
+    var skipCount = 0;
+    for (var col = 1; col <= 10; col++) {
+      var cells = container.querySelectorAll('[data-monte-round="' + col + '"]');
+      if (skipCount > 0) {
+        cells.forEach(function(c) { c.classList.add("monte-skipped"); });
+        skipCount--;
+        continue;
+      }
+
+      var entries = [];
+      cells.forEach(function(c) {
+        var uid = Number(c.dataset.monteUid);
+        var val = monteState.rounds[uid] ? monteState.rounds[uid][col] : undefined;
+        if (val != null && presentIds.indexOf(uid) !== -1) {
+          entries.push({ cell: c, uid: uid, val: val });
+        }
+      });
+
+      if (entries.length === 0) continue;
+
+      var minVal = Math.min.apply(null, entries.map(function(e) { return e.val; }));
+      var losers = entries.filter(function(e) { return e.val === minVal; });
+      losers.forEach(function(e) { e.cell.classList.add("monte-loser"); });
+      skipCount = losers.length - 1;
+    }
+
+    // "?" column (round 11)
+    if (monteState.questionValue != null) {
+      var qCells = container.querySelectorAll('[data-monte-round="11"]');
+      var qEntries = [];
+      qCells.forEach(function(c) {
+        var uid = Number(c.dataset.monteUid);
+        var val = monteState.rounds[uid] ? monteState.rounds[uid][11] : undefined;
+        if (val != null && presentIds.indexOf(uid) !== -1) {
+          qEntries.push({ cell: c, uid: uid, val: val });
+        }
+      });
+
+      if (qEntries.length > 0) {
+        var qMinVal = Math.min.apply(null, qEntries.map(function(e) { return e.val; }));
+        var qMaxVal = Math.max.apply(null, qEntries.map(function(e) { return e.val; }));
+        qEntries.filter(function(e) { return e.val === qMinVal; }).forEach(function(e) { e.cell.classList.add("monte-loser"); });
+        var winners = qEntries.filter(function(e) { return e.val === qMaxVal; });
+        if (winners.length === 1) winners[0].cell.classList.add("monte-winner");
+      }
+    }
+
+    // Re-apply placeable highlights after loser calculation
+    updateMonteSidebarHighlight();
+  }
+
+  function syncMonteToKladde() {
+    players.forEach(function(p) {
+      var hasOverride = monteOverrides[p.id] != null;
+      var total = hasOverride ? monteOverrides[p.id] : (monteState.totals[p.id] || 0);
+      var monteInput = p.row.querySelector('[name="monte_' + p.id + '"]');
+      if (monteInput) {
+        var zehntel = Math.round(total * 10);
+        monteInput.value = zehntel;
+        monteInput.dispatchEvent(new Event("input", { bubbles: true }));
+        monteInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      var extraRadio = p.row.querySelector('.monte-extra-radio');
+      if (extraRadio) {
+        extraRadio.checked = monteState.extraWinnerId == p.id;
+      }
+    });
+
+    if (monteState.extraWinnerId) {
+      fetch("/kegelkladde/monte-extra", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csrfToken: csrfToken, gamedayId: gamedayId, memberId: monteState.extraWinnerId })
+      });
+    }
+
+    recalcCosts();
+  }
+
+  // --- Monte State Persistence ---
+  function saveMonteState() {
+    var game = GAMES[currentGameIdx];
+    if (!game || game.type !== "monte") return;
+    if (!gameOrder.length) return;
+
+    var state = {
+      version: 1,
+      timestamp: Date.now(),
+      gameType: "monte",
+      playerIds: players.map(function(p) { return p.id; }),
+      gameOrderIds: gameOrder.map(function(p) { return p.id; }),
+      currentGameIdx: currentGameIdx,
+      gameHistory: gameHistory.slice(),
+      currentTurnIdx: currentTurnIdx,
+      pinklerSlots: [],
+      monteLive: {
+        pickedValue: monteState.pickedValue,
+        editMode: monteState.editMode
+      }
+    };
+    try { sessionStorage.setItem(liveStateKey, JSON.stringify(state)); } catch(e) {}
+  }
+
+  // --- Helpers ---
+  function formatMonteEur(value) {
+    return value > 0 ? value.toFixed(2).replace(".", ",") + " \u20ac" : "\u2014";
+  }
+
+  function escHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // --- Live button pulse (paused game indicator) ---
+  function highlightActiveLiveBtn() {
+    try {
+      var raw = sessionStorage.getItem(liveStateKey);
+      if (!raw) return;
+      var state = JSON.parse(raw);
+      if (!state || state.version !== 1) return;
+      var gameIdx = state.currentGameIdx;
+      if (gameIdx == null || !GAMES[gameIdx]) return;
+      var gameKey = GAMES[gameIdx].key;
+      var btn = kladdeDataEl.querySelector('.live-game-btn[data-live-start="' + gameKey + '"]');
+      if (btn) btn.classList.add("live-btn-pulse");
+    } catch(e) {}
+  }
+
+  function clearLiveBtnPulse() {
+    kladdeDataEl.querySelectorAll(".live-btn-pulse").forEach(function(b) {
+      b.classList.remove("live-btn-pulse");
+    });
+  }
+
+  // Intercept "Kegelbuch" nav clicks: exit live view without page reload
+  document.querySelectorAll('a[href="/kegelkladde"]').forEach(function(link) {
+    link.addEventListener("click", function(e) {
+      if (liveView && liveView.style.display !== "none") {
+        e.preventDefault();
+        closeLiveMode({ keepState: true });
+      }
+    });
+  });
+
+  // Restore live state after all declarations
+  restoreLiveState();
+})();

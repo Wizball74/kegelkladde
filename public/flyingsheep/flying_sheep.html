@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Ragdoll Flying Sheep (Custom Image)</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; background:#87ceeb; }
+  canvas { display:block; }
+
+  #sheep-container {
+    position:absolute;
+    transform-style:preserve-3d;
+    pointer-events:none;
+  }
+
+  #sheep-visual {
+    position:absolute;
+    width:160px;
+    height:160px;
+    left:-80px;
+    top:-80px;
+    transform-style:preserve-3d;
+    pointer-events:auto;
+    user-select:none;
+    cursor:grab;
+  }
+
+  #sheep-visual img {
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+  }
+
+  #propeller {
+    position:absolute;
+    width:90px;
+    height:90px;
+    left:-45px;     /* horizontal zentriert über dem Schaf */
+    top:-135px;    /* oberhalb des Schafs */
+    transform-origin:50% 50%;
+    pointer-events:none;
+  }
+
+  .blade {
+    position:absolute;
+    width:90px;
+    height:6px;
+    background:#333;
+    top:42px;
+    left:0;
+    border-radius:3px;
+  }
+  .blade.v { transform:rotate(90deg); }
+</style>
+</head>
+<body>
+
+<canvas id="world"></canvas>
+
+<div id="sheep-container">
+  <div id="propeller">
+    <div class="blade"></div>
+    <div class="blade v"></div>
+  </div>
+  <div id="sheep-visual">
+    <!-- Pfad zu deinem Bild anpassen -->
+    <img src="flying_sheep.png" alt="Dein Schaf">
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+const { Engine, Render, Runner, World, Bodies, Body, Constraint, Mouse, MouseConstraint, Events } = Matter;
+
+const engine = Engine.create();
+engine.world.gravity.y = 0.7;
+
+const canvas = document.getElementById("world");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+const render = Render.create({
+  canvas,
+  engine,
+  options: { width: innerWidth, height: innerHeight, wireframes:false, background:"transparent" }
+});
+
+Render.run(render);
+Runner.run(Runner.create(), engine);
+
+// Unsichtbare Wände
+const walls = [
+  Bodies.rectangle(innerWidth/2, -30, innerWidth, 60, { isStatic:true, render:{visible:false} }),
+  Bodies.rectangle(innerWidth/2, innerHeight+30, innerWidth, 60, { isStatic:true, render:{visible:false} }),
+  Bodies.rectangle(-30, innerHeight/2, 60, innerHeight, { isStatic:true, render:{visible:false} }),
+  Bodies.rectangle(innerWidth+30, innerHeight/2, 60, innerHeight, { isStatic:true, render:{visible:false} })
+];
+
+// Ragdoll (Körperteile)
+const body = Bodies.circle(innerWidth/2, 260, 38, { restitution:0.4, frictionAir:0.02 });
+const head = Bodies.circle(innerWidth/2, 220, 18, { restitution:0.4, frictionAir:0.02 });
+
+const leg1 = Bodies.rectangle(innerWidth/2-26, 310, 12, 44, { frictionAir:0.03 });
+const leg2 = Bodies.rectangle(innerWidth/2+26, 310, 12, 44, { frictionAir:0.03 });
+const leg3 = Bodies.rectangle(innerWidth/2-14, 350, 12, 44, { frictionAir:0.03 });
+const leg4 = Bodies.rectangle(innerWidth/2+14, 350, 12, 44, { frictionAir:0.03 });
+
+const joints = [
+  Constraint.create({ bodyA: body, bodyB: head, length: 42, stiffness:0.6 }),
+  Constraint.create({ bodyA: body, bodyB: leg1, pointA:{x:-22,y:32}, length:20, stiffness:0.5 }),
+  Constraint.create({ bodyA: body, bodyB: leg2, pointA:{x: 22,y:32}, length:20, stiffness:0.5 }),
+  Constraint.create({ bodyA: leg1, bodyB: leg3, length:22, stiffness:0.5 }),
+  Constraint.create({ bodyA: leg2, bodyB: leg4, length:22, stiffness:0.5 })
+];
+
+// Pendel-Aufhängung
+const anchor = Bodies.circle(innerWidth/2, 70, 6, { isStatic:true, render:{visible:false} });
+const rope = Constraint.create({ bodyA: anchor, bodyB: body, length: 190, stiffness:0.6 });
+
+World.add(engine.world, [...walls, body, head, leg1, leg2, leg3, leg4, ...joints, anchor, rope]);
+
+// Maus-Drag (Turbulenz)
+const mouse = Mouse.create(canvas);
+const mouseConstraint = MouseConstraint.create(engine, { mouse, constraint:{ stiffness:0.2, render:{visible:false} }});
+World.add(engine.world, mouseConstraint);
+
+// Visuals
+const sheepContainer = document.getElementById("sheep-container");
+const propeller = document.getElementById("propeller");
+const sheepVisual = document.getElementById("sheep-visual");
+
+let propellerSpeed = 12;   // Basis-Drehzahl
+let sheepYaw = 0;         // Y-Rotation nur für das Schaf
+
+// Kollisionen erhöhen Drehzahl
+Events.on(engine, "collisionStart", () => {
+  propellerSpeed += 10;
+});
+
+// Regelung: im Bildschirm halten
+function boundaryControl() {
+  const { x, y } = body.position;
+  const margin = 120;
+  let fx = 0, fy = 0;
+
+  if (x < margin) fx += 0.002;
+  if (x > innerWidth - margin) fx -= 0.002;
+  if (y < margin) fy += 0.002;
+  if (y > innerHeight - margin) fy -= 0.002;
+
+  if (fx || fy) {
+    Body.applyForce(body, body.position, { x: fx, y: fy });
+    propellerSpeed += (Math.abs(fx) + Math.abs(fy)) * 700;
+  }
+
+  // sanftes Abklingen
+  propellerSpeed *= 0.985;
+  propellerSpeed = Math.max(6, Math.min(propellerSpeed, 70));
+}
+
+function animate() {
+  boundaryControl();
+
+  // Container folgt dem Ragdoll-Körper
+  sheepContainer.style.transform =
+    `translate3d(${body.position.x}px, ${body.position.y}px, 0)`;
+
+  // Y-Rotation nur auf das Schafbild
+  sheepVisual.style.transform =
+    `translate(-80px, -80px) rotateY(${sheepYaw}deg)`;
+
+  // Propeller rotiert unabhängig von Yaw
+  propeller.style.transform =
+    `rotate(${performance.now() * propellerSpeed * 0.02}deg)`;
+
+  requestAnimationFrame(animate);
+}
+animate();
+
+// Externe API
+window.setSheepRotation = deg => sheepYaw = deg;
+window.applyTurbulence = (fx, fy) =>
+  Body.applyForce(body, body.position, { x: fx, y: fy });
+window.setPendulumTarget = (x, y) =>
+  Body.setPosition(anchor, { x, y });
+</script>
+</body>
+</html>

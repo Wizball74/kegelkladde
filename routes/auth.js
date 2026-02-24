@@ -55,7 +55,7 @@ router.post("/login", loginLimiter, verifyCsrf, async (req, res) => {
   const username = sanitize(req.body.username, 40);
   const password = String(req.body.password || "");
 
-  const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+  const user = db.prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(?)").get(username);
   if (!user) {
     return res.render("login", { error: "Ungueltige Zugangsdaten." });
   }

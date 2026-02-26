@@ -48,7 +48,7 @@ router.post("/setup/create", verifyCsrf, async (req, res) => {
 
 router.get("/login", (req, res) => {
   if (req.session.userId) return res.redirect("/kegelkladde");
-  res.render("login", { error: null });
+  res.render("login", { error: null, bodyClass: "login-body" });
 });
 
 router.post("/login", loginLimiter, verifyCsrf, async (req, res) => {
@@ -57,12 +57,12 @@ router.post("/login", loginLimiter, verifyCsrf, async (req, res) => {
 
   const user = db.prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(?)").get(username);
   if (!user) {
-    return res.render("login", { error: "Ungueltige Zugangsdaten." });
+    return res.render("login", { error: "Ungueltige Zugangsdaten.", bodyClass: "login-body" });
   }
 
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) {
-    return res.render("login", { error: "Ungueltige Zugangsdaten." });
+    return res.render("login", { error: "Ungueltige Zugangsdaten.", bodyClass: "login-body" });
   }
 
   req.session.userId = user.id;

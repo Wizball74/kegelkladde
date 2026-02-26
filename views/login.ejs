@@ -1,21 +1,101 @@
 <%- include("partials/top") %>
-<section class="card narrow fade-in">
-  <div class="section-head" style="text-align: center;">
-    <h1>Willkommen</h1>
-    <p class="subtle">Melde dich mit deinen Vereinszugangsdaten an.</p>
+
+<div class="login-page">
+  <div class="login-content">
+    <!-- Hero: Schaf-Illustration -->
+    <div class="login-hero">
+      <div class="login-sheep-wrap" id="loginSheepWrap">
+        <img src="/img/schaf_bw.png" alt="KC Schaf Zeilsheim Maskottchen" class="login-sheep login-sheep--normal" />
+        <img src="/img/schaf_bw_pw.png" alt="" class="login-sheep login-sheep--pw" />
+      </div>
+      <p class="login-motto">Per aspera ad astra &mdash; m&auml;&auml;h!</p>
+    </div>
+
+    <!-- Login-Formular -->
+    <div class="login-card">
+      <h2 class="login-card-title">Willkommen zur&uuml;ck</h2>
+      <% if (error) { %><p class="error" style="margin-bottom: 0.75rem;"><%= error %></p><% } %>
+
+      <form method="post" action="/login" class="login-form" id="loginForm">
+        <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+
+        <div class="login-field">
+          <label for="loginUser">Benutzername</label>
+          <div class="login-input-wrap">
+            <svg class="login-input-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 10a4 4 0 100-8 4 4 0 000 8zm-7 8a7 7 0 0114 0H3z"/></svg>
+            <input id="loginUser" name="username" required maxlength="40" autocomplete="username" autofocus placeholder="Dein Benutzername" />
+          </div>
+        </div>
+
+        <div class="login-field">
+          <label for="loginPass">Passwort</label>
+          <div class="login-input-wrap">
+            <svg class="login-input-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+            <input id="loginPass" type="password" name="password" required autocomplete="current-password" placeholder="Dein Passwort" />
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn" id="loginBtn">
+          <span>Einloggen</span>
+          <svg class="login-btn-arrow" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <p class="login-footer">&copy; KC Schaf Zeilsheim &middot; Vereinsportal</p>
   </div>
+</div>
 
-  <% if (error) { %><p class="error"><%= error %></p><% } %>
+<script>
+(function() {
+  var sheepWrap = document.getElementById('loginSheepWrap');
+  var passField = document.getElementById('loginPass');
+  var form = document.getElementById('loginForm');
+  var btn = document.getElementById('loginBtn');
 
-  <form method="post" action="/login" class="form-grid">
-    <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
-    <label>Benutzername
-      <input name="username" required maxlength="40" autocomplete="username" autofocus />
-    </label>
-    <label>Passwort
-      <input type="password" name="password" required autocomplete="current-password" />
-    </label>
-    <button type="submit">Einloggen</button>
-  </form>
-</section>
+  /* Schaf kneift Augen zu beim Passwort-Tippen (Crossfade) */
+  if (passField && sheepWrap) {
+    passField.addEventListener('focus', function() {
+      sheepWrap.classList.add('login-sheep--shy');
+    });
+    passField.addEventListener('blur', function() {
+      sheepWrap.classList.remove('login-sheep--shy');
+    });
+  }
+
+  /* Beim Einloggen: Schaf fliegt raus und wird geloescht */
+  if (form) {
+    form.addEventListener('submit', function() {
+      window.flyingSheepPerch = null;
+      if (window.flyingSheep && window.flyingSheep.dismiss) {
+        window.flyingSheep.dismiss(window.innerWidth + 80, -80);
+      }
+      try { sessionStorage.removeItem('flyingSheepState'); } catch(e) {}
+    });
+  }
+
+  /* Alten Sheep-State leeren, damit nur unser eines Schaf erscheint */
+  try { sessionStorage.removeItem('flyingSheepState'); } catch(e) {}
+
+  /* Perch-Target: Schaf soll sich zur Card hingezogen fuehlen */
+  var card = document.querySelector('.login-card');
+  function updatePerch() {
+    if (!card) return;
+    var rect = card.getBoundingClientRect();
+    window.flyingSheepPerch = { x: rect.left + rect.width * 0.5, y: rect.top - 10 };
+  }
+  updatePerch();
+  window.addEventListener('resize', updatePerch);
+
+  /* Ein einzelnes neugieriges Schaf spawnen — oberhalb der Card */
+  function spawnLoginSheep() {
+    if (!window.flyingSheep || !window.flyingSheep.spawn) return;
+    updatePerch();
+    var p = window.flyingSheepPerch;
+    window.flyingSheep.spawn(p.x + 60, p.y - 20);
+  }
+  setTimeout(spawnLoginSheep, 1800);
+})();
+</script>
+
 <%- include("partials/bottom") %>

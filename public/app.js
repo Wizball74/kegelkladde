@@ -3901,6 +3901,7 @@ function initMemberDragDrop() {
       var savedMonteLive = state.monteLive;
       var savedTurnIdx = currentTurnIdx;
       liveView.classList.add("live-shuffle-sidebar");
+      shuffleArea.style.display = ""; // Clear inline style so CSS flex rule takes effect
       gameContent.innerHTML = '<div class="live-loading">Lade Monte-Daten...</div>';
       fetch("/kegelkladde/monte-rounds?gamedayId=" + encodeURIComponent(gamedayId))
         .then(function(r) { return r.json(); })
@@ -3940,6 +3941,7 @@ function initMemberDragDrop() {
         });
     } else {
       liveView.classList.add("live-shuffle-sidebar");
+      shuffleArea.style.display = ""; // Clear inline style so CSS flex rule takes effect
       // V+A, Aussteigen, 6-Tage: each builds its own main + controls layout.
       addSidebarPinkelpause();
     }

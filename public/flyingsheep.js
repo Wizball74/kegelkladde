@@ -238,8 +238,16 @@
   }
 
   /* ═══ Targets ═══ */
-  function newTarget() { return { x: MARGIN + Math.random() * (W - MARGIN * 2), y: MARGIN + Math.random() * (H - MARGIN * 2) }; }
-  function nearTarget(sh, d) { return { x: sh.x + (Math.random() - .5) * d, y: sh.y + (Math.random() - .5) * d }; }
+  function newTarget() {
+    var p = window.flyingSheepPerch;
+    if (p && Math.random() < .7) return { x: p.x + (Math.random() - .5) * 70, y: p.y + (Math.random() - .5) * 40 };
+    return { x: MARGIN + Math.random() * (W - MARGIN * 2), y: MARGIN + Math.random() * (H - MARGIN * 2) };
+  }
+  function nearTarget(sh, d) {
+    var p = window.flyingSheepPerch;
+    if (p && Math.random() < .6) return { x: p.x + (Math.random() - .5) * 80, y: p.y + (Math.random() - .5) * 50 };
+    return { x: sh.x + (Math.random() - .5) * d, y: sh.y + (Math.random() - .5) * d };
+  }
 
   /* ═══ Ecke + Angst ═══ */
   function nearestCorner(x, y) {
@@ -811,6 +819,15 @@
     },
     count: function () { return flock.length; },
     save: saveFlock,
+    dismiss: function (tx, ty) {
+      for (var fi = 0; fi < flock.length; fi++) {
+        var sh = flock[fi];
+        sh.state = 'departing';
+        sh.target = { x: tx !== undefined ? tx : sh.x, y: ty !== undefined ? ty : -100 };
+        sh.stTimer = 0;
+        sh.propSpeed = PROP_MAX;
+      }
+    },
   };
 
   /* ═══ Start ═══ */

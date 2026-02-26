@@ -1,4 +1,14 @@
+/* --- Web Fonts (lokal gehostet) --- */
+@font-face { font-family: 'Bitter'; src: url('/fonts/bitter-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Bitter'; src: url('/fonts/bitter-600.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Bitter'; src: url('/fonts/bitter-700.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/fonts/sourcesans-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/fonts/sourcesans-500.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/fonts/sourcesans-600.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+
 :root {
+  --font-heading: 'Bitter', Georgia, serif;
+  --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
   --bg: #f5f2e8;
   --panel: #fffdf7;
   --panel-shuffle: #f3f1ea;
@@ -31,7 +41,7 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  font-family: var(--font-body);
   color: var(--ink);
   background: radial-gradient(circle at 15% 20%, #fff5d6 0%, var(--bg) 45%), linear-gradient(130deg, #f7f0df, #ecf4eb);
   min-height: 100vh;
@@ -88,6 +98,7 @@ a.brand {
 }
 
 .brand strong {
+  font-family: var(--font-heading);
   font-size: 0.85rem;
 }
 
@@ -300,6 +311,239 @@ button:disabled {
   margin: 2rem auto;
 }
 
+/* ======================================
+   Login Page
+   ====================================== */
+
+.login-body .topbar {
+  display: none;
+}
+
+.login-body .page-shell {
+  max-width: none;
+  padding: 0;
+}
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-hero {
+  text-align: center;
+  animation: loginHeroIn 0.9s ease-out both;
+}
+
+@keyframes loginHeroIn {
+  from { opacity: 0; transform: translateY(-18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.login-sheep-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+}
+
+.login-sheep {
+  width: 160px;
+  height: auto;
+  border-radius: 25%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: opacity 0.45s ease;
+}
+
+.login-sheep--pw {
+  position: absolute;
+  top: 1.2rem;
+  left: 1.2rem;
+  opacity: 0;
+}
+
+.login-sheep-wrap.login-sheep--shy .login-sheep--normal {
+  opacity: 0;
+}
+
+.login-sheep-wrap.login-sheep--shy .login-sheep--pw {
+  opacity: 1;
+}
+
+.login-motto {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin: 0.5rem 0 0;
+  letter-spacing: 0.03em;
+}
+
+.login-card {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  margin-top: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  animation: loginCardIn 0.8s ease-out 0.15s both;
+}
+
+@keyframes loginCardIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.login-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 1.25rem;
+  text-align: center;
+}
+
+.login-form {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.login-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+}
+
+.login-input-wrap {
+  position: relative;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.login-input-wrap input {
+  width: 100%;
+  padding: 0.75rem 0.9rem 0.75rem 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.login-input-wrap input::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.login-input-wrap input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.login-input-wrap:focus-within .login-input-icon {
+  opacity: 1;
+}
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem;
+  margin-top: 0.3rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-md);
+}
+
+.login-btn:hover {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-btn:active {
+  transform: translateY(0);
+}
+
+.login-btn-arrow {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.2s;
+}
+
+.login-btn:hover .login-btn-arrow {
+  transform: translateX(3px);
+}
+
+.login-footer {
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  animation: loginCardIn 0.8s ease-out 0.4s both;
+}
+
+/* Login page mobile */
+@media (max-width: 480px) {
+  .login-page {
+    padding: 1.5rem 1rem;
+  }
+
+  .login-sheep {
+    width: 140px;
+  }
+
+  .login-card {
+    padding: 1.5rem;
+  }
+}
+
 /* Section headers */
 .section-head {
   margin-bottom: 1.5rem;
@@ -316,6 +560,7 @@ button:disabled {
 }
 
 h1, h2, h3 {
+  font-family: var(--font-heading);
   margin: 0 0 0.75rem;
   line-height: 1.3;
 }
@@ -1053,6 +1298,17 @@ td.col-active.cell-empty:not(.marker-cell) > * {
   margin-right: 4px;
 }
 
+.kladde-avatar-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 .mark-btn {
   width: 12px;
   height: 12px;
@@ -1719,6 +1975,7 @@ td.col-active.cell-empty:not(.marker-cell) > * {
 }
 
 .stat-card .stat-value {
+  font-family: var(--font-heading);
   font-size: 2rem;
   font-weight: 700;
   color: var(--accent);

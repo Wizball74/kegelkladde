@@ -11,7 +11,7 @@
   <script defer src="/flyingsheep.js"></script><% } %>
   <script defer src="/app.js"></script>
 </head>
-<body>
+<body<% if (typeof bodyClass !== 'undefined' && bodyClass) { %> class="<%= bodyClass %>"<% } %>>
   <% if (sheepEnabled) { %><div id="sheep-overlay"></div><% } %>
   <div class="background-glow"></div>
 

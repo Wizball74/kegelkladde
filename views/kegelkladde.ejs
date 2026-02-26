@@ -202,14 +202,14 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <th title="Kranz"><span class="head-label">Kränze</span></th>
               <th><span class="head-label">Triclops</span></th>
               <th><span class="head-label">Pudel</span></th>
-              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="va" title="Live: V+A"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label">V+A</span></th>
-              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="monte" title="Live: Monte"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt)</span></span></th>
-              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="aussteigen" title="Live: Aussteigen"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label">Aussteigen</span></th>
-              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="sechs_tage" title="Live: 6-Tage-Rennen"><img src="/live.png" alt="Live" /></button><% } %><span class="head-label">6-Tage-Rennen</span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="va" title="Live: V+A"><img src="/notlive.png" alt="Live" /></button><% } %><span class="head-label">V+A</span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="monte" title="Live: Monte"><img src="/notlive.png" alt="Live" /></button><% } %><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt)</span></span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="aussteigen" title="Live: Aussteigen"><img src="/notlive.png" alt="Live" /></button><% } %><span class="head-label">Aussteigen</span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="sechs_tage" title="Live: 6-Tage-Rennen"><img src="/notlive.png" alt="Live" /></button><% } %><span class="head-label">6-Tage-Rennen</span></th>
               <% customGames.forEach((cg) => { %>
               <% if (status <= 1) { %>
               <th class="game-col custom-game-th" data-custom-game-th="<%= cg.id %>">
-                <% if (isAdmin) { %><button type="button" class="live-game-btn" data-live-start="cg_<%= cg.id %>" title="Live: <%= cg.name %>"><img src="/live.png" alt="Live" /></button><% } %>
+                <% if (isAdmin) { %><button type="button" class="live-game-btn" data-live-start="cg_<%= cg.id %>" title="Live: <%= cg.name %>"><img src="/notlive.png" alt="Live" /></button><% } %>
                 <input type="text" class="custom-game-header-input" value="<%= cg.name %>"
                        data-custom-game-rename="<%= cg.id %>" data-original-name="<%= cg.name %>" />
                 <button type="button" class="custom-game-delete-btn" data-custom-game-delete="<%= cg.id %>"

@@ -516,10 +516,8 @@ function calculateMonteTotals(gamedayId) {
   const totals = new Map(); // userId -> EUR
   for (const uid of presentIds) totals.set(uid, 0);
 
-  // Spalten 1-10: Verlierer-Logik mit Skip
-  let skipCount = 0;
+  // Spalten 1-10: Verlierer zahlt Spalte × 0,10€
   for (let col = 1; col <= 10; col++) {
-    if (skipCount > 0) { skipCount--; continue; }
     const colData = roundMap.get(col);
     if (!colData) continue;
 
@@ -537,8 +535,6 @@ function calculateMonteTotals(gamedayId) {
     for (const loser of losers) {
       totals.set(loser.uid, (totals.get(loser.uid) || 0) + penalty);
     }
-
-    skipCount = losers.length - 1;
   }
 
   // "?"-Spalte (round_number = 11)

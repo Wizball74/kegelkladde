@@ -32,6 +32,9 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
   const gagRow = db.prepare("SELECT value FROM settings WHERE key = 'gag_animations'").get();
   const gagAnimations = gagRow ? gagRow.value : "1";
 
+  const sheepRow = db.prepare("SELECT value FROM settings WHERE key = 'flying_sheep'").get();
+  const flyingSheep = sheepRow ? sheepRow.value : "1";
+
   const backups = listBackups();
 
   res.render("admin", {
@@ -44,6 +47,7 @@ router.get("/admin", requireAuth, requireAdmin, (req, res) => {
     auditLog,
     usersLastLogin,
     gagAnimations,
+    flyingSheep,
     backups
   });
 });
@@ -169,6 +173,20 @@ router.post("/admin/toggle-gags", requireAuth, requireAdmin, verifyCsrf, (req, r
 
   logAudit(req.session.userId, "GAG_ANIMATIONS_TOGGLE", "settings", null, { enabled: newVal === "1" });
   req.session.flash = { type: "success", message: newVal === "1" ? "Gag-Animationen aktiviert." : "Gag-Animationen deaktiviert." };
+  res.redirect("/admin");
+});
+
+// Flying Sheep an/aus
+router.post("/admin/toggle-sheep", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const current = db.prepare("SELECT value FROM settings WHERE key = 'flying_sheep'").get();
+  const newVal = (current && current.value === "1") ? "0" : "1";
+
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('flying_sheep', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(newVal);
+
+  logAudit(req.session.userId, "FLYING_SHEEP_TOGGLE", "settings", null, { enabled: newVal === "1" });
+  req.session.flash = { type: "success", message: newVal === "1" ? "Flying Sheep aktiviert." : "Flying Sheep deaktiviert." };
   res.redirect("/admin");
 });
 

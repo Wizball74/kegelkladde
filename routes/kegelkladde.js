@@ -930,6 +930,77 @@ router.post("/kegelkladde/remove-guest", requireAuth, requireAdmin, verifyCsrf, 
 
 // --- Monte-Runden (Live-Modus) ---
 
+// Monte-Standings: aktuelle Punkte der laufenden Runde pro Spieler
+router.get("/kegelkladde/monte-standings", requireAuth, (req, res) => {
+  const MONTE_POINTS = [10, 6, 4, 3, 2, 1];
+  const MONTE_CUTOFF = 2.0;
+  const MONTE_WIN_THRESHOLD = 100;
+
+  const members = getOrderedMembers();
+  const gamedays = db.prepare("SELECT id FROM gamedays ORDER BY match_date ASC, id ASC").all();
+
+  // Init
+  const monteMap = new Map();
+  members.forEach((m) => monteMap.set(m.id, { total: 0 }));
+
+  // Initial values
+  const initials = db.prepare(
+    "SELECT user_id, initial_monte_points FROM member_initial_values WHERE initial_monte_points > 0"
+  ).all();
+  initials.forEach((iv) => {
+    const mt = monteMap.get(iv.user_id);
+    if (mt) mt.total += iv.initial_monte_points;
+  });
+
+  // Compute per gameday
+  gamedays.forEach((gd) => {
+    const rows = db.prepare(
+      `SELECT user_id, monte, monte_extra, monte_tiebreak
+       FROM attendance WHERE gameday_id = ? AND present = 1
+       ORDER BY monte ASC, monte_tiebreak ASC`
+    ).all(gd.id);
+
+    const played = rows.some((r) => r.monte > 0);
+    if (!played) return;
+
+    const eligible = rows.filter((r) => r.monte < MONTE_CUTOFF);
+    eligible.forEach((row, i) => {
+      const placePts = i < MONTE_POINTS.length ? MONTE_POINTS[i] : 0;
+      const extraPt = row.monte_extra ? 1 : 0;
+      const pts = placePts + extraPt;
+      if (pts > 0) {
+        const entry = monteMap.get(row.user_id);
+        if (entry) entry.total += pts;
+      }
+    });
+
+    rows.forEach((row) => {
+      if (row.monte >= MONTE_CUTOFF && row.monte_extra) {
+        const entry = monteMap.get(row.user_id);
+        if (entry) entry.total += 1;
+      }
+    });
+
+    // Check for round win → reset
+    let winner = null, max = 0;
+    for (const [userId, entry] of monteMap) {
+      if (entry.total >= MONTE_WIN_THRESHOLD && entry.total > max) {
+        max = entry.total; winner = userId;
+      }
+    }
+    if (winner) {
+      for (const [, entry] of monteMap) entry.total = 0;
+    }
+  });
+
+  // Return standings as { userId: points }
+  const standings = {};
+  for (const [userId, entry] of monteMap) {
+    if (entry.total > 0) standings[userId] = entry.total;
+  }
+  res.json({ standings });
+});
+
 router.get("/kegelkladde/monte-rounds", requireAuth, (req, res) => {
   const gamedayId = Number.parseInt(req.query.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {

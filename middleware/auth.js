@@ -56,6 +56,8 @@ function setLocals(req, res, next) {
   res.locals.currentUser = req.session.user || null;
   res.locals.isAdmin = req.session.role === "admin";
   res.locals.currentPath = req.path;
+  const sheepRow = db.prepare("SELECT value FROM settings WHERE key = 'flying_sheep'").get();
+  res.locals.sheepEnabled = sheepRow ? sheepRow.value === "1" : true;
   next();
 }
 

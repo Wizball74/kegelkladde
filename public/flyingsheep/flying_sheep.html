@@ -2,188 +2,925 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Ragdoll Flying Sheep (Custom Image)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flying Sheep</title>
 <style>
-  html, body { margin:0; padding:0; overflow:hidden; background:#87ceeb; }
-  canvas { display:block; }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    overflow: hidden; width: 100%; height: 100%;
+    background: linear-gradient(180deg, #7ec8e3 0%, #b5dff5 50%, #c8e6c0 95%, #8cb878 100%);
+    user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  .p { position: absolute; pointer-events: none; }
+  .s-wrap { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 
-  #sheep-container {
-    position:absolute;
-    transform-style:preserve-3d;
-    pointer-events:none;
+  .s-torso {
+    width: 17px; height: 14px;
+    background: white; border: 1.5px solid #444; border-radius: 50%; z-index: 3;
+    perspective: 35px;
+  }
+  .s-label {
+    position: absolute; top: 50%; left: 50%;
+    font: 900 11px/1 sans-serif;
+    color: rgba(0,0,0,.55); white-space: nowrap;
+    pointer-events: none; transform-origin: center center;
+    will-change: transform;
+  }
+  .s-head {
+    width: 12px; height: 12px;
+    background: white; border: 1.5px solid #444; border-radius: 50%; z-index: 5;
+  }
+  .s-head::before {
+    content: '';
+    position: absolute;
+    width: 7px; height: 4px;
+    top: -2px; left: 50%; margin-left: -3.5px;
+    background: var(--wool, white);
+    border: 1px solid var(--bdr, #555); border-bottom: 1px solid var(--wool, white);
+    border-radius: 50%;
+  }
+  .s-ear {
+    position: absolute; width: 4px; height: 5px;
+    border-radius: 50%; top: 1.5px; z-index: -1;
+  }
+  .s-ear.l { left: -2.5px; transform: rotate(-15deg); }
+  .s-ear.r { right: -2.5px; transform: rotate(15deg); }
+  .s-eye {
+    position: absolute; width: 2px; height: 2.5px;
+    background: #222; border-radius: 50%;
+    top: 3.5px; will-change: transform;
+  }
+  .s-eye.l { left: 2px; }
+  .s-eye.r { right: 2px; }
+  .s-mouth {
+    position: absolute;
+    width: 3px; height: 1.5px;
+    border-bottom: 1px solid #444;
+    border-radius: 0 0 50% 50%;
+    bottom: 2px; left: 50%; margin-left: -1.5px;
+  }
+  .s-leg {
+    width: 2px; height: 8px;
+    background: #444; border-radius: 1px;
+    transform-origin: 1px 0;
+  }
+  .s-leg.bk { z-index: 1; opacity: 0.5; }
+  .s-leg.fr { z-index: 4; }
+  .s-tail {
+    border-radius: 50%; z-index: 2;
+    transform-origin: center top;
   }
 
-  #sheep-visual {
-    position:absolute;
-    width:160px;
-    height:160px;
-    left:-80px;
-    top:-80px;
-    transform-style:preserve-3d;
-    pointer-events:auto;
-    user-select:none;
-    cursor:grab;
+  .s-pole {
+    width: 1.5px; background: #555; border-radius: .75px;
+    transform-origin: top center; z-index: 6;
   }
+  .s-hub {
+    width: 4px; height: 4px;
+    background: #666; border-radius: 50%; z-index: 8;
+  }
+  .s-bwrap { width: 28px; height: 28px; perspective: 80px; z-index: 7; }
+  .s-blades {
+    width: 100%; height: 100%;
+    transform-style: preserve-3d; will-change: transform;
+  }
+  .s-bl {
+    position: absolute; width: 20px; height: 4px;
+    top: 50%; left: 50%; margin-top: -2px; margin-left: -10px;
+    background: linear-gradient(90deg, #b8860b, #ffd740 45%, #ffd740 55%, #b8860b);
+    border-radius: 2px;
+  }
+  .s-bl:nth-child(2) { transform: rotate(90deg); }
 
-  #sheep-visual img {
-    width:100%;
-    height:100%;
-    object-fit:contain;
-    display:block;
-  }
+  /* Accessoires */
+  .s-acc { position: absolute; pointer-events: none; }
 
-  #propeller {
-    position:absolute;
-    width:90px;
-    height:90px;
-    left:-45px;     /* horizontal zentriert über dem Schaf */
-    top:-135px;    /* oberhalb des Schafs */
-    transform-origin:50% 50%;
-    pointer-events:none;
-  }
+  /* Zylinder */
+  .s-tophat { top: -9px; left: 50%; transform: translateX(-50%);
+    width: 7px; height: 8px; border-radius: 1.5px 1.5px 0 0; z-index: 10; }
+  .s-tophat::after { content: ''; position: absolute;
+    bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 11px; height: 2px; border-radius: 1px; background: inherit; }
+  .s-tophat::before { content: ''; position: absolute;
+    top: 3px; left: 1px; right: 1px; height: 1px; background: rgba(255,255,255,.3); }
 
-  .blade {
-    position:absolute;
-    width:90px;
-    height:6px;
-    background:#333;
-    top:42px;
-    left:0;
-    border-radius:3px;
+  /* Partyhut */
+  .s-partyhat { top: -12px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; z-index: 10;
+    border-left: 4.5px solid transparent; border-right: 4.5px solid transparent; }
+  .s-partyhat::after { content: ''; position: absolute;
+    top: -2px; left: -1.5px; width: 3px; height: 3px;
+    background: #ffd740; border-radius: 50%; }
+
+  /* Krone */
+  .s-crown { top: -7px; left: 50%; transform: translateX(-50%);
+    width: 11px; height: 6px; background: #ffd740; z-index: 10;
+    clip-path: polygon(0% 100%, 0% 35%, 18% 65%, 33% 0%, 50% 50%, 67% 0%, 82% 65%, 100% 35%, 100% 100%); }
+  .s-crown::after { content: ''; position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1.5px; background: #b8860b; }
+
+  /* Mütze */
+  .s-beanie { top: -5px; left: 50%; transform: translateX(-50%);
+    width: 11px; height: 6px; border-radius: 6px 6px 1px 1px; z-index: 10; }
+  .s-beanie::after { content: ''; position: absolute;
+    bottom: 0; left: -0.5px; right: -0.5px; height: 2.5px;
+    border-radius: 1px; background: rgba(255,255,255,.3); }
+  .s-beanie::before { content: ''; position: absolute;
+    top: -2.5px; left: 50%; transform: translateX(-50%);
+    width: 3.5px; height: 3.5px; border-radius: 50%; background: inherit;
+    filter: brightness(1.2); }
+
+  /* Brille */
+  .s-glasses { top: 2.5px; left: 50%; transform: translateX(-50%); width: 11px; height: 4.5px; z-index: 10; }
+  .s-lens { position: absolute; width: 4.5px; height: 4px; border: 1px solid #555; border-radius: 50%; top: 0;
+    background: rgba(180,215,255,.25); }
+  .s-lens:first-child { left: 0; }
+  .s-lens:nth-child(2) { right: 0; }
+  .s-bridge { position: absolute; top: 1.5px; left: 4.5px; width: 2px; border-top: .8px solid #555; }
+
+  /* Fliege */
+  .s-bowtie { top: -3px; left: 50%; transform: translateX(-50%); width: 0; height: 0;
+    border-top: 2.5px solid transparent; border-bottom: 2.5px solid transparent; z-index: 6; }
+
+  /* Glocke */
+  .s-bell { bottom: -2px; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 4px; background: #ffd740; border-radius: 50%; border: .6px solid #b8860b; z-index: 6; }
+  .s-bell::before { content: ''; position: absolute;
+    top: -3px; left: 50%; transform: translateX(-50%);
+    width: 5px; height: 1.5px; border-radius: .5px; background: #b8860b; }
+
+  /* Blume */
+  .s-flower { top: -1px; right: -3px; width: 5px; height: 5px; border-radius: 50%; z-index: 10; }
+  .s-flower::before { content: ''; position: absolute;
+    top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 2px; height: 2px; border-radius: 50%; background: #ffd740; }
+  .s-flower::after { content: ''; position: absolute;
+    top: 100%; left: 40%; width: 1px; height: 3px; background: #5a5; transform: rotate(10deg); }
+
+  /* Schal */
+  .s-scarf { bottom: -2.5px; left: 50%; transform: translateX(-50%);
+    width: 10px; height: 3.5px; border-radius: 1.5px; z-index: 6; }
+  .s-scarf::after { content: ''; position: absolute;
+    top: 2px; right: -1px; width: 3px; height: 5px;
+    border-radius: 0 0 1.5px 1.5px; background: inherit; }
+
+  /* Schuhe */
+  .s-shoe { position: absolute; pointer-events: none; bottom: -2px; left: -.5px;
+    width: 4px; height: 2.5px; border-radius: .5px 2px 1px .5px; }
+
+  .star {
+    position: absolute; pointer-events: none; z-index: 30;
+    animation: pop 400ms ease-out forwards;
   }
-  .blade.v { transform:rotate(90deg); }
+  @keyframes pop {
+    0%   { opacity: 1; transform: translate(0,0) scale(1) rotate(0); }
+    100% { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(.1) rotate(400deg); }
+  }
+  .cloud {
+    position: absolute; pointer-events: none; z-index: 0;
+    background: white; border-radius: 50%; opacity: .4;
+  }
 </style>
 </head>
 <body>
-
-<canvas id="world"></canvas>
-
-<div id="sheep-container">
-  <div id="propeller">
-    <div class="blade"></div>
-    <div class="blade v"></div>
-  </div>
-  <div id="sheep-visual">
-    <!-- Pfad zu deinem Bild anpassen -->
-    <img src="flying_sheep.png" alt="Dein Schaf">
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
 <script>
-const { Engine, Render, Runner, World, Bodies, Body, Constraint, Mouse, MouseConstraint, Events } = Matter;
+(function () {
 
-const engine = Engine.create();
-engine.world.gravity.y = 0.7;
+  const HEAD_R = 5, HEAD_W = 12, HEAD_H = 12;
+  const TORSO_W = 17, TORSO_H = 14;
+  const LEG_W = 2, LEG_H = 8;
+  const POLE_H = 5, HUB_SZ = 4;
+  let W = innerWidth, H = innerHeight;
 
-const canvas = document.getElementById("world");
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+  const PROP_BASE = 8, PROP_MAX = 90;
+  const MAX_SPEED = 3.0;
+  const STEER = 0.06;
+  const FRICTION = 0.985;
+  const MARGIN = 35;
 
-const render = Render.create({
-  canvas,
-  engine,
-  options: { width: innerWidth, height: innerHeight, wireframes:false, background:"transparent" }
-});
+  /* Herde */
+  const SEPARATION_R = 55, ALIGNMENT_R = 90, COHESION_R = 120;
+  const SEP_FORCE = 0.08, ALI_FORCE = 0.006, COH_FORCE = 0.0015;
+  const COLLISION_R = 16;
 
-Render.run(render);
-Runner.run(Runner.create(), engine);
+  /* ═══ Cursor ═══ */
+  let cursorX = W / 2, cursorY = H / 2, cursorLastMove = 0;
+  document.addEventListener('mousemove', e => {
+    cursorX = e.clientX; cursorY = e.clientY; cursorLastMove = performance.now();
+  });
 
-// Unsichtbare Wände
-const walls = [
-  Bodies.rectangle(innerWidth/2, -30, innerWidth, 60, { isStatic:true, render:{visible:false} }),
-  Bodies.rectangle(innerWidth/2, innerHeight+30, innerWidth, 60, { isStatic:true, render:{visible:false} }),
-  Bodies.rectangle(-30, innerHeight/2, 60, innerHeight, { isStatic:true, render:{visible:false} }),
-  Bodies.rectangle(innerWidth+30, innerHeight/2, 60, innerHeight, { isStatic:true, render:{visible:false} })
-];
+  /* ═══ Flock ═══ */
+  const flock = [];
 
-// Ragdoll (Körperteile)
-const body = Bodies.circle(innerWidth/2, 260, 38, { restitution:0.4, frictionAir:0.02 });
-const head = Bodies.circle(innerWidth/2, 220, 18, { restitution:0.4, frictionAir:0.02 });
-
-const leg1 = Bodies.rectangle(innerWidth/2-26, 310, 12, 44, { frictionAir:0.03 });
-const leg2 = Bodies.rectangle(innerWidth/2+26, 310, 12, 44, { frictionAir:0.03 });
-const leg3 = Bodies.rectangle(innerWidth/2-14, 350, 12, 44, { frictionAir:0.03 });
-const leg4 = Bodies.rectangle(innerWidth/2+14, 350, 12, 44, { frictionAir:0.03 });
-
-const joints = [
-  Constraint.create({ bodyA: body, bodyB: head, length: 42, stiffness:0.6 }),
-  Constraint.create({ bodyA: body, bodyB: leg1, pointA:{x:-22,y:32}, length:20, stiffness:0.5 }),
-  Constraint.create({ bodyA: body, bodyB: leg2, pointA:{x: 22,y:32}, length:20, stiffness:0.5 }),
-  Constraint.create({ bodyA: leg1, bodyB: leg3, length:22, stiffness:0.5 }),
-  Constraint.create({ bodyA: leg2, bodyB: leg4, length:22, stiffness:0.5 })
-];
-
-// Pendel-Aufhängung
-const anchor = Bodies.circle(innerWidth/2, 70, 6, { isStatic:true, render:{visible:false} });
-const rope = Constraint.create({ bodyA: anchor, bodyB: body, length: 190, stiffness:0.6 });
-
-World.add(engine.world, [...walls, body, head, leg1, leg2, leg3, leg4, ...joints, anchor, rope]);
-
-// Maus-Drag (Turbulenz)
-const mouse = Mouse.create(canvas);
-const mouseConstraint = MouseConstraint.create(engine, { mouse, constraint:{ stiffness:0.2, render:{visible:false} }});
-World.add(engine.world, mouseConstraint);
-
-// Visuals
-const sheepContainer = document.getElementById("sheep-container");
-const propeller = document.getElementById("propeller");
-const sheepVisual = document.getElementById("sheep-visual");
-
-let propellerSpeed = 12;   // Basis-Drehzahl
-let sheepYaw = 0;         // Y-Rotation nur für das Schaf
-
-// Kollisionen erhöhen Drehzahl
-Events.on(engine, "collisionStart", () => {
-  propellerSpeed += 10;
-});
-
-// Regelung: im Bildschirm halten
-function boundaryControl() {
-  const { x, y } = body.position;
-  const margin = 120;
-  let fx = 0, fy = 0;
-
-  if (x < margin) fx += 0.002;
-  if (x > innerWidth - margin) fx -= 0.002;
-  if (y < margin) fy += 0.002;
-  if (y > innerHeight - margin) fy -= 0.002;
-
-  if (fx || fy) {
-    Body.applyForce(body, body.position, { x: fx, y: fy });
-    propellerSpeed += (Math.abs(fx) + Math.abs(fy)) * 700;
+  /* ═══ Traits ═══ */
+  function generateDefaultTraits() {
+    return {
+      scale: 1, chub: 1, legMul: 1, headMul: 1,
+      woolColor: 'white', borderColor: '#444', skinColor: '#444',
+      isBlack: false, accessory: null, accColor: '#444',
+      legs: [
+        { lx: -5, ly: 5.5 }, { lx: 5, ly: 5.5 },
+        { lx: -3, ly: 6.5 }, { lx: 3, ly: 6.5 },
+      ],
+      legPhases: [0, Math.PI / 2, Math.PI, Math.PI * 1.5],
+      legRestAngles: [0, 0, 0, 0],
+      tailSize: 4,
+    };
   }
 
-  // sanftes Abklingen
-  propellerSpeed *= 0.985;
-  propellerSpeed = Math.max(6, Math.min(propellerSpeed, 70));
-}
+  function generateTraits() {
+    const isBlack = Math.random() < 0.08;
+    const scale = 0.75 + Math.random() * 0.5;
+    const chub = 0.85 + Math.random() * 0.35;
+    const legMul = 0.75 + Math.random() * 0.5;
+    const headMul = 0.9 + Math.random() * 0.2;
+    const woolColors = ['white', 'white', 'white', 'white', '#f5f0e0', '#eee', '#f0e6d3'];
+    const woolColor = isBlack ? '#3a3a3a' : woolColors[Math.random() * woolColors.length | 0];
+    const borderColor = isBlack ? '#1a1a1a' : '#444';
+    const skinColor = isBlack ? '#2a2a2a' : '#444';
+    const accColors = ['#e44', '#44e', '#4a4', '#e4e', '#fa0', '#0cd', '#f80', '#c44'];
+    const accColor = accColors[Math.random() * accColors.length | 0];
+    let accessory = null;
+    const r = Math.random();
+    if (r < .10) accessory = 'tophat';
+    else if (r < .18) accessory = 'partyhat';
+    else if (r < .22) accessory = 'crown';
+    else if (r < .32) accessory = 'beanie';
+    else if (r < .42) accessory = 'glasses';
+    else if (r < .50) accessory = 'bowtie';
+    else if (r < .57) accessory = 'bell';
+    else if (r < .64) accessory = 'flower';
+    else if (r < .72) accessory = 'scarf';
+    else if (r < .80) accessory = 'shoes';
+    /* Beinpositionen: individuell pro Schaf */
+    const legSpread = 3 + Math.random() * 5;          /* 3-8: wie weit Beine auseinander */
+    const legYBase = 4.5 + Math.random() * 3;         /* 4.5-7.5: Ansatzhöhe */
+    const legBackOff = 0.5 + Math.random() * 1.5;     /* Hinterbeine etwas enger */
+    const legs = [
+      { lx: -legSpread / 2 - .5 + (Math.random() - .5), ly: legYBase + (Math.random() - .5) * 1.5 },
+      { lx:  legSpread / 2 + .5 + (Math.random() - .5), ly: legYBase + (Math.random() - .5) * 1.5 },
+      { lx: -legSpread / 2 + legBackOff + (Math.random() - .5), ly: legYBase + 1 + (Math.random() - .5) },
+      { lx:  legSpread / 2 - legBackOff + (Math.random() - .5), ly: legYBase + 1 + (Math.random() - .5) },
+    ];
+    /* Phasen-Offsets: jedes Bein startet anders */
+    const legPhases = [
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    ];
+    /* Ruhwinkel: leichte Grundstellung pro Bein */
+    const legRestAngles = [
+      (Math.random() - .5) * 12,
+      (Math.random() - .5) * 12,
+      (Math.random() - .5) * 12,
+      (Math.random() - .5) * 12,
+    ];
+    const tailSize = 3 + Math.random() * 3;  /* 3-6px Schwanz-Puschel */
+    return { scale, chub, legMul, headMul, woolColor, borderColor, skinColor, isBlack, accessory, accColor, legs, legPhases, legRestAngles, tailSize };
+  }
 
-function animate() {
-  boundaryControl();
+  /* ═══ DOM-Factory ═══ */
+  function createSheepDOM(tr) {
+    const wrap = document.createElement('div');
+    wrap.className = 's-wrap';
+    document.body.appendChild(wrap);
+    const mk = (cls) => { const el = document.createElement('div'); el.className = 'p ' + cls; wrap.appendChild(el); return el; };
 
-  // Container folgt dem Ragdoll-Körper
-  sheepContainer.style.transform =
-    `translate3d(${body.position.x}px, ${body.position.y}px, 0)`;
+    const tw = TORSO_W * tr.chub, th = TORSO_H;
+    const hw = HEAD_W * tr.headMul, hh = HEAD_H * tr.headMul;
+    const lh = LEG_H * tr.legMul;
 
-  // Y-Rotation nur auf das Schafbild
-  sheepVisual.style.transform =
-    `translate(-80px, -80px) rotateY(${sheepYaw}deg)`;
+    const lbl = mk('s-leg bk'); const lbr = mk('s-leg bk');
+    const tail = mk('s-tail');
+    const torso = mk('s-torso');
+    const lfl = mk('s-leg fr'); const lfr = mk('s-leg fr');
+    const head = mk('s-head');
 
-  // Propeller rotiert unabhängig von Yaw
-  propeller.style.transform =
-    `rotate(${performance.now() * propellerSpeed * 0.02}deg)`;
+    tail.style.cssText += `width:${tr.tailSize}px;height:${tr.tailSize}px;background:${tr.woolColor};border:1px solid ${tr.borderColor};`;
+    torso.style.cssText += `width:${tw}px;height:${th}px;background:${tr.woolColor};border-color:${tr.borderColor};`;
+    const label = document.createElement('span'); label.className = 's-label';
+    label.textContent = 'K';
+    if (tr.isBlack) label.style.color = 'rgba(255,255,255,.45)';
+    torso.appendChild(label);
+    head.style.cssText += `width:${hw}px;height:${hh}px;background:${tr.woolColor};border-color:${tr.borderColor};`;
+    head.style.setProperty('--wool', tr.woolColor);
+    head.style.setProperty('--bdr', tr.borderColor);
+    for (const leg of [lfl, lfr, lbl, lbr]) leg.style.cssText += `height:${lh}px;background:${tr.skinColor};`;
 
-  requestAnimationFrame(animate);
-}
-animate();
+    const earL = document.createElement('div'); earL.className = 's-ear l'; head.appendChild(earL);
+    const earR = document.createElement('div'); earR.className = 's-ear r'; head.appendChild(earR);
+    const earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
+    earL.style.background = earR.style.background = earColor;
+    earL.style.borderColor = earR.style.borderColor = tr.borderColor;
+    earL.style.border = earR.style.border = `.8px solid ${tr.borderColor}`;
+    const eyeL = document.createElement('div'); eyeL.className = 's-eye l'; head.appendChild(eyeL);
+    const eyeR = document.createElement('div'); eyeR.className = 's-eye r'; head.appendChild(eyeR);
+    const mouth = document.createElement('div'); mouth.className = 's-mouth'; head.appendChild(mouth);
+    if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = tr.borderColor; }
 
-// Externe API
-window.setSheepRotation = deg => sheepYaw = deg;
-window.applyTurbulence = (fx, fy) =>
-  Body.applyForce(body, body.position, { x: fx, y: fy });
-window.setPendulumTarget = (x, y) =>
-  Body.setPosition(anchor, { x, y });
+    const pole = mk('s-pole'); const hub = mk('s-hub');
+    const bwrap = mk('s-bwrap');
+    const blades = document.createElement('div'); blades.className = 's-blades'; bwrap.appendChild(blades);
+    blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
+    blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
+
+    /* Accessoire */
+    if (tr.accessory === 'tophat') {
+      const h = document.createElement('div'); h.className = 's-acc s-tophat';
+      h.style.background = tr.isBlack ? '#555' : '#222';
+      head.appendChild(h);
+    } else if (tr.accessory === 'partyhat') {
+      const h = document.createElement('div'); h.className = 's-acc s-partyhat';
+      h.style.borderBottomColor = tr.accColor; h.style.borderBottomWidth = '10px';
+      head.appendChild(h);
+    } else if (tr.accessory === 'crown') {
+      const h = document.createElement('div'); h.className = 's-acc s-crown';
+      head.appendChild(h);
+    } else if (tr.accessory === 'beanie') {
+      const h = document.createElement('div'); h.className = 's-acc s-beanie';
+      h.style.background = tr.accColor;
+      head.appendChild(h);
+    } else if (tr.accessory === 'glasses') {
+      const g = document.createElement('div'); g.className = 's-acc s-glasses';
+      g.innerHTML = '<span class="s-lens"></span><span class="s-lens"></span><span class="s-bridge"></span>';
+      head.appendChild(g);
+    } else if (tr.accessory === 'bowtie') {
+      const bt = document.createElement('div'); bt.className = 's-acc s-bowtie';
+      bt.style.borderLeftColor = bt.style.borderRightColor = tr.accColor;
+      bt.style.borderLeftWidth = bt.style.borderRightWidth = '3.5px';
+      torso.appendChild(bt);
+    } else if (tr.accessory === 'bell') {
+      const b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b);
+    } else if (tr.accessory === 'flower') {
+      const f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f);
+    } else if (tr.accessory === 'scarf') {
+      const s = document.createElement('div'); s.className = 's-acc s-scarf'; s.style.background = tr.accColor;
+      head.appendChild(s);
+    } else if (tr.accessory === 'shoes') {
+      for (const leg of [lfl, lfr, lbl, lbr]) {
+        const s = document.createElement('div'); s.className = 's-shoe'; s.style.background = tr.accColor; leg.appendChild(s);
+      }
+    }
+
+    return { wrap, torso, head, tail, label, lfl, lfr, lbl, lbr, pole, hub, bwrap, blades, eyeL, eyeR };
+  }
+
+  /* ═══ Schaf erzeugen ═══ */
+  function createSheep(x, y) {
+    const traits = flock.length === 0 ? generateDefaultTraits() : generateTraits();
+    const dom = createSheepDOM(traits);
+    const sheep = {
+      dom, traits,
+      tw: TORSO_W * traits.chub, th: TORSO_H,
+      hw: HEAD_W * traits.headMul, hh: HEAD_H * traits.headMul,
+      hr: HEAD_R * traits.headMul,
+      x: x ?? MARGIN + Math.random() * (W - MARGIN * 2),
+      y: y ?? MARGIN + Math.random() * (H - MARGIN * 2),
+      vx: (Math.random() - .5) * 2, vy: (Math.random() - .5) * 2,
+      bank: 0, headAngle: 0, headTarget: 0,
+      propSpeed: 10 + Math.random() * 10, propAngle: Math.random() * 360,
+      bobPhase: Math.random() * 9999, legPhase: Math.random() * 9999,
+      eyeX: 0, eyeY: 0, wobble: 0, wobbleV: 0,
+      target: { x: 0, y: 0 }, state: 'dart', stTimer: 0, stDur: 500,
+      resumeDelay: 0, throwBoost: 0,
+      orbitCenter: { x: 0, y: 0 }, orbitAngle: 0, orbitRadius: 40, orbitDir: 1,
+      blinkTimer: 1500 + Math.random() * 3000, isBlinking: false, blinkDur: 0,
+      wideEyes: 0, kickLeg: -1, kickTimer: 0, kickCD: 1500 + Math.random() * 2500,
+      socialTarget: null, collisionCD: 0,
+      scareCorner: null, canSpreadFear: false,
+      solo: Math.random() < 0.35, soloTimer: 4000 + Math.random() * 12000,
+      tailSide: 0,                         /* geglättete Schwanz-Seite (-1 links, +1 rechts) */
+      legDragX: 0, legDragY: 0,           /* geglättete Bein-Trägheit */
+    };
+    sheep.target = newTarget();
+    flock.push(sheep);
+    return sheep;
+  }
+
+  function removeSheep(sheep) {
+    const i = flock.indexOf(sheep);
+    if (i === -1) return;
+    flock.splice(i, 1);
+    sheep.dom.wrap.remove();
+  }
+
+  /* ═══ Targets ═══ */
+  function newTarget() { return { x: MARGIN + Math.random() * (W - MARGIN * 2), y: MARGIN + Math.random() * (H - MARGIN * 2) }; }
+  function nearTarget(sh, d) { return { x: sh.x + (Math.random() - .5) * d, y: sh.y + (Math.random() - .5) * d }; }
+
+  /* ═══ Ecke + Angst ═══ */
+  function nearestCorner(x, y) {
+    const pad = MARGIN + 15;
+    const corners = [{ x: pad, y: pad }, { x: W - pad, y: pad }, { x: pad, y: H - pad }, { x: W - pad, y: H - pad }];
+    let best = corners[0], bestD = Infinity;
+    for (const c of corners) { const d = Math.hypot(c.x - x, c.y - y); if (d < bestD) { best = c; bestD = d; } }
+    return best;
+  }
+
+  function makeSheepScared(sh, canSpread) {
+    sh.state = 'scared'; sh.stTimer = 0; sh.stDur = 8000 + Math.random() * 7000;
+    sh.scareCorner = nearestCorner(sh.x, sh.y);
+    sh.wideEyes = sh.stDur + 1000; sh.propSpeed = PROP_MAX;
+    sh.canSpreadFear = canSpread;
+    if (canSpread) {
+      for (const o of flock) {
+        if (o === sh || o.state === 'scared') continue;
+        if (Math.hypot(o.x - sh.x, o.y - sh.y) < 100) makeSheepScared(o, false);
+      }
+    }
+  }
+
+  /* ═══ Verhalten ═══ */
+  function pickNext(sh) {
+    if (sh.state === 'scared' || sh.state === 'departing') return;
+
+    /* Solo-Schafe: bevorzugen weite Erkundungen, meiden social */
+    if (sh.solo) {
+      const r = Math.random();
+      if (r < .35) { sh.state = 'explore'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 3000 + Math.random() * 5000; sh.propSpeed = Math.min(sh.propSpeed + 6, PROP_MAX); }
+      else if (r < .55) { sh.state = 'dart'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 800 + Math.random() * 1200; sh.propSpeed = Math.min(sh.propSpeed + 12, PROP_MAX); }
+      else if (r < .72) { sh.state = 'zigzag'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500; }
+      else if (r < .85) { sh.state = 'circle'; sh.orbitCenter = { x: sh.x, y: sh.y }; sh.orbitAngle = Math.random() * Math.PI * 2; sh.orbitRadius = 40 + Math.random() * 80; sh.orbitDir = Math.random() > .5 ? 1 : -1; sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 3000; }
+      else { sh.state = 'hover'; sh.stTimer = 0; sh.stDur = 500 + Math.random() * 1500; }
+      return;
+    }
+
+    const curOK = (performance.now() - cursorLastMove) < 4000 && Math.hypot(sh.x - cursorX, sh.y - cursorY) > 60;
+    const r = Math.random();
+    if (curOK && r < .12) { sh.state = 'curious'; sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500; }
+    else if (flock.length > 1 && r < .22) {
+      sh.state = 'social';
+      const others = flock.filter(o => o !== sh && o.state !== 'departing');
+      if (!others.length) { sh.state = 'explore'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 2500; return; }
+      sh.socialTarget = others[Math.random() * others.length | 0];
+      sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500;
+    }
+    else if (r < .42) { sh.state = 'dart'; sh.target = nearTarget(sh, 200); sh.stTimer = 0; sh.stDur = 600 + Math.random() * 1000; sh.propSpeed = Math.min(sh.propSpeed + 12, PROP_MAX); }
+    else if (r < .52) { sh.state = 'hover'; sh.stTimer = 0; sh.stDur = 400 + Math.random() * 1200; }
+    else if (r < .72) { sh.state = 'explore'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 3500; sh.propSpeed = Math.min(sh.propSpeed + 6, PROP_MAX); }
+    else if (r < .85) { sh.state = 'circle'; sh.orbitCenter = { x: sh.x, y: sh.y }; sh.orbitAngle = Math.random() * Math.PI * 2; sh.orbitRadius = 30 + Math.random() * 60; sh.orbitDir = Math.random() > .5 ? 1 : -1; sh.stTimer = 0; sh.stDur = 1500 + Math.random() * 2000; }
+    else { sh.state = 'zigzag'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 1500 + Math.random() * 2000; }
+  }
+
+  function behave(sh, dt, t) {
+    if (sh === dragSheep) {
+      sh.headTarget = Math.max(-30, Math.min(30, sh.vx * 5));
+      sh.wideEyes = Math.max(sh.wideEyes, 100);
+      return;
+    }
+    if (sh.resumeDelay > 0) { sh.resumeDelay -= dt; return; }
+    sh.stTimer += dt;
+    const S = STEER;
+
+    switch (sh.state) {
+      case 'hover': {
+        sh.vx *= .94; sh.vy *= .94;
+        sh.headTarget = Math.sin(sh.stTimer * .005) * 35;
+        if (sh.stTimer > sh.stDur) pickNext(sh);
+        break;
+      }
+      case 'dart': {
+        const dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+        if (d < 20 || sh.stTimer > sh.stDur) { pickNext(sh); break; }
+        sh.vx += (dx / d) * S * 1.4; sh.vy += (dy / d) * S * 1.4;
+        sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
+        break;
+      }
+      case 'explore': {
+        const dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+        if (d < 25 || sh.stTimer > sh.stDur) { pickNext(sh); break; }
+        const nx = dx / d, ny = dy / d, arr = Math.min(1, d / 60);
+        const w = Math.sin(t * .001 + sh.stTimer * .001 + sh.bobPhase) * .5;
+        const c = Math.cos(w), sn = Math.sin(w);
+        sh.vx += (nx * c - ny * sn) * S * arr; sh.vy += (nx * sn + ny * c) * S * arr;
+        sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 5));
+        break;
+      }
+      case 'circle': {
+        sh.orbitAngle += dt * .003 * sh.orbitDir;
+        const tx = sh.orbitCenter.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
+        const ty = sh.orbitCenter.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
+        const dx = tx - sh.x, dy = ty - sh.y, d = Math.hypot(dx, dy);
+        if (d > 1) { sh.vx += (dx / d) * S * 1.1; sh.vy += (dy / d) * S * 1.1; }
+        sh.headTarget = Math.max(-25, Math.min(25, sh.vx * 4));
+        if (sh.stTimer > sh.stDur) pickNext(sh);
+        break;
+      }
+      case 'zigzag': {
+        const dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+        if (d < 25 || sh.stTimer > sh.stDur) { pickNext(sh); break; }
+        const nx = dx / d, ny = dy / d;
+        const zig = Math.sin(sh.stTimer * .008) * 1.2, c = Math.cos(zig), sn = Math.sin(zig);
+        sh.vx += (nx * c - ny * sn) * S * 1.2; sh.vy += (nx * sn + ny * c) * S * 1.2;
+        sh.headTarget = Math.sin(sh.stTimer * .006) * 30;
+        break;
+      }
+      case 'curious': {
+        const dx = cursorX - sh.x, dy = cursorY - sh.y, d = Math.hypot(dx, dy);
+        if (sh.stTimer > sh.stDur) { pickNext(sh); break; }
+        if (d > 45) { sh.vx += (dx / d) * S * .9; sh.vy += (dy / d) * S * .9; sh.headTarget = Math.max(-30, Math.min(30, dx * .2)); }
+        else { sh.vx *= .94; sh.vy *= .94; sh.headTarget = Math.max(-40, Math.min(40, dx * .35)); }
+        break;
+      }
+      case 'social': {
+        if (!sh.socialTarget || flock.indexOf(sh.socialTarget) === -1 || sh.socialTarget.state === 'departing') { pickNext(sh); break; }
+        const dx = sh.socialTarget.x - sh.x, dy = sh.socialTarget.y - sh.y, d = Math.hypot(dx, dy);
+        if (sh.stTimer > sh.stDur) { pickNext(sh); break; }
+        if (d > 35) {
+          sh.vx += (dx / d) * S * .8; sh.vy += (dy / d) * S * .8;
+        } else {
+          sh.vx += (sh.socialTarget.vx - sh.vx) * .03;
+          sh.vy += (sh.socialTarget.vy - sh.vy) * .03;
+          sh.vx *= .95; sh.vy *= .95;
+        }
+        sh.headTarget = Math.max(-35, Math.min(35, dx * .25));
+        break;
+      }
+      case 'scared': {
+        sh.wideEyes = Math.max(sh.wideEyes, 500);
+        if (sh.stTimer > sh.stDur) { sh.wideEyes = 0; pickNext(sh); break; }
+        const cmx = cursorX - sh.x, cmy = cursorY - sh.y, cmd = Math.hypot(cmx, cmy);
+        if (cmd < 100) {
+          if (cmd > 1) { sh.vx -= (cmx / cmd) * S * 1.8; sh.vy -= (cmy / cmd) * S * 1.8; }
+          sh.propSpeed = Math.min(sh.propSpeed + 3, PROP_MAX);
+          sh.scareCorner = nearestCorner(sh.x + (sh.x - cursorX), sh.y + (sh.y - cursorY));
+        } else {
+          const dcx = sh.scareCorner.x - sh.x, dcy = sh.scareCorner.y - sh.y, dc = Math.hypot(dcx, dcy);
+          if (dc > 20) {
+            sh.vx += (dcx / dc) * S * .8; sh.vy += (dcy / dc) * S * .8;
+          } else {
+            sh.vx *= .9; sh.vy *= .9;
+            sh.vx += (Math.random() - .5) * .06; sh.vy += (Math.random() - .5) * .06;
+          }
+        }
+        sh.headTarget = Math.max(-40, Math.min(40, cmx * .15 + Math.sin(sh.stTimer * .01) * 5));
+        break;
+      }
+      case 'departing': {
+        const dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+        if (d > 1) { sh.vx += (dx / d) * S * 1.5; sh.vy += (dy / d) * S * 1.5; }
+        sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
+        break;
+      }
+    }
+  }
+
+  /* ═══ Herdenverhalten (Boids) ═══ */
+  function flockForces(sh) {
+    if (flock.length < 2 || sh === dragSheep || sh.state === 'departing' || sh.solo) return;
+    let sepX = 0, sepY = 0;
+    let aliVX = 0, aliVY = 0, aliN = 0;
+    let cohX = 0, cohY = 0, cohN = 0;
+    for (const o of flock) {
+      if (o === sh || o.state === 'departing') continue;
+      const dx = sh.x - o.x, dy = sh.y - o.y, d = Math.hypot(dx, dy);
+      if (d < SEPARATION_R && d > 0) { sepX += (dx / d) / d; sepY += (dy / d) / d; }
+      if (d < ALIGNMENT_R) { aliVX += o.vx; aliVY += o.vy; aliN++; }
+      if (d < COHESION_R) { cohX += o.x; cohY += o.y; cohN++; }
+    }
+    sh.vx += sepX * SEP_FORCE; sh.vy += sepY * SEP_FORCE;
+    if (aliN) { sh.vx += (aliVX / aliN - sh.vx) * ALI_FORCE; sh.vy += (aliVY / aliN - sh.vy) * ALI_FORCE; }
+    if (cohN) { const cx = cohX / cohN - sh.x, cy = cohY / cohN - sh.y; sh.vx += cx * COH_FORCE; sh.vy += cy * COH_FORCE; }
+  }
+
+  /* ═══ Physik ═══ */
+  function physics(sh, dt) {
+    /* Beim Draggen: Position + Wände überspringen, Rest (Bank, Trägheit, Propeller) läuft weiter */
+    if (sh !== dragSheep) {
+      sh.throwBoost = Math.max(0, sh.throwBoost - dt);
+      const curMax = sh.throwBoost > 0 ? MAX_SPEED + (sh.throwBoost / 500) * 4 : MAX_SPEED;
+      const spd = Math.hypot(sh.vx, sh.vy);
+      if (spd > curMax) { sh.vx *= curMax / spd; sh.vy *= curMax / spd; }
+      sh.vx *= (sh.throwBoost > 0 ? .996 : FRICTION);
+      sh.vy *= (sh.throwBoost > 0 ? .996 : FRICTION);
+
+      sh.x += sh.vx * dt * .06; sh.y += sh.vy * dt * .06;
+
+      /* Wandkollision (nicht für abfliegende Schafe) */
+      if (sh.state !== 'departing') {
+        const preHitSpd = Math.hypot(sh.vx, sh.vy);
+        let hit = false;
+
+        /* Oben: OFFEN — Schwerkraft zieht zurück, Seitenwände gelten nicht */
+        if (sh.y < MARGIN) {
+          sh.vy += 0.006 * dt;  /* Schwerkraft */
+          /* Seitenwände nur im Spielfeld */
+        } else {
+          /* Seiten: nur innerhalb des Spielfelds */
+          if (sh.x < MARGIN)     { sh.x = MARGIN;     sh.vx = Math.abs(sh.vx) * .5; hit = true; }
+          if (sh.x > W - MARGIN) { sh.x = W - MARGIN; sh.vx = -Math.abs(sh.vx) * .5; hit = true; }
+        }
+        /* Unten: immer Wand */
+        if (sh.y > H - MARGIN) { sh.y = H - MARGIN; sh.vy = -Math.abs(sh.vy) * .5; hit = true; }
+
+        if (hit && preHitSpd > 1.0) {
+          spawnStars(sh.x, sh.y, 2 + (Math.random() * 2 | 0));
+          sh.propSpeed = Math.min(sh.propSpeed + 15, PROP_MAX); sh.wobbleV += (Math.random() - .5) * 16;
+          if (sh.throwBoost > 500 && sh.state !== 'scared') {
+            makeSheepScared(sh, true);
+          }
+        }
+      }
+    }
+
+    sh.bank += ((-sh.vx * 6) - sh.bank) * .12;
+    sh.wobbleV -= sh.wobble * .3; sh.wobbleV *= .85; sh.wobble += sh.wobbleV * dt * .06;
+    sh.headAngle += (sh.headTarget - sh.headAngle) * .09;
+
+    /* Bein-Trägheit: verzögerte Velocity → Beine schleifen nach */
+    sh.legDragX += (sh.vx - sh.legDragX) * .04;
+    sh.legDragY += (sh.vy - sh.legDragY) * .04;
+
+    /* Schwanz-Seite: gegenüber Flugrichtung, geglättet */
+    const spd2 = Math.hypot(sh.vx, sh.vy);
+    const tailTarget = spd2 > 0.3 ? Math.max(-1, Math.min(1, -sh.vx / spd2 * 1.5)) : sh.tailSide * .95;
+    sh.tailSide += (tailTarget - sh.tailSide) * .06;
+
+    const vel = Math.hypot(sh.vx, sh.vy);
+    sh.propSpeed = Math.max(PROP_BASE + vel * 6, sh.propSpeed * .992);
+    sh.propSpeed = Math.min(sh.propSpeed, PROP_MAX);
+    sh.propAngle += sh.propSpeed * dt * .07;
+
+    sh.bobPhase += dt; sh.legPhase += dt;
+
+    if (sh.isBlinking) { sh.blinkDur -= dt; if (sh.blinkDur <= 0) { sh.isBlinking = false; sh.blinkTimer = 1500 + Math.random() * 3500; } }
+    else { sh.blinkTimer -= dt; if (sh.blinkTimer <= 0) { sh.isBlinking = true; sh.blinkDur = 80 + Math.random() * 50; } }
+    if (sh.wideEyes > 0) sh.wideEyes -= dt;
+
+    if (sh.state === 'hover' || sh.state === 'curious') {
+      sh.kickCD -= dt;
+      if (sh.kickCD <= 0 && sh.kickLeg === -1) { sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 250; sh.kickCD = 1500 + Math.random() * 3000; }
+    }
+    if (sh.kickTimer > 0) { sh.kickTimer -= dt; if (sh.kickTimer <= 0) sh.kickLeg = -1; }
+    sh.collisionCD = Math.max(0, sh.collisionCD - dt);
+  }
+
+  /* ═══ Sheep-Kollisionen ═══ */
+  function sheepCollisions() {
+    for (let i = 0; i < flock.length; i++) {
+      for (let j = i + 1; j < flock.length; j++) {
+        const a = flock[i], b = flock[j];
+        if (a.state === 'departing' || b.state === 'departing') continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        const minD = COLLISION_R * 2;
+        if (d < minD && d > 0) {
+          const nx = dx / d, ny = dy / d, overlap = minD - d;
+          a.x -= nx * overlap * .5; a.y -= ny * overlap * .5;
+          b.x += nx * overlap * .5; b.y += ny * overlap * .5;
+          const rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+          if (rv > 0) { a.vx -= nx * rv * .4; a.vy -= ny * rv * .4; b.vx += nx * rv * .4; b.vy += ny * rv * .4; }
+          if (rv > 1.5 && a.collisionCD <= 0 && b.collisionCD <= 0) {
+            spawnStars((a.x + b.x) / 2, (a.y + b.y) / 2, 2 + (Math.random() * 2 | 0));
+            a.wobbleV += (Math.random() - .5) * 8; b.wobbleV += (Math.random() - .5) * 8;
+            a.propSpeed = Math.min(a.propSpeed + 10, PROP_MAX); b.propSpeed = Math.min(b.propSpeed + 10, PROP_MAX);
+            a.collisionCD = 500; b.collisionCD = 500;
+          }
+        }
+      }
+    }
+  }
+
+  /* ═══ Render ═══ */
+  function rot(lx, ly, a) { const c = Math.cos(a), sn = Math.sin(a); return { x: c * lx - sn * ly, y: sn * lx + c * ly }; }
+
+  function render(sh) {
+    const d = sh.dom, tr = sh.traits;
+    const bankRad = (sh.bank + sh.wobble) * Math.PI / 180;
+    const headRad = sh.headAngle * Math.PI / 180;
+    const bob = Math.sin(sh.bobPhase * .006) * 2;
+    const hBob = Math.sin(sh.bobPhase * .0045 + 1.5) * 1;
+
+    /* Wrapper: Position + individuelle Größe */
+    d.wrap.style.transform = `translate(${sh.x}px,${sh.y}px) scale(${tr.scale})`;
+
+    /* Alles relativ zu (0,0) */
+    const tx = 0, ty = bob;
+    d.torso.style.transform = `translate(${tx - sh.tw / 2}px,${ty - sh.th / 2}px) rotate(${bankRad}rad)`;
+
+    /* Label perspektivisch auf der Brust */
+    const labelRotY = sh.tailSide * 65;
+    d.label.style.transform = `translate(-50%,-50%) rotateY(${labelRotY}deg)`;
+
+    /* Schwanz — seitlich hinter dem Schaf, nie zwischen den Beinen */
+    const ts = tr.tailSize;
+    const tailWag = Math.sin(sh.bobPhase * .008) * 0.15;
+    const tailLocalX = sh.tailSide * (sh.tw / 2 + ts * .3);
+    const tailLocalY = 1;  /* leicht unter Mitte, aber über Bein-Ansatz */
+    const tailPos = rot(tailLocalX, tailLocalY, bankRad);
+    const tailX = tx + tailPos.x, tailY = ty + tailPos.y;
+    d.tail.style.transform = `translate(${tailX - ts / 2}px,${tailY - ts / 2}px) rotate(${(tailWag + sh.tailSide * .4) * Math.PI}rad)`;
+
+    const headSideX = -sh.tailSide * (sh.tw * 0.38);  /* invertiert zum Schwanz */
+    const hOff = rot(headSideX, -5, bankRad);
+    const hx = tx + hOff.x, hy = ty + hOff.y + hBob * .3;
+    d.head.style.transform = `translate(${hx - sh.hw / 2}px,${hy - sh.hh / 2}px) rotate(${headRad}rad)`;
+
+    /* Augen — Viewport-Coords für Cursor-Vergleiche */
+    const sc = tr.scale;
+    const headVX = sh.x + hx * sc, headVY = sh.y + hy * sc;
+    let etx, ety;
+    if (sh.wideEyes > 0) { etx = sh.vx * 3; ety = sh.vy * 2; }
+    else if (sh.state === 'curious') { etx = (cursorX - headVX) * .03; ety = (cursorY - headVY) * .03; }
+    else if (sh.state === 'social' && sh.socialTarget) { etx = (sh.socialTarget.x - headVX) * .04; ety = (sh.socialTarget.y - headVY) * .04; }
+    else if (sh.state === 'scared') { etx = (cursorX - headVX) * .03; ety = (cursorY - headVY) * .03; }
+    else if (sh.state === 'hover') {
+      let looked = false;
+      for (const o of flock) { if (o !== sh && Math.hypot(o.x - sh.x, o.y - sh.y) < 50) { etx = (o.x - headVX) * .04; ety = (o.y - headVY) * .04; looked = true; break; } }
+      if (!looked) { etx = Math.sin(sh.headAngle * Math.PI / 180) * 1.5; ety = 0; }
+    }
+    else { etx = sh.vx * 3; ety = sh.vy * 2; }
+    etx = Math.max(-2, Math.min(2, etx)); ety = Math.max(-1.5, Math.min(1.5, ety));
+    sh.eyeX += (etx - sh.eyeX) * .15; sh.eyeY += (ety - sh.eyeY) * .15;
+    let ee = sh.isBlinking ? ' scaleY(0.1)' : sh.wideEyes > 0 ? ' scale(1.5)' : '';
+    d.eyeL.style.transform = `translate(${sh.eyeX}px,${sh.eyeY}px)${ee}`;
+    d.eyeR.style.transform = `translate(${sh.eyeX}px,${sh.eyeY}px)${ee}`;
+
+    /* Propeller */
+    const topX = hx - Math.sin(headRad) * (sh.hr + 1);
+    const topY = hy - Math.cos(headRad) * (sh.hr + 1);
+    const hd = sh.hr + POLE_H + 1;
+    const hubX = hx - Math.sin(headRad) * hd, hubY = hy - Math.cos(headRad) * hd;
+    const pdx = hubX - topX, pdy = hubY - topY, pL = Math.hypot(pdx, pdy);
+    d.pole.style.height = pL + 'px'; d.pole.style.left = topX + 'px'; d.pole.style.top = topY + 'px';
+    d.pole.style.transform = `translateX(-50%) rotate(${Math.atan2(pdx, -pdy)}rad)`;
+    d.hub.style.left = (hubX - HUB_SZ / 2) + 'px'; d.hub.style.top = (hubY - HUB_SZ / 2) + 'px';
+    d.bwrap.style.left = (hubX - 14) + 'px'; d.bwrap.style.top = (hubY - 14) + 'px';
+    d.blades.style.transform = `rotateX(55deg) rotate(${sh.propAngle}deg)`;
+    d.blades.style.opacity = Math.max(.25, 1 - (sh.propSpeed - PROP_BASE) / (PROP_MAX - PROP_BASE) * .75);
+
+    /* Beine — mit Trägheit/Fliehkraft */
+    const vel = Math.hypot(sh.vx, sh.vy);
+    const legEls = [d.lfl, d.lfr, d.lbl, d.lbr];
+    /* Trägheits-Differenz: wie stark die Beine nachhinken */
+    const dragDiffX = (sh.legDragX - sh.vx) * 4;   /* horizontale Trägheit */
+    const dragDiffY = (sh.legDragY - sh.vy) * 3.5;  /* vertikale Trägheit */
+    for (let i = 0; i < 4; i++) {
+      const lp = tr.legs[i], hip = rot(lp.lx, lp.ly, bankRad);
+      const hpX = tx + hip.x, hpY = ty + hip.y;
+      const freq = .006 + vel * .005, amp = 5 + vel * 8;
+      const idle = Math.sin(sh.legPhase * freq + tr.legPhases[i]) * amp;
+      const sway = sh.legDragX * 3.5 * (i < 2 ? 1 : .7);     /* Grundschwung aus Geschwindigkeit */
+      const inertia = dragDiffX * (i < 2 ? 1.2 : .8);          /* Trägheit: vorne stärker */
+      const lift = -sh.legDragY * 2.5;                          /* nach oben → Beine schleifen nach unten */
+      let kick = 0;
+      if (i === sh.kickLeg && sh.kickTimer > 0) kick = Math.sin((1 - sh.kickTimer / 250) * Math.PI) * 35;
+      const angle = tr.legRestAngles[i] + idle + sway + inertia + lift + kick;
+      legEls[i].style.transform = `translate(${hpX - LEG_W / 2}px,${hpY}px) rotate(${angle * Math.PI / 180}rad)`;
+    }
+  }
+
+  /* ═══ Stars ═══ */
+  function spawnStars(x, y, n) {
+    for (let i = 0; i < n; i++) {
+      const el = document.createElement('div'); el.className = 'star'; el.textContent = '\u2B50';
+      const a = (Math.PI * 2 / n) * i + (Math.random() - .5), d = 14 + Math.random() * 22;
+      el.style.cssText = `left:${x}px;top:${y}px;font-size:${6 + Math.random() * 4}px;`;
+      el.style.setProperty('--dx', Math.cos(a) * d + 'px'); el.style.setProperty('--dy', Math.sin(a) * d + 'px');
+      document.body.appendChild(el); setTimeout(() => el.remove(), 450);
+    }
+  }
+
+  /* ═══ Wolken ═══ */
+  for (let i = 0; i < 5; i++) {
+    const c = document.createElement('div'); c.className = 'cloud';
+    const sz = 30 + Math.random() * 50;
+    c.style.cssText = `width:${sz}px;height:${sz * .45}px;left:${Math.random() * W}px;top:${10 + Math.random() * H * .35}px;`;
+    document.body.appendChild(c);
+  }
+
+  /* ═══ Drag ═══ */
+  let dragSheep = null, dragOX = 0, dragOY = 0, dragLX = 0, dragLY = 0, dragLT = 0;
+  const velBuf = [];
+
+  function findNearest(x, y) {
+    let best = null, bestD = 40;
+    for (const sh of flock) {
+      if (sh.state === 'departing') continue;
+      const d = Math.hypot(sh.x - x, sh.y - y);
+      if (d < bestD) { best = sh; bestD = d; }
+    }
+    return best;
+  }
+
+  document.addEventListener('pointerdown', e => {
+    const sh = findNearest(e.clientX, e.clientY);
+    if (!sh) return;
+    e.preventDefault(); dragSheep = sh;
+    dragOX = sh.x - e.clientX; dragOY = sh.y - e.clientY;
+    dragLX = e.clientX; dragLY = e.clientY; dragLT = performance.now();
+    velBuf.length = 0; document.body.style.cursor = 'grabbing';
+    /* Herde aufscheuchen wenn eins gegriffen wird */
+    for (const o of flock) {
+      if (o === sh) continue;
+      const dx = o.x - sh.x, dy = o.y - sh.y, d = Math.hypot(dx, dy) || 1;
+      o.vx += (dx / d) * 2.5; o.vy += (dy / d) * 2.5;
+      o.propSpeed = Math.min(o.propSpeed + 15, PROP_MAX);
+      o.wideEyes = Math.max(o.wideEyes, 600);
+      o.state = 'dart'; o.target = { x: o.x + (dx / d) * 120, y: o.y + (dy / d) * 120 };
+      o.stTimer = 0; o.stDur = 800 + Math.random() * 600;
+    }
+  });
+  document.addEventListener('pointermove', e => {
+    if (!dragSheep) return; e.preventDefault();
+    const now = performance.now(), dtt = now - dragLT;
+    if (dtt > 1) {
+      velBuf.push({ vx: (e.clientX - dragLX) / dtt * 16, vy: (e.clientY - dragLY) / dtt * 16, t: now });
+      while (velBuf.length && now - velBuf[0].t > 80) velBuf.shift();
+    }
+    dragSheep.x = e.clientX + dragOX; dragSheep.y = e.clientY + dragOY;
+    /* Live-Velocity fürs Schaf → Bank, Beine, Schwanz, Kopf reagieren */
+    if (dtt > 1) {
+      dragSheep.vx += ((e.clientX - dragLX) / dtt * 12 - dragSheep.vx) * .3;
+      dragSheep.vy += ((e.clientY - dragLY) / dtt * 12 - dragSheep.vy) * .3;
+    }
+    dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
+    dragSheep.propSpeed = Math.min(dragSheep.propSpeed + .5, PROP_MAX);
+  });
+  document.addEventListener('pointerup', () => {
+    if (!dragSheep) return;
+    let ax = 0, ay = 0;
+    if (velBuf.length) { for (const v of velBuf) { ax += v.vx; ay += v.vy; } ax /= velBuf.length; ay /= velBuf.length; }
+    dragSheep.vx = ax * .8; dragSheep.vy = ay * .8;
+    dragSheep.throwBoost = 2500; dragSheep.resumeDelay = 1200;
+    dragSheep.wobbleV += (Math.random() - .5) * 12;
+    velBuf.length = 0; dragSheep = null; document.body.style.cursor = '';
+  });
+
+  /* ═══ Haupt-Loop ═══ */
+  let lastT = 0;
+  function frame(t) {
+    const dt = lastT ? Math.min(t - lastT, 40) : 16;
+    lastT = t;
+    for (const sh of flock) {
+      behave(sh, dt, t); flockForces(sh); physics(sh, dt); render(sh);
+      /* Solo-Timer: wechselt zwischen Solo und Herde */
+      if (sh.state !== 'scared' && sh.state !== 'departing') {
+        sh.soloTimer -= dt;
+        if (sh.soloTimer <= 0) {
+          sh.solo = !sh.solo;
+          sh.soloTimer = sh.solo
+            ? 6000 + Math.random() * 15000   /* Solo-Phase: 6-21s */
+            : 4000 + Math.random() * 10000;  /* Herden-Phase: 4-14s */
+        }
+      }
+    }
+    sheepCollisions();
+    /* Abflug: ab und zu verlässt ein Schaf die Herde */
+    if (flock.length > 1) {
+      for (const sh of flock) {
+        if (sh !== dragSheep && sh.state !== 'departing' && sh.state !== 'scared' && Math.random() < 0.000003 * dt) {
+          sh.state = 'departing'; sh.stTimer = 0; sh.stDur = 8000;
+          sh.target = { x: Math.random() > .5 ? -60 : W + 60, y: MARGIN + Math.random() * (H - MARGIN * 2) };
+          sh.propSpeed = Math.min(sh.propSpeed + 10, PROP_MAX);
+        }
+      }
+    }
+    /* Cleanup: Schafe die den Screen verlassen haben */
+    for (let i = flock.length - 1; i >= 0; i--) {
+      const sh = flock[i];
+      if (sh === dragSheep) continue;
+      /* Departing: normal off-screen */
+      if (sh.state === 'departing' && (sh.x < -60 || sh.x > W + 60 || sh.y < -60 || sh.y > H + 60)) {
+        removeSheep(sh); continue;
+      }
+      /* Rausgeworfen: oben raus + seitlich außerhalb → weg */
+      if (sh.y < -40 && (sh.x < -60 || sh.x > W + 60)) {
+        removeSheep(sh);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ═══ API ═══ */
+  window.addSheep = function (x, y) { return createSheep(x, y); };
+
+  window.removeSheep = function () {
+    if (flock.length > 1) removeSheep(flock[flock.length - 1]);
+  };
+
+  window.sheepScare = function (fx, fy) {
+    for (const sh of flock) {
+      if (fx !== undefined && fy !== undefined) {
+        const dx = sh.x - fx, dy = sh.y - fy, d = Math.hypot(dx, dy) || 1;
+        sh.vx = (dx / d) * (4 + Math.random() * 2); sh.vy = (dy / d) * (3 + Math.random()) - 2.5;
+      } else {
+        sh.vx = (Math.random() - .5) * 5; sh.vy = -4.5 - Math.random() * 2;
+      }
+      sh.propSpeed = PROP_MAX; sh.wobbleV = (Math.random() - .5) * 24;
+      sh.wideEyes = 1000; sh.throwBoost = 2500; sh.resumeDelay = 1500 + Math.random() * 800;
+      sh.state = 'dart'; sh.target = { x: sh.x + sh.vx * 40, y: sh.y + sh.vy * 40 }; sh.stTimer = 0; sh.stDur = 800;
+    }
+  };
+
+  window.sheepCount = function () { return flock.length; };
+
+  /* ═══ Start ═══ */
+  createSheep(W / 2, H / 2);
+  requestAnimationFrame(frame);
+  window.addEventListener('resize', () => { W = innerWidth; H = innerHeight; });
+
+})();
 </script>
 </body>
 </html>

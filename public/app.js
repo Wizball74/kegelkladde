@@ -724,6 +724,43 @@ function gagConfetti(anchor) {
   }
 }
 
+// Warmup: force browser to compile gag animation keyframes
+(function gagWarmup() {
+  const offscreen = document.createElement("div");
+  offscreen.style.cssText = "position:fixed;left:-9999px;top:-9999px;pointer-events:none;opacity:0;";
+  document.body.appendChild(offscreen);
+
+  // gag-shake
+  const shake = document.createElement("div");
+  shake.className = "gag-shake";
+  offscreen.appendChild(shake);
+
+  // gag-cell-flash
+  const flash = document.createElement("span");
+  flash.className = "gag-cell-flash";
+  offscreen.appendChild(flash);
+
+  // gag-bubble
+  const bubble = document.createElement("span");
+  bubble.className = "gag-bubble";
+  offscreen.appendChild(bubble);
+
+  // gag-confetti (with CSS vars)
+  const conf = document.createElement("div");
+  conf.className = "gag-confetti";
+  conf.style.setProperty("--dx", "10px");
+  conf.style.setProperty("--dy", "-10px");
+  conf.style.setProperty("--r1", "45deg");
+  conf.style.setProperty("--wobble", "5px");
+  conf.style.setProperty("--t-burst", "0.4s");
+  conf.style.setProperty("--t-drift", "2.5s");
+  offscreen.appendChild(conf);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => offscreen.remove());
+  });
+})();
+
 document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
   controlsEl.addEventListener("click", (event) => {
     const button = event.target.closest(".mark-btn");
@@ -744,11 +781,21 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
     const row = controlsEl.closest("tr");
     if (row) autoSaveRow(row);
 
-    // Gag animations
+    // Gag animations (disabled on mobile)
     const kladdeData = document.getElementById("kladdeData");
-    if (kladdeData && kladdeData.dataset.gags === "1" && op === "inc") {
+    if (kladdeData && kladdeData.dataset.gags === "1" && op === "inc" && window.matchMedia("(min-width: 900px)").matches) {
       if (target === "pudel") gagPudel(controlsEl);
-      if (target === "alle9" || target === "kranz") gagConfetti(controlsEl);
+      if (target === "triclops") gagConfetti(controlsEl);
+      if (target === "alle9" || target === "kranz") {
+        if (window.flyingSheep) {
+          const row = controlsEl.closest("tr");
+          const memberId = row?.dataset.memberId;
+          const name = row?.querySelector(".name-col")?.textContent.trim() || "?";
+          const letter = name.charAt(0).toUpperCase();
+          const rect = controlsEl.getBoundingClientRect();
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, memberId, letter);
+        }
+      }
     }
   });
 });
@@ -2969,7 +3016,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initMemberDragDrop();
 
   // Copyable fields: click to copy
-  document.querySelectorAll(".member-col.copyable").forEach(el => {
+  document.querySelectorAll(".copyable").forEach(el => {
     el.addEventListener("click", () => {
       const text = el.textContent.trim();
       if (!text || text === "–") return;
@@ -2982,60 +3029,62 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initMemberDragDrop() {
-  const memberList = document.querySelector(".member-list-new");
+  const memberLists = document.querySelectorAll(".member-grid");
   const orderForm = document.getElementById("orderForm");
   const orderInput = document.getElementById("memberOrder");
-  if (!memberList || !orderForm || !orderInput) return;
+  if (!memberLists.length || !orderForm || !orderInput) return;
 
   let dragItem = null;
 
-  memberList.querySelectorAll(".member-card[draggable]").forEach((card) => {
-    card.addEventListener("dragstart", (e) => {
-      dragItem = card;
-      card.style.opacity = "0.5";
-      e.dataTransfer.effectAllowed = "move";
-    });
+  memberLists.forEach(memberList => {
+    memberList.querySelectorAll(".mcard[draggable]").forEach((card) => {
+      card.addEventListener("dragstart", (e) => {
+        dragItem = card;
+        card.style.opacity = "0.5";
+        e.dataTransfer.effectAllowed = "move";
+      });
 
-    card.addEventListener("dragend", () => {
-      card.style.opacity = "";
-      memberList.querySelectorAll(".member-card").forEach((c) => c.classList.remove("drag-over"));
-      dragItem = null;
-    });
+      card.addEventListener("dragend", () => {
+        card.style.opacity = "";
+        memberList.querySelectorAll(".mcard").forEach((c) => c.classList.remove("drag-over"));
+        dragItem = null;
+      });
 
-    card.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      if (dragItem && dragItem !== card) {
-        card.classList.add("drag-over");
-      }
-    });
+      card.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (dragItem && dragItem !== card) {
+          card.classList.add("drag-over");
+        }
+      });
 
-    card.addEventListener("dragleave", () => {
-      card.classList.remove("drag-over");
-    });
+      card.addEventListener("dragleave", () => {
+        card.classList.remove("drag-over");
+      });
 
-    card.addEventListener("drop", (e) => {
-      e.preventDefault();
-      card.classList.remove("drag-over");
-      if (!dragItem || dragItem === card) return;
+      card.addEventListener("drop", (e) => {
+        e.preventDefault();
+        card.classList.remove("drag-over");
+        if (!dragItem || dragItem === card) return;
 
-      const items = Array.from(memberList.querySelectorAll(".member-card"));
-      const fromIdx = items.indexOf(dragItem);
-      const toIdx = items.indexOf(card);
+        const items = Array.from(memberList.querySelectorAll(".mcard"));
+        const fromIdx = items.indexOf(dragItem);
+        const toIdx = items.indexOf(card);
 
-      if (fromIdx < toIdx) {
-        card.after(dragItem);
-      } else {
-        card.before(dragItem);
-      }
+        if (fromIdx < toIdx) {
+          card.after(dragItem);
+        } else {
+          card.before(dragItem);
+        }
 
-      // Auto-save new order
-      saveMemberOrder();
+        // Auto-save new order
+        saveMemberOrder();
+      });
     });
   });
 
   function saveMemberOrder() {
-    const ids = Array.from(memberList.querySelectorAll(".member-card")).map((c) => c.dataset.id);
+    const ids = Array.from(document.querySelectorAll(".member-grid .mcard")).map((c) => c.dataset.id);
     orderInput.value = ids.join(",");
     // Submit via fetch for seamless UX
     const formData = new FormData(orderForm);
@@ -3411,11 +3460,29 @@ function initMemberDragDrop() {
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
+    function warmup() {
+      if (!canvas || !ctx) return;
+      resize();
+      // Run one invisible frame of each effect type to JIT-compile the code paths
+      var cw = canvas.width, ch = canvas.height;
+      burstParticles.push({ confetti: [new Confetto(cw/2, ch/2, 0.1)], startTime: Date.now() });
+      burstParticles.push({ explosions: [new ExpParticle(cw/2, ch/2, "brown")] });
+      fwRockets.push(new FwRocket(cw/2, ch, cw/2, ch/2, 0));
+      fwSparks.push(new FwSpark(cw/2, ch/2, 0));
+      // Render one frame then clear
+      renderLoop();
+      loopRunning = false;
+      if (animId) { cancelAnimationFrame(animId); animId = null; }
+      fwRockets = []; fwSparks = []; burstParticles = [];
+      ctx.clearRect(0, 0, cw, ch);
+    }
+
     return {
       fireworks: startFireworks,
       confetti: confettiBurst,
       explosion: explosion,
-      stop: stopAll
+      stop: stopAll,
+      warmup: warmup
     };
   })();
 
@@ -3444,14 +3511,15 @@ function initMemberDragDrop() {
 
     // Render Abräumen pin diamond into shuffleArea (RIGHT side)
     renderAbraeumen: function(opts) {
-      // opts: { onConfirm(fallenPins), onUndo(), onInvert(), canUndo, canInvert, fallenCount }
+      // opts: { onConfirm(fallenPins), onUndo(), onInvert(), canUndo, canInvert, fallenCount, throwNum }
       this.mode = "abraeumen";
       this.opts = opts;
       var html = '<div class="va-phase-container">';
+      html += '<div class="va-abraeumen-throw-num">Wurf ' + (opts.throwNum || 1) + '<span class="va-abraeumen-throw-total"> / 5</span></div>';
       html += renderPinDiamond();
       html += '<div class="va-abraeumen-actions">';
       html += '<span class="va-fallen-count" id="vaFallenCount">Getroffen: ' + (opts.fallenCount || 0) + '</span>';
-      if (opts.canInvert) html += '<button type="button" class="va-invert-btn" id="vaInvertBtn">Invertieren \u21C4</button>';
+      html += '<button type="button" class="va-invert-btn" id="vaInvertBtn"' + (opts.canInvert ? '' : ' disabled') + '>Invertieren \u21C4</button>';
       html += '<button type="button" class="va-confirm-throw" id="vaConfirmThrow">Wurf best\u00e4tigen \u2713</button>';
       html += '</div>';
       html += '<div class="va-actions-row">';
@@ -3499,7 +3567,7 @@ function initMemberDragDrop() {
           }
           var throwVal, marker;
           if (val === "pudel") { throwVal = 0; marker = "pudel"; }
-          else if (val === "triclops") { throwVal = 0; marker = "triclops"; }
+          else if (val === "triclops") { throwVal = 3; marker = "triclops"; }
           else if (val === "9er") { throwVal = 9; marker = "alle9"; }
           else if (val === "kranz") { throwVal = 12; marker = "kranz"; }
           else { throwVal = Number(val); marker = null; }
@@ -3611,8 +3679,9 @@ function initMemberDragDrop() {
 
   // Shuffle + Turn state
   let gameOrder = [];       // Gemischte Spieler-Reihenfolge [{id, name, avatar, row}]
+  let gameOrderOriginal = []; // Original-Reihenfolge (IDs) nach Shuffle, für Pinkelpause-Rückkehr
   let currentTurnIdx = 0;
-  let pinklerSlots = [];    // [{playerId, returnAfterIdx}]
+  let pinklerSlots = [];    // [{playerId}]
 
   // V+A state
   let vaState = {
@@ -3628,9 +3697,23 @@ function initMemberDragDrop() {
   // Aussteigen state
   let aussteigenState = {
     remaining: [],
-    eliminated: [],           // [[{id, round, cost}]] groups per round
+    eliminated: [],           // [[{id, round, cumTotal}]] groups per round
     currentRound: 1,
-    selected: []              // temp selection for current round
+    currentPlayerIdx: 0,      // index into remaining[]
+    roundThrows: {},          // {playerId: {val, marker}} for current round
+    throwHistory: [],         // [{playerId, val, marker}] for undo
+    cumulativeTotals: {},     // {playerId: runningSum} across all rounds
+    roundSnapshots: [],       // [{position, cumulatives: {id: total}, eliminatedIds: []}]
+    currentPosition: 0,       // cost-column index the current round maps to
+    costs: null
+  };
+
+  // 6-Tage-Rennen state
+  let sechsTageState = {
+    teams: [],          // [{ p1: playerObj, p2: playerObj|null, throws: {} }]
+    currentDay: 1,      // aktueller Tag (1-6)
+    currentTeamIdx: 0,  // aktuelles Team
+    currentSlot: 1      // 1 = P1, 2 = P2
   };
 
   // --- Live State Persistence (sessionStorage) ---
@@ -3638,7 +3721,7 @@ function initMemberDragDrop() {
 
   function saveLiveState() {
     var game = GAMES[currentGameIdx];
-    if (!game || (game.type !== "va" && game.type !== "aussteigen" && game.type !== "monte")) return;
+    if (!game || (game.type !== "va" && game.type !== "aussteigen" && game.type !== "monte" && game.type !== "sechs_tage")) return;
     if (game.type === "monte") { saveMonteState(); return; }
     if (!gameOrder.length || currentTurnIdx < 0) return;
 
@@ -3648,6 +3731,7 @@ function initMemberDragDrop() {
       gameType: game.type,
       playerIds: players.map(function(p) { return p.id; }),
       gameOrderIds: gameOrder.map(function(p) { return p.id; }),
+      gameOrderOriginalIds: gameOrderOriginal.slice(),
       currentGameIdx: currentGameIdx,
       gameHistory: gameHistory.slice(),
       currentTurnIdx: currentTurnIdx,
@@ -3671,7 +3755,25 @@ function initMemberDragDrop() {
         remainingIds: aussteigenState.remaining.map(function(p) { return p.id; }),
         eliminated: JSON.parse(JSON.stringify(aussteigenState.eliminated)),
         currentRound: aussteigenState.currentRound,
-        selected: aussteigenState.selected.slice()
+        currentPlayerIdx: aussteigenState.currentPlayerIdx,
+        roundThrows: JSON.parse(JSON.stringify(aussteigenState.roundThrows)),
+        throwHistory: JSON.parse(JSON.stringify(aussteigenState.throwHistory)),
+        cumulativeTotals: JSON.parse(JSON.stringify(aussteigenState.cumulativeTotals)),
+        roundSnapshots: JSON.parse(JSON.stringify(aussteigenState.roundSnapshots)),
+        currentPosition: aussteigenState.currentPosition
+      };
+    } else if (game.type === "sechs_tage") {
+      state.sechsTageState = {
+        teamData: sechsTageState.teams.map(function(t) {
+          return {
+            p1Id: t.p1.id,
+            p2Id: t.p2 ? t.p2.id : null,
+            throws: JSON.parse(JSON.stringify(t.throws))
+          };
+        }),
+        currentDay: sechsTageState.currentDay,
+        currentTeamIdx: sechsTageState.currentTeamIdx,
+        currentSlot: sechsTageState.currentSlot
       };
     }
 
@@ -3718,6 +3820,7 @@ function initMemberDragDrop() {
     // Rebuild player arrays with DOM refs
     players = state.playerIds.map(function(id) { return presentMap[id]; });
     gameOrder = state.gameOrderIds.map(function(id) { return presentMap[id]; });
+    gameOrderOriginal = state.gameOrderOriginalIds || state.gameOrderIds.slice();
 
     // Restore navigation state
     currentGameIdx = state.currentGameIdx;
@@ -3742,16 +3845,35 @@ function initMemberDragDrop() {
         throwHistory: state.vaState.throwHistory || {}
       };
     } else if (game.type === "aussteigen" && state.aussteigenState) {
+      var as = state.aussteigenState;
       aussteigenState = {
-        remaining: state.aussteigenState.remainingIds.map(function(id) { return presentMap[id]; }),
-        eliminated: state.aussteigenState.eliminated,
-        currentRound: state.aussteigenState.currentRound,
-        selected: state.aussteigenState.selected || []
+        remaining: as.remainingIds.map(function(id) { return presentMap[id]; }),
+        eliminated: as.eliminated,
+        currentRound: as.currentRound,
+        currentPlayerIdx: as.currentPlayerIdx || 0,
+        roundThrows: as.roundThrows || {},
+        throwHistory: as.throwHistory || [],
+        cumulativeTotals: as.cumulativeTotals || {},
+        roundSnapshots: as.roundSnapshots || [],
+        currentPosition: as.currentPosition || 0,
+        costs: null
       };
     } else if (game.type === "monte" && state.monteLive) {
       // Monte restores its data from server; just restore turn state
       // monteLive: { pickedValue, editMode }
       // actual monteState.rounds will be fetched from server in renderMonteGame()
+    } else if (game.type === "sechs_tage" && state.sechsTageState) {
+      var std = state.sechsTageState;
+      sechsTageState.teams = std.teamData.map(function(td) {
+        return {
+          p1: presentMap[td.p1Id],
+          p2: td.p2Id ? presentMap[td.p2Id] : null,
+          throws: td.throws
+        };
+      });
+      sechsTageState.currentDay = std.currentDay;
+      sechsTageState.currentTeamIdx = std.currentTeamIdx;
+      sechsTageState.currentSlot = std.currentSlot;
     } else {
       clearLiveState();
       return;
@@ -3818,11 +3940,7 @@ function initMemberDragDrop() {
         });
     } else {
       liveView.classList.add("live-shuffle-sidebar");
-      // V+A: renderVAPlayerUI builds both main + controls.
-      // Aussteigen: score table goes in shuffleArea (right side).
-      if (game.type === "aussteigen") {
-        buildShuffleSidebar();
-      }
+      // V+A, Aussteigen, 6-Tage: each builds its own main + controls layout.
       addSidebarPinkelpause();
     }
 
@@ -3835,7 +3953,13 @@ function initMemberDragDrop() {
         updateShuffleHighlight(currentTurnIdx);
       }
     } else if (game.type === "aussteigen") {
-      renderAussteigenRound();
+      if (aussteigenState.remaining.length <= 1) {
+        renderAussteigenResults();
+      } else {
+        renderAussteigenUI();
+      }
+    } else if (game.type === "sechs_tage") {
+      renderSechsTageUI();
     }
 
     showToast("Live-Modus fortgesetzt", "info");
@@ -3847,7 +3971,7 @@ function initMemberDragDrop() {
       { key: "va", label: "V+A", type: "va" },
       { key: "monte", label: "Monte", type: "monte" },
       { key: "aussteigen", label: "Aussteigen", type: "aussteigen" },
-      { key: "sechs_tage", label: "6-Tage-Rennen", type: "simple", skipShuffle: true }
+      { key: "sechs_tage", label: "6-Tage-Rennen", type: "sechs_tage" }
     ];
     // Custom games
     const table = document.querySelector(".kladde-table:not(.kladde-preview)");
@@ -3887,6 +4011,7 @@ function initMemberDragDrop() {
     }
 
     renderSidebar();
+    liveFx.warmup();
 
     // Gewähltes Spiel direkt ansteuern
     if (startGameKey) {
@@ -3922,6 +4047,7 @@ function initMemberDragDrop() {
   function closeLiveMode(opts) {
     if (!opts || !opts.keepState) clearLiveState();
     closePicker();
+    hideMonteCursor();
     liveFx.stop();
     liveControls.clear();
     liveView.style.display = "none";
@@ -4009,7 +4135,11 @@ function initMemberDragDrop() {
       const played = game && isGamePlayedDOM(game);
       btn.classList.toggle("is-played", !!played);
       const img = btn.querySelector("img");
-      if (img) img.src = played ? "/closed.png" : "/live.png";
+      if (img) {
+        // Save original src from template on first run (live.png vs notlive.png)
+        if (!img.dataset.origSrc) img.dataset.origSrc = img.getAttribute("src");
+        img.src = played ? "/closed.png" : img.dataset.origSrc;
+      }
     });
   }
 
@@ -4211,6 +4341,7 @@ function initMemberDragDrop() {
   }
 
   function renderCurrentGame() {
+    hideMonteCursor();
     const game = GAMES[currentGameIdx];
     sidebarTitle.textContent = game.label;
     gameLabel.textContent = game.label;
@@ -4228,6 +4359,8 @@ function initMemberDragDrop() {
       renderShufflePhase(game, function() { renderVAGame(); });
     } else if (game.type === "aussteigen") {
       renderShufflePhase(game, function() { renderAussteigenGame(); });
+    } else if (game.type === "sechs_tage") {
+      renderShufflePhase(game, function() { renderSechsTageGame(); });
     } else {
       renderSimpleGame(game);
     }
@@ -4342,7 +4475,6 @@ function initMemberDragDrop() {
       var initials = getInitials(p.name);
       var color = initialColor(p.name);
       html += '<div class="shuffle-list-item" data-player-id="' + p.id + '">';
-      html += '<span class="shuffle-num">' + (i + 1) + '.</span>';
       if (p.avatar) {
         html += '<img src="' + p.avatar + '" class="shuffle-card-avatar" />';
       } else {
@@ -4382,25 +4514,80 @@ function initMemberDragDrop() {
       liveView.classList.add("live-shuffle-sidebar");
       shuffleArea.style.display = ""; // Clear inline style so CSS flex takes effect
       // Each game type sets up its own main/controls layout.
-      // Aussteigen uses the V+A score table on the right (shuffleArea),
-      // V+A and Monte build their own layout in onReady().
-      var game = GAMES[currentGameIdx];
-      if (game && game.type === "aussteigen") {
-        buildShuffleSidebar();
-      }
+      // V+A, Monte, Aussteigen, and 6-Tage each build their own layout in onReady().
       addSidebarPinkelpause();
       currentTurnIdx = 0;
       pinklerSlots = [];
+      gameOrderOriginal = gameOrder.map(function(p) { return p.id; });
       onReady();
     });
 
+    // Monte: load standings, show points, auto-sort if data exists
+    var monteStandings = null;
+    if (game.type === "monte") {
+      shuffleBtn.disabled = true;
+      fetch("/kegelkladde/monte-standings")
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          monteStandings = data.standings || {};
+          var hasStandings = Object.keys(monteStandings).length > 0;
+          if (hasStandings) {
+            // Show points next to each player name
+            players.forEach(function(p) {
+              var pts = monteStandings[p.id] || 0;
+              var el = itemEls[p.id];
+              if (el) {
+                var ptsSpan = document.createElement("span");
+                ptsSpan.className = "shuffle-pts";
+                ptsSpan.textContent = pts + " Pkt.";
+                el.appendChild(ptsSpan);
+              }
+            });
+            // Replace shuffle button with info text
+            shuffleBtn.style.display = "none";
+            var labelEl = shuffleBtn.parentNode.querySelector(".shuffle-start-label");
+            if (labelEl) labelEl.textContent = "Reihenfolge wird gesetzt\u2026";
+            // Auto-trigger sort after short delay
+            setTimeout(function() { doShuffle(); }, 600);
+          } else {
+            shuffleBtn.disabled = false;
+          }
+        })
+        .catch(function(err) {
+          console.error("[Monte Standings Error]", err);
+          monteStandings = {};
+          shuffleBtn.disabled = false;
+        });
+    }
+
     shuffleBtn.addEventListener("click", doShuffle);
+
+    function sortByMonteStandings(arr) {
+      if (!monteStandings) return fisherYatesShuffle(arr);
+      // Group by points
+      var grouped = {};
+      arr.forEach(function(p) {
+        var pts = monteStandings[p.id] || 0;
+        if (!grouped[pts]) grouped[pts] = [];
+        grouped[pts].push(p);
+      });
+      // Sort groups: highest points first
+      var sortedKeys = Object.keys(grouped).map(Number).sort(function(a, b) { return b - a; });
+      var result = [];
+      sortedKeys.forEach(function(pts) {
+        var group = grouped[pts];
+        // Shuffle within tied groups
+        if (group.length > 1) group = fisherYatesShuffle(group);
+        result = result.concat(group);
+      });
+      return result;
+    }
 
     var hasShuffled = false;
     function doShuffle() {
       if (hasShuffled && !confirm("Wirklich erneut mischen?")) return;
       hasShuffled = true;
-      gameOrder = fisherYatesShuffle(players);
+      gameOrder = (game.type === "monte") ? sortByMonteStandings(players) : fisherYatesShuffle(players);
       shuffleBtn.disabled = true;
       shuffleBtn.classList.add("shuffle-spinning");
       goBtn.style.display = "none";
@@ -4423,7 +4610,8 @@ function initMemberDragDrop() {
         });
       }
 
-      var roundTimings = [280, 200, 150, 120, 120, 150, 200, 300, 500];
+      var isMonteSorted = (game.type === "monte" && monteStandings && Object.keys(monteStandings).length > 0);
+      var roundTimings = isMonteSorted ? [600] : [280, 200, 150, 120, 120, 150, 200, 300, 500];
       var totalRounds = roundTimings.length;
       var currentRound = 0;
 
@@ -4442,7 +4630,6 @@ function initMemberDragDrop() {
           el.style.transition = 'top ' + duration + 'ms cubic-bezier(.4,0,.2,1), transform ' + duration + 'ms cubic-bezier(.25,.46,.45,.94)';
           el.style.top = targetTop + 'px';
           el.style.transform = 'translateX(' + arcX + 'px)';
-          el.querySelector('.shuffle-num').textContent = (newIdx + 1) + '.';
         });
 
         currentRound++;
@@ -4477,6 +4664,11 @@ function initMemberDragDrop() {
                 shuffleBtn.classList.remove("shuffle-spinning");
                 goBtn.style.display = "";
                 goBtn.classList.add("shuffle-go-animate");
+
+                // For pair games (6-Tage): show team pairings visually
+                if (game.type === "sechs_tage") {
+                  showShuffleTeamPairs(newOrder, itemEls, itemH, gap, listEl);
+                }
               }, delay);
             }, 250);
           }
@@ -4484,6 +4676,35 @@ function initMemberDragDrop() {
       }
 
       setTimeout(runRound, 150);
+    }
+  }
+
+  function showShuffleTeamPairs(order, itemEls, itemH, gap, listEl) {
+    // Remove any existing team markers
+    listEl.querySelectorAll(".shuffle-team-bracket").forEach(function(el) { el.remove(); });
+    listEl.querySelectorAll(".shuffle-list-item").forEach(function(el) {
+      el.classList.remove("shuffle-team-top", "shuffle-team-bottom", "shuffle-team-solo");
+    });
+
+    for (var i = 0; i < order.length; i += 2) {
+      var el1 = itemEls[order[i].id];
+      var hasPair = (i + 1 < order.length);
+
+      if (hasPair) {
+        var el2 = itemEls[order[i + 1].id];
+        el1.classList.add("shuffle-team-top");
+        el2.classList.add("shuffle-team-bottom");
+
+        // Add team bracket
+        var bracket = document.createElement("div");
+        bracket.className = "shuffle-team-bracket";
+        var topPos = parseFloat(el1.style.top) || (i * itemH);
+        bracket.style.top = topPos + "px";
+        bracket.style.height = (itemH * 2 - gap) + "px";
+        listEl.appendChild(bracket);
+      } else {
+        el1.classList.add("shuffle-team-solo");
+      }
     }
   }
 
@@ -4534,67 +4755,72 @@ function initMemberDragDrop() {
   }
 
   function getNextTurnIdx(fromIdx) {
-    // Check pinkler returns first
-    for (var i = 0; i < pinklerSlots.length; i++) {
-      if (pinklerSlots[i].returnAfterIdx === fromIdx) {
-        return -2; // special: pinkler returns
-      }
-    }
     if (fromIdx + 1 < gameOrder.length) return fromIdx + 1;
     return -1;
   }
 
   function advanceTurn(onTurnChange) {
-    // Check if any pinkler should return after this turn
-    var returning = [];
-    pinklerSlots = pinklerSlots.filter(function(ps) {
-      if (ps.returnAfterIdx === currentTurnIdx) {
-        returning.push(ps);
-        return false;
-      }
-      return true;
-    });
+    // Remember who just played (before incrementing)
+    var justPlayed = gameOrder[currentTurnIdx];
+    var justPlayedId = justPlayed ? justPlayed.id : null;
 
-    if (returning.length > 0) {
-      // Pinkler returns — they go next before advancing
-      var pinklerPlayer = gameOrder.find(function(p) { return p.id === returning[0].playerId; });
-      if (pinklerPlayer) {
-        // Insert pinkler right after current position
-        var pinklerIdx = gameOrder.indexOf(pinklerPlayer);
-        if (pinklerIdx > currentTurnIdx + 1) {
-          gameOrder.splice(pinklerIdx, 1);
-          gameOrder.splice(currentTurnIdx + 1, 0, pinklerPlayer);
-        }
-        showToast(pinklerPlayer.name + " ist zur\u00fcck!", "success");
-      }
-    }
-
+    // First advance to next player
     currentTurnIdx++;
-    if (currentTurnIdx < gameOrder.length) {
-      if (onTurnChange) onTurnChange();
-    } else {
-      if (onTurnChange) onTurnChange(); // will detect end
+
+    // Then restore pinkler to original position (after advancing, so next player is correct)
+    if (justPlayedId && pinklerSlots.length > 0) {
+      var psIdx = -1;
+      for (var pi = 0; pi < pinklerSlots.length; pi++) {
+        if (pinklerSlots[pi].playerId === justPlayedId) { psIdx = pi; break; }
+      }
+      if (psIdx !== -1) {
+        // Remove from pinkler tracking
+        pinklerSlots.splice(psIdx, 1);
+        // Find current position of the player who just threw
+        var removePos = currentTurnIdx - 1;
+        gameOrder.splice(removePos, 1);
+        // Adjust currentTurnIdx since we removed before it
+        currentTurnIdx--;
+        // Find correct insert position based on original order
+        var origIdx = gameOrderOriginal.indexOf(justPlayedId);
+        var insertIdx = 0;
+        for (var i = 0; i < gameOrder.length; i++) {
+          if (gameOrderOriginal.indexOf(gameOrder[i].id) < origIdx) insertIdx = i + 1;
+        }
+        gameOrder.splice(insertIdx, 0, justPlayed);
+        // Adjust currentTurnIdx if we inserted before or at it
+        if (insertIdx <= currentTurnIdx) currentTurnIdx++;
+      }
     }
+
+    if (onTurnChange) onTurnChange();
   }
 
   function triggerPinkelpause(onTurnChange) {
     var current = gameOrder[currentTurnIdx];
-    pinklerSlots.push({
-      playerId: current.id,
-      returnAfterIdx: currentTurnIdx // return after the next player
-    });
+
+    // Track as pinkler (only once)
+    if (!pinklerSlots.some(function(ps) { return ps.playerId === current.id; })) {
+      pinklerSlots.push({ playerId: current.id });
+    }
 
     showToast(current.name + " ist auf Pinkelpause \uD83D\uDEBD", "info");
 
-    // Remove from gameOrder and reinsert later
-    var removed = gameOrder.splice(currentTurnIdx, 1)[0];
-    // Insert after next player (currentTurnIdx now points to next player)
-    var insertAt = Math.min(currentTurnIdx + 1, gameOrder.length);
-    gameOrder.splice(insertAt, 0, removed);
+    // Swap with next NON-PINKLER player (skip other pinklers to avoid infinite swapping)
+    var swapIdx = -1;
+    for (var i = currentTurnIdx + 1; i < gameOrder.length; i++) {
+      var isPinkler = pinklerSlots.some(function(ps) { return ps.playerId === gameOrder[i].id; });
+      if (!isPinkler) { swapIdx = i; break; }
+    }
 
-    // Update pinkler returnAfterIdx to the new next player's position
-    pinklerSlots[pinklerSlots.length - 1].returnAfterIdx = currentTurnIdx;
+    if (swapIdx !== -1) {
+      var temp = gameOrder[currentTurnIdx];
+      gameOrder[currentTurnIdx] = gameOrder[swapIdx];
+      gameOrder[swapIdx] = temp;
+    }
+    // If no non-pinkler found, pinkler stays (all remaining players are also pinklers)
 
+    // currentTurnIdx stays — now points to the swapped-in non-pinkler
     if (onTurnChange) onTurnChange();
   }
 
@@ -4875,7 +5101,8 @@ function initMemberDragDrop() {
         onInvert: vaOnAbraeumenInvert,
         canUndo: vaState.abraeumenThrows.length > 0,
         canInvert: vaState.standingPins.length === 9,
-        fallenCount: 0
+        fallenCount: 0,
+        throwNum: vaState.abraeumenThrows.length + 1
       });
     }
 
@@ -5101,7 +5328,7 @@ function initMemberDragDrop() {
     html += '<button type="button" class="va-picker-btn" data-va-pick="7">7</button>';
     html += '<button type="button" class="va-picker-btn" data-va-pick="8">8</button>';
     html += '<button type="button" class="va-picker-btn va-picker-tri" data-va-pick="triclops"><span class="tri-pins"><span></span><span></span><span></span></span></button>';
-    html += '<button type="button" class="va-picker-btn va-picker-kranz" data-va-pick="kranz">K</button>';
+    html += '<button type="button" class="va-picker-btn va-picker-kranz" data-va-pick="kranz">12</button>';
     html += '</div>';
     return html;
   }
@@ -5339,151 +5566,373 @@ function initMemberDragDrop() {
   }
 
   // =============================================
-  // --- Aussteigen ---
+  // --- Aussteigen (Throw-based, V+A Layout) ---
   // =============================================
   function renderAussteigenGame() {
+    var cumInit = {};
+    gameOrder.forEach(function(p) { cumInit[p.id] = 0; });
     aussteigenState = {
       remaining: gameOrder.slice(),
       eliminated: [],
       currentRound: 1,
-      selected: []
+      currentPlayerIdx: 0,
+      roundThrows: {},
+      throwHistory: [],
+      cumulativeTotals: cumInit,
+      roundSnapshots: [],
+      currentPosition: 0,
+      costs: null
     };
-    renderAussteigenRound();
+    renderAussteigenUI();
   }
 
-  function renderAussteigenRound() {
+  // Compute which cost-column positions are skipped due to ties
+  function aussteigenSkippedPositions() {
+    var skipped = {};
+    var pos = 0;
+    for (var i = 0; i < aussteigenState.roundSnapshots.length; i++) {
+      var snap = aussteigenState.roundSnapshots[i];
+      var elimCount = snap.eliminatedIds.length;
+      // Position pos is used. If elimCount > 1, skip the next (elimCount-1) positions.
+      for (var s = 1; s < elimCount; s++) {
+        skipped[pos + s] = true;
+      }
+      pos += elimCount;
+    }
+    return skipped;
+  }
+
+  function buildAussteigenTableHtml() {
+    var n = gameOrder.length;
+    var skipped = aussteigenSkippedPositions();
+
+    // Build snapshot lookup: position → snapshot
+    var snapByPos = {};
+    aussteigenState.roundSnapshots.forEach(function(snap) {
+      snapByPos[snap.position] = snap;
+    });
+
+    // Build eliminated map: playerId → {position, cumTotal}
+    var elimMap = {};
+    aussteigenState.roundSnapshots.forEach(function(snap) {
+      snap.eliminatedIds.forEach(function(id) {
+        elimMap[id] = { position: snap.position, cumTotal: snap.cumulatives[id] };
+      });
+    });
+
+    // Current round partial cumulatives (for players who have thrown this round)
+    var partialCum = {};
+    aussteigenState.remaining.forEach(function(p) {
+      var rt = aussteigenState.roundThrows[p.id];
+      if (rt) {
+        partialCum[p.id] = (aussteigenState.cumulativeTotals[p.id] || 0) + rt.val;
+      }
+    });
+
+    // Find lowest partial cumulative (the player currently in danger)
+    var partialKeys = Object.keys(partialCum);
+    var minPartialCum = Infinity;
+    if (partialKeys.length > 1) {
+      partialKeys.forEach(function(id) {
+        if (partialCum[id] < minPartialCum) minPartialCum = partialCum[id];
+      });
+    }
+
+    var html = '<div class="aussteigen-table-wrap">';
+    html += '<table class="aussteigen-table" id="aussteigenTable">';
+    html += '<thead><tr>';
+    html += '<th class="ast-player">Spieler</th>';
+    html += '<th class="ast-marker" data-ast-col="alle9">9</th>';
+    html += '<th class="ast-marker" data-ast-col="kranz">K</th>';
+    html += '<th class="ast-marker" data-ast-col="triclops">T</th>';
+    html += '<th class="ast-marker" data-ast-col="pudel">P</th>';
+    // Cost columns: position 0 (highest cost) → position n-1 (0,00)
+    for (var pos = 0; pos < n; pos++) {
+      var costZehntel = n - 1 - pos;
+      var eur = (costZehntel / 10).toFixed(2).replace(".", ",");
+      var isSkipped = !!skipped[pos];
+      var isCurrent = pos === aussteigenState.currentPosition && aussteigenState.remaining.length > 1;
+      html += '<th class="ast-cost' + (isSkipped ? ' ast-skipped' : '') + (isCurrent ? ' ast-col-active' : '') + '">' + eur + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    gameOrder.forEach(function(p) {
+      var isEliminated = !!elimMap[p.id];
+      var isRemaining = aussteigenState.remaining.some(function(r) { return r.id === p.id; });
+      var isCurrentPlayer = isRemaining && aussteigenState.remaining[aussteigenState.currentPlayerIdx] &&
+                            aussteigenState.remaining[aussteigenState.currentPlayerIdx].id === p.id;
+      var initials = getInitials(p.name);
+      var color = initialColor(p.name);
+      var avatarHtml = p.avatar
+        ? '<img src="' + p.avatar + '" class="ast-avatar" />'
+        : '<span class="ast-avatar ast-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
+
+      html += '<tr class="ast-row' + (isEliminated ? ' ast-out' : '') + (isCurrentPlayer ? ' ast-active' : '') + '" data-player-id="' + p.id + '">';
+      html += '<td class="ast-player-cell">';
+      html += avatarHtml;
+      html += '<span class="ast-name">' + escHtml(p.name) + '</span>';
+      html += '</td>';
+
+      // Marker columns: 9, K, T, P
+      var markers = ["alle9", "kranz", "triclops", "pudel"];
+      markers.forEach(function(m) {
+        var val = getPlayerMarkerVal(p, m);
+        html += '<td class="ast-marker-cell">' + (val > 0 ? val : '') + '</td>';
+      });
+
+      // Cost columns
+      for (var pos = 0; pos < n; pos++) {
+        var isSkipped = !!skipped[pos];
+        var isCurrent = pos === aussteigenState.currentPosition && aussteigenState.remaining.length > 1;
+        var cellContent = '';
+        var cellClass = 'ast-cost-cell';
+
+        if (isSkipped) {
+          cellClass += ' ast-skipped';
+        } else {
+          // Past completed rounds: show cumulative for this player if they were in that round
+          var snap = snapByPos[pos];
+          if (snap && snap.cumulatives[p.id] !== undefined) {
+            var cumVal = snap.cumulatives[p.id];
+            // Find previous snapshot's cumulative for this player to derive single throw
+            var prevCumVal = 0;
+            for (var si = 0; si < aussteigenState.roundSnapshots.length; si++) {
+              if (aussteigenState.roundSnapshots[si].position === pos) break;
+              if (aussteigenState.roundSnapshots[si].cumulatives[p.id] !== undefined) {
+                prevCumVal = aussteigenState.roundSnapshots[si].cumulatives[p.id];
+              }
+            }
+            var singleThrow = cumVal - prevCumVal;
+            if (prevCumVal > 0) {
+              cellContent = '<span class="ast-throw-hint">(+' + singleThrow + ')</span>' + cumVal;
+            } else {
+              cellContent = String(cumVal);
+            }
+            if (snap.eliminatedIds.indexOf(p.id) !== -1) {
+              cellClass += ' ast-cost-elim';
+            }
+          }
+          // Current round: show partial cumulative for players who have thrown
+          if (isCurrent && partialCum[p.id] !== undefined) {
+            var rt = aussteigenState.roundThrows[p.id];
+            var prevCum = aussteigenState.cumulativeTotals[p.id] || 0;
+            if (prevCum > 0 && rt) {
+              cellContent = '<span class="ast-throw-hint">(+' + rt.val + ') </span>' + partialCum[p.id];
+            } else {
+              cellContent = String(partialCum[p.id]);
+            }
+            // Mark the current lowest (danger zone)
+            if (partialKeys.length > 1 && partialCum[p.id] === minPartialCum) {
+              cellClass += ' ast-danger';
+            }
+          }
+          // Winner in final column
+          if (pos === n - 1 && !isEliminated && isRemaining && aussteigenState.remaining.length === 1) {
+            cellContent = '\uD83C\uDFC6';
+          }
+        }
+
+        if (isCurrentPlayer && isCurrent && !isSkipped) cellClass += ' ast-cell-current';
+        html += '<td class="' + cellClass + '">' + cellContent + '</td>';
+      }
+
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderAussteigenUI() {
     if (aussteigenState.remaining.length <= 1) {
       renderAussteigenResults();
       return;
     }
 
-    var html = '<div class="aussteigen-container">';
-    html += '<div class="aussteigen-header">';
-    html += '<span class="aussteigen-round">Aussteigen \u2014 Runde ' + aussteigenState.currentRound + '</span>';
-    html += '<span class="aussteigen-count">Noch dabei: ' + aussteigenState.remaining.length + '</span>';
-    html += '</div>';
-    html += '<div class="aussteigen-prompt">Wer fliegt raus?</div>';
+    var currentPlayer = aussteigenState.remaining[aussteigenState.currentPlayerIdx];
 
-    html += '<div class="aussteigen-player-grid">';
-    aussteigenState.remaining.forEach(function(p) {
-      var selected = aussteigenState.selected.indexOf(p.id) !== -1;
-      html += '<button type="button" class="aussteigen-card' + (selected ? ' selected' : '') + '" data-aussteigen-id="' + p.id + '">';
-      html += playerAvatarHtml(p, "aussteigen-card-avatar");
-      html += '<span class="aussteigen-card-name">' + escHtml(p.name) + '</span>';
-      if (selected) html += '<span class="aussteigen-check">\u2713</span>';
-      html += '</button>';
+    var mainHtml = '';
+    mainHtml += '<div class="va-player-heading">' + escHtml(currentPlayer ? currentPlayer.name : '') + '</div>';
+    mainHtml += '<div class="va-phase-title">Aussteigen \u2014 Runde ' + aussteigenState.currentRound +
+                ', Wurf ' + (aussteigenState.currentPlayerIdx + 1) + '/' + aussteigenState.remaining.length + '</div>';
+    mainHtml += buildAussteigenTableHtml();
+    gameContent.innerHTML = mainHtml;
+
+    liveControls.renderVolle({
+      onPick: aussteigenOnPick,
+      onUndo: aussteigenOnUndo,
+      canUndo: aussteigenState.throwHistory.length > 0
     });
-    html += '</div>';
-
-    if (aussteigenState.selected.length > 0) {
-      var names = aussteigenState.selected.map(function(id) {
-        var p = aussteigenState.remaining.find(function(r) { return r.id === id; });
-        return p ? p.name : "?";
-      });
-      html += '<div class="aussteigen-selection">Ausgew\u00e4hlt: ' + names.join(", ") + '</div>';
-    }
-
-    html += '<div class="aussteigen-actions">';
-    html += '<button type="button" class="aussteigen-eliminate-btn' + (aussteigenState.selected.length === 0 ? ' disabled' : '') + '" id="aussteigenEliminateBtn"' + (aussteigenState.selected.length === 0 ? ' disabled' : '') + '>Raus! \uD83C\uDF0A</button>';
-    html += '</div>';
-    html += '</div>';
-
-    gameContent.innerHTML = html;
-
-    // Card click handlers
-    gameContent.querySelectorAll(".aussteigen-card").forEach(function(card) {
-      card.addEventListener("click", function() {
-        var id = card.dataset.aussteigenId;
-        var idx = aussteigenState.selected.indexOf(id);
-        if (idx === -1) {
-          aussteigenState.selected.push(id);
-        } else {
-          aussteigenState.selected.splice(idx, 1);
-        }
-        renderAussteigenRound();
-      });
-    });
-
-    // Eliminate button
-    var elimBtn = document.getElementById("aussteigenEliminateBtn");
-    if (elimBtn && aussteigenState.selected.length > 0) {
-      elimBtn.addEventListener("click", function() {
-        eliminateSelected();
-      });
-    }
 
     saveLiveState();
   }
 
-  function eliminateSelected() {
-    var selectedIds = aussteigenState.selected.slice();
-    var eliminatedGroup = [];
-    var totalPlayers = gameOrder.length;
+  function aussteigenOnPick(throwVal, marker, btn) {
+    var player = aussteigenState.remaining[aussteigenState.currentPlayerIdx];
+    if (!player) return;
 
-    selectedIds.forEach(function(id) {
-      eliminatedGroup.push({
-        id: id,
-        round: aussteigenState.currentRound
-      });
+    // Store throw
+    aussteigenState.roundThrows[player.id] = { val: throwVal, marker: marker };
+    aussteigenState.throwHistory.push({ playerId: player.id, val: throwVal, marker: marker });
+
+    // Trigger auto-markers
+    if (marker) triggerAutoMarker(player, marker, 1);
+
+    // Visual effects
+    if (marker === "kranz") {
+      liveFx.stop(); liveFx.confetti(btn);
+      setTimeout(function() { liveFx.fireworks(20000); }, 600);
+    } else if (marker === "alle9") {
+      liveFx.fireworks(20000);
+    } else if (marker === "pudel") {
+      liveFx.stop(); liveFx.explosion(btn, "brown");
+    } else if (marker === "triclops") {
+      liveFx.stop(); liveFx.explosion(btn, "purple");
+    }
+
+    // Advance to next player
+    aussteigenState.currentPlayerIdx++;
+
+    // Check if all remaining players have thrown this round
+    if (aussteigenState.currentPlayerIdx >= aussteigenState.remaining.length) {
+      aussteigenEliminateLowest();
+    } else {
+      renderAussteigenUI();
+    }
+  }
+
+  function aussteigenOnUndo() {
+    if (aussteigenState.throwHistory.length === 0) return;
+
+    var lastThrow = aussteigenState.throwHistory.pop();
+    var playerId = lastThrow.playerId;
+
+    // Remove this player's round throw
+    delete aussteigenState.roundThrows[playerId];
+
+    // Undo marker
+    if (lastThrow.marker) {
+      var player = gameOrder.find(function(p) { return p.id === playerId; });
+      if (player) triggerAutoMarker(player, lastThrow.marker, -1);
+    }
+
+    // Move cursor back
+    aussteigenState.currentPlayerIdx = Math.max(0, aussteigenState.currentPlayerIdx - 1);
+    renderAussteigenUI();
+  }
+
+  function aussteigenEliminateLowest() {
+    // Update cumulative totals for all remaining players
+    aussteigenState.remaining.forEach(function(p) {
+      var rt = aussteigenState.roundThrows[p.id];
+      if (rt) {
+        aussteigenState.cumulativeTotals[p.id] = (aussteigenState.cumulativeTotals[p.id] || 0) + rt.val;
+      }
     });
 
+    // Find the lowest cumulative total among remaining players
+    var minCum = Infinity;
+    aussteigenState.remaining.forEach(function(p) {
+      var cum = aussteigenState.cumulativeTotals[p.id];
+      if (cum < minCum) minCum = cum;
+    });
+
+    // Collect all players with the lowest cumulative total
+    var losers = aussteigenState.remaining.filter(function(p) {
+      return aussteigenState.cumulativeTotals[p.id] === minCum;
+    });
+
+    // Build snapshot: cumulatives for ALL remaining players this round
+    var cumulatives = {};
+    aussteigenState.remaining.forEach(function(p) {
+      cumulatives[p.id] = aussteigenState.cumulativeTotals[p.id];
+    });
+    var eliminatedIds = losers.map(function(p) { return p.id; });
+    aussteigenState.roundSnapshots.push({
+      position: aussteigenState.currentPosition,
+      cumulatives: cumulatives,
+      eliminatedIds: eliminatedIds
+    });
+
+    // Build eliminated group
+    var eliminatedGroup = losers.map(function(p) {
+      return {
+        id: p.id,
+        round: aussteigenState.currentRound,
+        cumTotal: aussteigenState.cumulativeTotals[p.id]
+      };
+    });
     aussteigenState.eliminated.push(eliminatedGroup);
 
-    // Animate out
-    selectedIds.forEach(function(id) {
-      var card = gameContent.querySelector('[data-aussteigen-id="' + id + '"]');
-      if (card) card.classList.add("aussteigen-eliminated");
+    // Show toast with names
+    var loserNames = losers.map(function(p) { return p.name; }).join(", ");
+    showToast(loserNames + " raus! (Summe: " + minCum + ")", "info");
+
+    // Remove losers from remaining
+    var loserIds = losers.map(function(p) { return p.id; });
+    aussteigenState.remaining = aussteigenState.remaining.filter(function(p) {
+      return loserIds.indexOf(p.id) === -1;
     });
 
-    // After animation, update state
-    setTimeout(function() {
-      aussteigenState.remaining = aussteigenState.remaining.filter(function(p) {
-        return selectedIds.indexOf(p.id) === -1;
-      });
-      aussteigenState.selected = [];
-      aussteigenState.currentRound++;
-      renderAussteigenRound();
-    }, 700);
+    // Advance position: skip columns for ties
+    aussteigenState.currentPosition += losers.length;
+
+    // Reset round state
+    aussteigenState.roundThrows = {};
+    aussteigenState.throwHistory = [];
+    aussteigenState.currentPlayerIdx = 0;
+    aussteigenState.currentRound++;
+
+    // Check if game over
+    if (aussteigenState.remaining.length <= 1) {
+      renderAussteigenResults();
+    } else {
+      renderAussteigenUI();
+    }
   }
 
   function renderAussteigenResults() {
     var totalPlayers = gameOrder.length;
     var costs = calcAussteigenCosts(aussteigenState.eliminated, totalPlayers);
     var winner = aussteigenState.remaining[0];
+    aussteigenState.costs = costs;
 
-    var html = '<div class="aussteigen-results">';
-    html += '<h3 class="aussteigen-results-title">Aussteigen \u2014 Ergebnis</h3>';
+    var mainHtml = '';
+    mainHtml += '<div class="aussteigen-results">';
+    mainHtml += '<h3 class="aussteigen-results-title">Aussteigen \u2014 Ergebnis</h3>';
 
     if (winner) {
-      html += '<div class="aussteigen-winner">';
-      html += '<span class="aussteigen-trophy">\uD83C\uDFC6</span> Gewinner: <strong>' + escHtml(winner.name) + '</strong> (0,00 \u20ac)';
-      html += '</div>';
+      mainHtml += '<div class="aussteigen-winner">';
+      mainHtml += '<span class="aussteigen-trophy">\uD83C\uDFC6</span> Gewinner: <strong>' + escHtml(winner.name) + '</strong> (0,00 \u20ac)';
+      mainHtml += '</div>';
     }
 
-    html += '<div class="aussteigen-rounds-list">';
-    aussteigenState.eliminated.forEach(function(group) {
-      var round = group[0].round;
-      var names = group.map(function(e) {
+    // Results table
+    mainHtml += '<table class="va-results-table">';
+    mainHtml += '<thead><tr><th>Rang</th><th>Spieler</th><th>Kosten</th></tr></thead><tbody>';
+    if (winner) {
+      mainHtml += '<tr><td>1</td><td>' + escHtml(winner.name) + '</td><td>0,00 \u20ac</td></tr>';
+    }
+    for (var i = aussteigenState.eliminated.length - 1; i >= 0; i--) {
+      var group = aussteigenState.eliminated[i];
+      group.forEach(function(e) {
         var p = gameOrder.find(function(g) { return g.id === e.id; });
         var cost = costs[e.id] || 0;
         var costStr = (cost / 10).toFixed(2).replace(".", ",") + " \u20ac";
-        return (p ? p.name : "?") + " (" + costStr + ")";
+        var rank = totalPlayers - (costs[e.id] || 0);
+        mainHtml += '<tr><td>' + rank + '</td><td>' + escHtml(p ? p.name : "?") + '</td><td>' + costStr + '</td></tr>';
       });
-      var prefix = group.length > 1 ? "je " : "";
-      html += '<div class="aussteigen-round-result">Runde ' + round + ': ' + names.join(", ") + '</div>';
-    });
-    html += '</div>';
+    }
+    mainHtml += '</tbody></table>';
 
-    html += '<div class="aussteigen-results-actions">';
-    html += '<button type="button" class="aussteigen-accept-btn" id="aussteigenAcceptBtn">\u00dcbernehmen \u2713</button>';
-    html += '<button type="button" class="aussteigen-edit-btn" id="aussteigenEditBtn">Kosten anpassen \u270F\uFE0F</button>';
-    html += '</div>';
-    html += '</div>';
+    mainHtml += '<div class="aussteigen-results-actions">';
+    mainHtml += '<button type="button" class="aussteigen-accept-btn" id="aussteigenAcceptBtn">\u00dcbernehmen \u2713</button>';
+    mainHtml += '<button type="button" class="aussteigen-edit-btn" id="aussteigenEditBtn">Kosten anpassen \u270F\uFE0F</button>';
+    mainHtml += '</div>';
+    mainHtml += '</div>';
 
-    gameContent.innerHTML = html;
-
-    // Store costs
-    aussteigenState.costs = costs;
+    gameContent.innerHTML = mainHtml;
+    liveControls.clear();
 
     document.getElementById("aussteigenAcceptBtn").addEventListener("click", function() {
       syncAussteigenToKladde();
@@ -5492,7 +5941,6 @@ function initMemberDragDrop() {
     });
 
     document.getElementById("aussteigenEditBtn").addEventListener("click", function() {
-      // Show editable cost fields in a simple list
       var editHtml = '<div class="aussteigen-edit-costs">';
       editHtml += '<h3>Kosten anpassen (Zehntel-Euro)</h3>';
       gameOrder.forEach(function(p) {
@@ -5532,7 +5980,6 @@ function initMemberDragDrop() {
       }
       position += group.length;
     }
-    // Winner (remaining) = 0
     return costs;
   }
 
@@ -5541,6 +5988,380 @@ function initMemberDragDrop() {
     gameOrder.forEach(function(p) {
       var zehntel = costs[p.id] || 0;
       var input = p.row.querySelector('[name="aussteigen_' + p.id + '"]');
+      if (input) {
+        input.value = zehntel;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+    recalcCosts();
+  }
+
+  // =============================================
+  // --- 6-Tage-Rennen Game (Live Mode) ---
+  // =============================================
+
+  function renderSechsTageGame() {
+    // Pair players from gameOrder into teams of 2
+    sechsTageState.teams = [];
+    for (var i = 0; i < gameOrder.length; i += 2) {
+      var throwsInit = {};
+      for (var d = 1; d <= 6; d++) {
+        throwsInit[d] = { p1: null, p2: null };
+      }
+      sechsTageState.teams.push({
+        p1: gameOrder[i],
+        p2: (i + 1 < gameOrder.length) ? gameOrder[i + 1] : null,
+        throws: throwsInit
+      });
+    }
+    sechsTageState.currentDay = 1;
+    sechsTageState.currentTeamIdx = 0;
+    sechsTageState.currentSlot = 1;
+    renderSechsTageUI();
+  }
+
+  function sechsTageIsFinished() {
+    var teams = sechsTageState.teams;
+    for (var t = 0; t < teams.length; t++) {
+      for (var d = 1; d <= 6; d++) {
+        if (teams[t].throws[d].p1 === null) return false;
+        if (teams[t].throws[d].p2 === null) return false;
+      }
+    }
+    return true;
+  }
+
+  function sechsTageWeighted(raw, day) {
+    return (raw === null || raw === undefined) ? null : raw * day;
+  }
+
+  function calcSechsTageTeamTotal(team) {
+    var total = 0;
+    for (var d = 1; d <= 6; d++) {
+      var p1 = team.throws[d].p1;
+      var p2 = team.throws[d].p2;
+      if (p1 !== null) total += p1 * d;
+      if (p2 !== null) total += p2 * d;
+    }
+    return total;
+  }
+
+  function calcSechsTageCosts() {
+    var teams = sechsTageState.teams;
+    var ranked = teams.map(function(t, idx) {
+      return { idx: idx, total: calcSechsTageTeamTotal(t) };
+    });
+    ranked.sort(function(a, b) { return b.total - a.total; });
+    var costs = {};
+    var rank = 1;
+    for (var i = 0; i < ranked.length; i++) {
+      if (i > 0 && ranked[i].total === ranked[i - 1].total) {
+        // Same rank as previous (tie)
+      } else {
+        rank = i + 1;
+      }
+      var costZehntel = (rank - 1) * 2;
+      var team = teams[ranked[i].idx];
+      costs[team.p1.id] = costZehntel;
+      if (team.p2) costs[team.p2.id] = costZehntel;
+    }
+    return costs;
+  }
+
+  // Renders team cards into gameContent (LEFT) and picker into shuffleArea (RIGHT)
+  function renderSechsTageUI() {
+    if (sechsTageIsFinished()) {
+      renderSechsTageResults();
+      return;
+    }
+
+    var teams = sechsTageState.teams;
+    var curDay = sechsTageState.currentDay;
+    var curTeam = sechsTageState.currentTeamIdx;
+    var curSlot = sechsTageState.currentSlot;
+
+    var activeTeam = teams[curTeam];
+    var activePlayer = curSlot === 1 ? activeTeam.p1 : (activeTeam.p2 || activeTeam.p1);
+    var isSolo = !activeTeam.p2;
+
+    // === LEFT side (gameContent): team cards ===
+    var html = '<div class="st-container">';
+
+    // Team cards
+    html += '<div class="st-cards">';
+    for (var t = 0; t < teams.length; t++) {
+      var team = teams[t];
+      var solo = !team.p2;
+      var isActiveTeam = (t === curTeam);
+
+      html += '<div class="st-card' + (isActiveTeam ? ' st-card-active' : '') + '">';
+      if (solo) {
+        html += '<div class="st-card-header"><span class="st-solo-tag">Solo</span></div>';
+      }
+
+      html += '<div class="st-grid">';
+
+      // Column headers
+      html += '<div class="st-label"></div>';
+      for (var d = 1; d <= 6; d++) {
+        html += '<div class="st-header">&times;' + d + '</div>';
+      }
+      html += '<div class="st-header st-header-total">Ges.</div>';
+
+      // P1 row
+      html += '<div class="st-label st-name">' + playerAvatarHtml(team.p1, "st-row-avatar") + ' ' + escHtml(solo ? team.p1.name : team.p1.name.split(' ')[0]) + '</div>';
+      var p1Total = 0;
+      for (var d = 1; d <= 6; d++) {
+        var val = team.throws[d].p1;
+        var weighted = sechsTageWeighted(val, d);
+        if (weighted !== null) p1Total += weighted;
+        var isActive = isActiveTeam && d === curDay && curSlot === 1;
+        html += '<div class="st-cell' + (isActive ? ' st-active' : '') + (val === null ? ' st-empty' : '') + '">';
+        html += val !== null ? weighted : '';
+        html += '</div>';
+      }
+      html += '<div class="st-cell st-cell-total">' + p1Total + '</div>';
+
+      // Running sum row
+      html += '<div class="st-label st-sum-label">Summe</div>';
+      var runSum = 0;
+      for (var d = 1; d <= 6; d++) {
+        var v1 = team.throws[d].p1;
+        var v2 = team.throws[d].p2;
+        if (v1 !== null) runSum += v1 * d;
+        if (v2 !== null) runSum += v2 * d;
+        html += '<div class="st-cell st-sum">' + runSum + '</div>';
+      }
+      var teamTotal = calcSechsTageTeamTotal(team);
+      html += '<div class="st-cell st-sum st-cell-total">' + teamTotal + '</div>';
+
+      // P2 row
+      var p2Player = solo ? team.p1 : team.p2;
+      var p2Name = solo ? 'Wurf 2' : team.p2.name.split(' ')[0];
+      html += '<div class="st-label st-name">' + (solo ? '' : playerAvatarHtml(p2Player, "st-row-avatar") + ' ') + escHtml(p2Name) + '</div>';
+      var p2Total = 0;
+      for (var d = 1; d <= 6; d++) {
+        var val = team.throws[d].p2;
+        var weighted = sechsTageWeighted(val, d);
+        if (weighted !== null) p2Total += weighted;
+        var isActive = isActiveTeam && d === curDay && curSlot === 2;
+        html += '<div class="st-cell' + (isActive ? ' st-active' : '') + (val === null ? ' st-empty' : '') + '">';
+        html += val !== null ? weighted : '';
+        html += '</div>';
+      }
+      html += '<div class="st-cell st-cell-total">' + p2Total + '</div>';
+
+      html += '</div>'; // .st-grid
+      html += '</div>'; // .st-card
+    }
+    html += '</div>'; // .st-cards
+    html += '</div>'; // .st-container
+
+    gameContent.innerHTML = html;
+
+    // === RIGHT side (shuffleArea): VA picker via liveControls ===
+    // Player heading on LEFT side (inside gameContent)
+    var headingHtml = '<div class="va-player-heading">' + escHtml(activePlayer.name) + '</div>';
+    headingHtml += '<div class="st-picker-info">';
+    headingHtml += '<span class="st-day-badge">Tag ' + curDay + ' / 6</span>';
+    if (isSolo) headingHtml += ' <span class="st-solo-badge">(Solo ' + (curSlot === 1 ? 'W1' : 'W2') + ')</span>';
+    headingHtml += '</div>';
+    gameContent.insertAdjacentHTML("afterbegin", headingHtml);
+
+    liveControls.renderVolle({
+      onPick: function(throwVal, marker, btn) {
+        onSechsTageValue(throwVal);
+      },
+      onUndo: function() {
+        undoSechsTage();
+      },
+      canUndo: sechsTageCanUndo()
+    });
+
+    saveLiveState();
+  }
+
+  function sechsTageCanUndo() {
+    // Can undo if any throw has been entered
+    var st = sechsTageState;
+    if (st.currentDay > 1 || st.currentTeamIdx > 0 || st.currentSlot > 1) return true;
+    // Check if current position already has a value
+    var team = st.teams[st.currentTeamIdx];
+    if (team && team.throws[st.currentDay] && team.throws[st.currentDay].p1 !== null) return true;
+    return false;
+  }
+
+  function undoSechsTage() {
+    var st = sechsTageState;
+
+    // Step cursor back
+    if (st.currentSlot === 2) {
+      // Undo P1 of current team/day (cursor was moved to P2 by advance)
+      st.currentSlot = 1;
+    } else if (st.currentTeamIdx > 0) {
+      st.currentTeamIdx--;
+      st.currentSlot = 2;
+    } else if (st.currentDay > 1) {
+      st.currentDay--;
+      st.currentTeamIdx = st.teams.length - 1;
+      st.currentSlot = 2;
+    } else {
+      return; // Nothing to undo
+    }
+
+    // Clear the value at the new cursor position
+    var team = st.teams[st.currentTeamIdx];
+    if (st.currentSlot === 1) {
+      team.throws[st.currentDay].p1 = null;
+    } else {
+      team.throws[st.currentDay].p2 = null;
+    }
+
+    renderSechsTageUI();
+  }
+
+  function onSechsTageValue(raw) {
+    var teams = sechsTageState.teams;
+    var team = teams[sechsTageState.currentTeamIdx];
+    var day = sechsTageState.currentDay;
+    var slot = sechsTageState.currentSlot;
+
+    if (slot === 1) {
+      team.throws[day].p1 = raw;
+    } else {
+      team.throws[day].p2 = raw;
+    }
+
+    advanceSechsTage();
+    renderSechsTageUI();
+  }
+
+  function advanceSechsTage() {
+    var teams = sechsTageState.teams;
+    var curSlot = sechsTageState.currentSlot;
+    var curTeam = sechsTageState.currentTeamIdx;
+    var curDay = sechsTageState.currentDay;
+
+    // Within current team: P1 → P2
+    if (curSlot === 1) {
+      sechsTageState.currentSlot = 2;
+      return;
+    }
+
+    // P2 done → next team
+    if (curTeam + 1 < teams.length) {
+      sechsTageState.currentTeamIdx = curTeam + 1;
+      sechsTageState.currentSlot = 1;
+      return;
+    }
+
+    // All teams done for this day → next day
+    if (curDay < 6) {
+      sechsTageState.currentDay = curDay + 1;
+      sechsTageState.currentTeamIdx = 0;
+      sechsTageState.currentSlot = 1;
+      return;
+    }
+
+    // Day 6 complete → finished (renderSechsTageUI will detect and show results)
+  }
+
+  function renderSechsTageResults() {
+    var teams = sechsTageState.teams;
+    var costs = calcSechsTageCosts();
+
+    var ranked = teams.map(function(t, idx) {
+      return { team: t, total: calcSechsTageTeamTotal(t), idx: idx };
+    });
+    ranked.sort(function(a, b) { return b.total - a.total; });
+
+    var html = '<div class="st-results">';
+    html += '<h3 class="st-results-title">6-Tage-Rennen \u2014 Ergebnis</h3>';
+
+    if (ranked.length > 0) {
+      var winner = ranked[0].team;
+      var winnerNames = winner.p2 ? (winner.p1.name + ' + ' + winner.p2.name) : winner.p1.name;
+      html += '<div class="st-winner">';
+      html += '<span class="st-trophy">\uD83C\uDFC6</span> Gewinner: <strong>' + escHtml(winnerNames) + '</strong> (' + ranked[0].total + ' Pkt.)';
+      html += '</div>';
+    }
+
+    html += '<table class="va-results-table">';
+    html += '<thead><tr>';
+    html += '<th>Rang</th><th>Team</th><th>Gesamt</th><th>Kosten</th>';
+    html += '</tr></thead><tbody>';
+
+    var prevTotal = null;
+    var displayRank = 0;
+    for (var i = 0; i < ranked.length; i++) {
+      if (ranked[i].total !== prevTotal) {
+        displayRank = i + 1;
+      }
+      prevTotal = ranked[i].total;
+      var t = ranked[i].team;
+      var teamName = t.p2 ? (escHtml(t.p1.name) + ' + ' + escHtml(t.p2.name)) : escHtml(t.p1.name) + ' (Solo)';
+      var costZehntel = costs[t.p1.id] || 0;
+      var costStr = (costZehntel / 10).toFixed(2).replace('.', ',') + ' \u20ac';
+
+      html += '<tr>';
+      html += '<td>' + displayRank + '.</td>';
+      html += '<td style="text-align:left">' + teamName + '</td>';
+      html += '<td>' + ranked[i].total + '</td>';
+      html += '<td>' + costStr + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+
+    html += '<div class="st-results-actions">';
+    html += '<button type="button" class="aussteigen-accept-btn" id="stAcceptBtn">\u00dcbernehmen \u2713</button>';
+    html += '<button type="button" class="aussteigen-edit-btn" id="stEditBtn">Kosten anpassen \u270F\uFE0F</button>';
+    html += '</div>';
+    html += '</div>';
+
+    gameContent.innerHTML = html;
+    liveControls.clear(); // Clear picker from right side
+
+    sechsTageState.costs = costs;
+
+    document.getElementById("stAcceptBtn").addEventListener("click", function() {
+      syncSechsTageToKladde();
+      showToast("6-Tage-Rennen \u00fcbernommen!", "success");
+      closeLiveMode();
+    });
+
+    document.getElementById("stEditBtn").addEventListener("click", function() {
+      var editHtml = '<div class="aussteigen-edit-costs">';
+      editHtml += '<h3>Kosten anpassen (Zehntel-Euro)</h3>';
+      gameOrder.forEach(function(p) {
+        var cost = sechsTageState.costs[p.id] || 0;
+        editHtml += '<div class="aussteigen-edit-row">';
+        editHtml += '<span class="aussteigen-edit-name">' + playerAvatarHtml(p, "aussteigen-edit-avatar") + ' ' + escHtml(p.name) + '</span>';
+        editHtml += '<input type="number" min="0" max="999" step="1" class="aussteigen-cost-input" data-st-cost-id="' + p.id + '" value="' + cost + '" />';
+        editHtml += '</div>';
+      });
+      editHtml += '<div class="aussteigen-edit-actions">';
+      editHtml += '<button type="button" id="stSaveCosts">Speichern \u2713</button>';
+      editHtml += '</div>';
+      editHtml += '</div>';
+      gameContent.innerHTML = editHtml;
+
+      document.getElementById("stSaveCosts").addEventListener("click", function() {
+        gameContent.querySelectorAll("[data-st-cost-id]").forEach(function(inp) {
+          sechsTageState.costs[inp.dataset.stCostId] = Number(inp.value) || 0;
+        });
+        renderSechsTageResults();
+      });
+    });
+
+    saveLiveState();
+  }
+
+  function syncSechsTageToKladde() {
+    var costs = sechsTageState.costs;
+    gameOrder.forEach(function(p) {
+      var zehntel = costs[p.id] || 0;
+      var input = p.row.querySelector('[name="sechs_tage_' + p.id + '"]');
       if (input) {
         input.value = zehntel;
         input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -5613,11 +6434,20 @@ function initMemberDragDrop() {
   }
 
   function skipFilledMontePlayers() {
+    // Find minimum filled cells across all players
+    var minFilled = 11;
+    gameOrder.forEach(function(p) {
+      var filled = 11 - getMonteEmptyCells(p.id).length;
+      if (filled < minFilled) minFilled = filled;
+    });
+
     var checked = 0;
     while (currentTurnIdx < gameOrder.length && checked < gameOrder.length) {
       var player = gameOrder[currentTurnIdx];
-      var emptyCells = getMonteEmptyCells(player.id);
-      if (emptyCells.length > 0) return;
+      var empty = getMonteEmptyCells(player.id);
+      var filled = 11 - empty.length;
+      // Player needs a turn if: has empty cells AND is not ahead of others
+      if (empty.length > 0 && filled <= minFilled) return;
       currentTurnIdx++;
       checked++;
     }
@@ -5672,7 +6502,7 @@ function initMemberDragDrop() {
       html += '</td>';
       cols.forEach(function(c) {
         var val = monteState.rounds[uid] ? monteState.rounds[uid][c.num] : undefined;
-        var display = val != null ? (val === 12 ? "K" : String(val)) : "";
+        var display = val != null ? (String(val)) : "";
         html += '<td class="monte-cell" data-monte-uid="' + uid + '" data-monte-round="' + c.num + '">' + display + '</td>';
       });
       var hasOverride = monteOverrides[uid] != null;
@@ -5719,11 +6549,31 @@ function initMemberDragDrop() {
     // Delegated click handler for sidebar cells
     var sidebarWrap = document.getElementById("monteSidebarWrap");
     if (sidebarWrap) {
+      // Column hover highlight (only if active player's cell in that column is empty)
+      sidebarWrap.addEventListener("mouseover", function(e) {
+        var cell = e.target.closest(".monte-cell");
+        sidebarWrap.querySelectorAll(".monte-cell.monte-col-hover").forEach(function(c) {
+          c.classList.remove("monte-col-hover");
+        });
+        if (!cell || currentTurnIdx >= gameOrder.length) return;
+        var round = cell.dataset.monteRound;
+        var activePlayer = gameOrder[currentTurnIdx];
+        var activeVal = monteState.rounds[activePlayer.id] ? monteState.rounds[activePlayer.id][Number(round)] : undefined;
+        if (activeVal != null) return; // already filled for active player
+        sidebarWrap.querySelectorAll('.monte-cell[data-monte-round="' + round + '"]').forEach(function(c) {
+          c.classList.add("monte-col-hover");
+        });
+      });
+      sidebarWrap.addEventListener("mouseleave", function() {
+        sidebarWrap.querySelectorAll(".monte-cell.monte-col-hover").forEach(function(c) {
+          c.classList.remove("monte-col-hover");
+        });
+      });
+
       sidebarWrap.addEventListener("click", function(e) {
         // Click on monte cell
         var cell = e.target.closest(".monte-cell");
         if (cell) {
-          if (cell.classList.contains("monte-skipped")) return;
           var uid = cell.dataset.monteUid;
           var round = Number(cell.dataset.monteRound);
 
@@ -5733,9 +6583,16 @@ function initMemberDragDrop() {
             return;
           }
 
-          // Normal turn-based mode: only place if pickedValue is set and cell is placeable
-          if (monteState.pickedValue != null && cell.classList.contains("monte-placeable")) {
-            placeMonteValue(uid, round, cell);
+          // Normal turn-based mode: click anywhere in the column → place in active player's cell
+          if (monteState.pickedValue != null && currentTurnIdx < gameOrder.length) {
+            var activePlayer = gameOrder[currentTurnIdx];
+            var activeCell = sidebarWrap.querySelector('.monte-cell[data-monte-uid="' + activePlayer.id + '"][data-monte-round="' + round + '"]');
+            if (activeCell) {
+              var val = monteState.rounds[activePlayer.id] ? monteState.rounds[activePlayer.id][round] : undefined;
+              if (val == null) {
+                placeMonteValue(activePlayer.id, round, activeCell);
+              }
+            }
           }
           return;
         }
@@ -5813,7 +6670,7 @@ function initMemberDragDrop() {
       if (monteState.pickedValue != null) {
         activeRow.querySelectorAll(".monte-cell").forEach(function(c) {
           var val = monteState.rounds[activePlayer.id] ? monteState.rounds[activePlayer.id][Number(c.dataset.monteRound)] : undefined;
-          if (val == null && !c.classList.contains("monte-skipped")) {
+          if (val == null) {
             c.classList.add("monte-placeable");
           }
         });
@@ -5871,10 +6728,38 @@ function initMemberDragDrop() {
     saveMonteState();
   }
 
+  // --- Monte cursor follower ---
+  var monteCursorEl = null;
+
+  function showMonteCursor(val) {
+    if (!monteCursorEl) {
+      monteCursorEl = document.createElement("div");
+      monteCursorEl.className = "monte-cursor-val";
+      document.body.appendChild(monteCursorEl);
+      document.addEventListener("mousemove", moveMonteCursor);
+    }
+    monteCursorEl.textContent = String(val);
+    monteCursorEl.style.display = "block";
+  }
+
+  function hideMonteCursor() {
+    if (monteCursorEl) {
+      monteCursorEl.style.display = "none";
+    }
+  }
+
+  function moveMonteCursor(e) {
+    if (monteCursorEl && monteCursorEl.style.display !== "none") {
+      monteCursorEl.style.left = (e.clientX - 1) + "px";
+      monteCursorEl.style.top = (e.clientY + 18)+ "px";
+    }
+  }
+
   // --- Monte callbacks for unified picker ---
   function monteOnPick(val, marker, btn) {
     monteState.pickedValue = val;
     liveControls.highlightPick(val);
+    showMonteCursor(val);
     updateMonteSidebarHighlight();
 
     // Visual effects for special markers
@@ -5893,6 +6778,7 @@ function initMemberDragDrop() {
   function monteOnUndo() {
     if (monteState.pickedValue != null) {
       monteState.pickedValue = null;
+      hideMonteCursor();
       renderMontePlayerUI();
     } else if (monteState.lastPlacement) {
       var lp = monteState.lastPlacement;
@@ -5966,6 +6852,7 @@ function initMemberDragDrop() {
     // Save placement for undo
     monteState.lastPlacement = { uid: uid, round: round, value: value };
     monteState.pickedValue = null;
+    hideMonteCursor();
 
     // Update local state + cell display + server
     selectMonteValue(uid, round, value, cell);
@@ -6009,7 +6896,7 @@ function initMemberDragDrop() {
     grid.className = "monte-picker-grid";
 
     var values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, null];
-    var labels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "K", "\u00D7"];
+    var labels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "12", "\u00D7"];
     var currentVal = monteState.rounds[uid] ? monteState.rounds[uid][round] : undefined;
 
     values.forEach(function(v, i) {
@@ -6055,13 +6942,13 @@ function initMemberDragDrop() {
 
     // Update cell display in Monte table
     if (cell) {
-      cell.textContent = value != null ? (value === 12 ? "K" : String(value)) : "";
+      cell.textContent = value != null ? (String(value)) : "";
     } else {
       // Find cell in Monte table (now in gameContent)
       var monteWrap = document.getElementById("monteSidebarWrap");
       var searchEl = monteWrap || gameContent;
       var foundCell = searchEl.querySelector('.monte-cell[data-monte-uid="' + uid + '"][data-monte-round="' + round + '"]');
-      if (foundCell) foundCell.textContent = value != null ? (value === 12 ? "K" : String(value)) : "";
+      if (foundCell) foundCell.textContent = value != null ? (String(value)) : "";
     }
 
     fetch("/kegelkladde/monte-round", {
@@ -6098,20 +6985,15 @@ function initMemberDragDrop() {
 
   function highlightMonteLosers() {
     var presentIds = gameOrder.map(function(p) { return Number(p.id); });
+    var totalPlayers = presentIds.length;
     var container = document.getElementById("monteSidebarWrap") || gameContent;
 
     container.querySelectorAll(".monte-cell").forEach(function(c) {
-      c.classList.remove("monte-loser", "monte-skipped", "monte-winner");
+      c.classList.remove("monte-loser", "monte-loser-final", "monte-safe", "monte-winner");
     });
 
-    var skipCount = 0;
     for (var col = 1; col <= 10; col++) {
       var cells = container.querySelectorAll('[data-monte-round="' + col + '"]');
-      if (skipCount > 0) {
-        cells.forEach(function(c) { c.classList.add("monte-skipped"); });
-        skipCount--;
-        continue;
-      }
 
       var entries = [];
       cells.forEach(function(c) {
@@ -6124,10 +7006,13 @@ function initMemberDragDrop() {
 
       if (entries.length === 0) continue;
 
+      var colComplete = entries.length === totalPlayers;
       var minVal = Math.min.apply(null, entries.map(function(e) { return e.val; }));
       var losers = entries.filter(function(e) { return e.val === minVal; });
-      losers.forEach(function(e) { e.cell.classList.add("monte-loser"); });
-      skipCount = losers.length - 1;
+      var safe = entries.filter(function(e) { return e.val !== minVal; });
+      var cls = colComplete ? "monte-loser-final" : "monte-loser";
+      losers.forEach(function(e) { e.cell.classList.add(cls); });
+      safe.forEach(function(e) { e.cell.classList.add("monte-safe"); });
     }
 
     // "?" column (round 11)
@@ -6143,11 +7028,15 @@ function initMemberDragDrop() {
       });
 
       if (qEntries.length > 0) {
+        var qComplete = qEntries.length === totalPlayers;
         var qMinVal = Math.min.apply(null, qEntries.map(function(e) { return e.val; }));
         var qMaxVal = Math.max.apply(null, qEntries.map(function(e) { return e.val; }));
-        qEntries.filter(function(e) { return e.val === qMinVal; }).forEach(function(e) { e.cell.classList.add("monte-loser"); });
-        var winners = qEntries.filter(function(e) { return e.val === qMaxVal; });
-        if (winners.length === 1) winners[0].cell.classList.add("monte-winner");
+        var qCls = qComplete ? "monte-loser-final" : "monte-loser";
+        qEntries.filter(function(e) { return e.val === qMinVal; }).forEach(function(e) { e.cell.classList.add(qCls); });
+        if (qComplete) {
+          var winners = qEntries.filter(function(e) { return e.val === qMaxVal; });
+          if (winners.length === 1) winners[0].cell.classList.add("monte-winner");
+        }
       }
     }
 
@@ -6196,6 +7085,7 @@ function initMemberDragDrop() {
       gameType: "monte",
       playerIds: players.map(function(p) { return p.id; }),
       gameOrderIds: gameOrder.map(function(p) { return p.id; }),
+      gameOrderOriginalIds: gameOrderOriginal.slice(),
       currentGameIdx: currentGameIdx,
       gameHistory: gameHistory.slice(),
       currentTurnIdx: currentTurnIdx,
@@ -6230,13 +7120,19 @@ function initMemberDragDrop() {
       if (gameIdx == null || !GAMES[gameIdx]) return;
       var gameKey = GAMES[gameIdx].key;
       var btn = kladdeDataEl.querySelector('.live-game-btn[data-live-start="' + gameKey + '"]');
-      if (btn) btn.classList.add("live-btn-pulse");
+      if (btn) {
+        btn.classList.add("live-btn-pulse");
+        var img = btn.querySelector("img");
+        if (img) img.src = "/live.png";
+      }
     } catch(e) {}
   }
 
   function clearLiveBtnPulse() {
     kladdeDataEl.querySelectorAll(".live-btn-pulse").forEach(function(b) {
       b.classList.remove("live-btn-pulse");
+      var img = b.querySelector("img");
+      if (img && img.dataset.origSrc) img.src = img.dataset.origSrc;
     });
   }
 
@@ -6250,6 +7146,15 @@ function initMemberDragDrop() {
     });
   });
 
-  // Restore live state after all declarations
-  restoreLiveState();
+  // Restore live state after all declarations — but NOT after a fresh login
+  var flashEl = document.getElementById("flashData");
+  var isLogin = false;
+  if (flashEl) {
+    try { var fd = JSON.parse(flashEl.textContent); isLogin = fd && fd.message && fd.message.indexOf("Willkommen") !== -1; } catch(e) {}
+  }
+  if (isLogin) {
+    clearLiveState();
+  } else {
+    restoreLiveState();
+  }
 })();

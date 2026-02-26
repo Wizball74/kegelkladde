@@ -7,9 +7,12 @@
   <meta name="description" content="KC Schaf Zeilsheim - Vereinsportal für Kegelclub-Verwaltung" />
   <title>KC Schaf Zeilsheim</title>
   <link rel="stylesheet" href="/style.css" />
+  <% if (sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css" />
+  <script defer src="/flyingsheep.js"></script><% } %>
   <script defer src="/app.js"></script>
 </head>
 <body>
+  <% if (sheepEnabled) { %><div id="sheep-overlay"></div><% } %>
   <div class="background-glow"></div>
 
   <!-- Toast container for notifications -->

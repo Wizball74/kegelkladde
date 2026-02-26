@@ -1,8 +1,16 @@
 <%- include("partials/top") %>
+<%
+  const regularMembers = members.filter(m => !m.is_guest);
+  const guestMembers = members.filter(m => m.is_guest);
+%>
 <section class="card fade-in">
   <div class="section-head">
     <h1>Mitglieder</h1>
-    <p class="subtle">Alle Vereinsmitglieder auf einen Blick.</p>
+    <div class="member-summary">
+      <span class="member-summary-item"><strong><%= regularMembers.length %></strong> Mitglieder</span>
+      <span class="member-summary-sep">&middot;</span>
+      <span class="member-summary-item"><strong><%= guestMembers.length %></strong> Gaeste</span>
+    </div>
   </div>
 
   <% if (isAdmin) { %>
@@ -11,50 +19,44 @@
     </div>
   <% } %>
 
-  <!-- Desktop: Tabellen-Header -->
-  <div class="member-grid-header desktop-only <%= isAdmin ? 'has-admin' : '' %>">
-    <% if (isAdmin) { %><span></span><% } %>
-    <span></span>
-    <span>Name</span>
-    <span>E-Mail</span>
-    <span>Adresse</span>
-    <span>Telefon</span>
-    <% if (isAdmin) { %><span></span><% } %>
-  </div>
-
-  <ul class="member-list-new">
-    <% members.forEach((m, idx) => { %>
-      <li class="member-card <%= m.is_guest ? 'member-card-guest' : '' %>" data-id="<%= m.id %>" <% if (isAdmin) { %>draggable="true"<% } %>>
+  <ul class="member-grid">
+    <% regularMembers.forEach((m, idx) => { %>
+      <li class="mcard" data-id="<%= m.id %>" style="animation-delay: <%= idx * 30 %>ms" <% if (isAdmin) { %>draggable="true"<% } %>>
         <% if (isAdmin) { %>
           <span class="drag-handle" title="Reihenfolge aendern">&#9776;</span>
         <% } %>
-        <div class="member-card-avatar">
+        <div class="mcard-avatar">
           <% if (m.avatar) { %>
-            <img src="/uploads/avatars/<%= m.avatar %>" alt="" class="member-avatar" />
+            <img src="/uploads/avatars/<%= m.avatar %>" alt="" />
           <% } else { %>
-            <span class="member-avatar member-avatar-initials"><%= m.first_name ? m.first_name[0].toUpperCase() : '' %><%= m.last_name ? m.last_name[0].toUpperCase() : '' %></span>
+            <span class="mcard-avatar-initials"><%= m.first_name ? m.first_name[0].toUpperCase() : '' %><%= m.last_name ? m.last_name[0].toUpperCase() : '' %></span>
           <% } %>
         </div>
-        <div class="member-col member-col-name">
-          <strong><%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %></strong>
-          <% if (m.role === 'admin') { %><span class="badge badge-success">Admin</span><% } %>
-          <% if (m.is_guest) { %><span class="badge badge-muted">Gast</span><% } %>
+        <div class="mcard-body">
+          <div class="mcard-name-row">
+            <strong class="mcard-name"><%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %></strong>
+            <% if (m.role === 'admin') { %><span class="badge badge-success">Admin</span><% } %>
+          </div>
+          <div class="mcard-details">
+            <% if (m.email) { %>
+              <span class="mcard-detail"><span class="mcard-icon">&#9993;</span><a href="mailto:<%= m.email %>"><%= m.email %></a></span>
+            <% } %>
+            <% if (m.phones && m.phones.length) { %>
+              <span class="mcard-detail copyable"><span class="mcard-icon">&#9742;</span><%= m.phones.join(" | ") %></span>
+            <% } %>
+            <% if (m.address) { %>
+              <span class="mcard-detail copyable"><span class="mcard-icon">&#8962;</span><%= m.address.replace(/\r?\n/g, ', ') %></span>
+            <% } %>
+          </div>
         </div>
-        <% if (!m.is_guest) { %>
-          <div class="member-col member-col-email" data-label="E-Mail"><% if (m.email) { %><a href="mailto:<%= m.email %>"><%= m.email %></a><% } else { %>–<% } %></div>
-          <div class="member-col member-col-address copyable" data-label="Adresse"><%= m.address || '–' %></div>
-          <div class="member-col member-col-phone copyable" data-label="Telefon"><%= (m.phones && m.phones.length) ? m.phones.join(" | ") : '–' %></div>
-        <% } else { %>
-          <div class="member-col member-col-guest-spacer"></div>
-        <% } %>
         <% if (isAdmin) { %>
-          <div class="member-card-actions">
-            <button class="btn btn-sm btn-secondary" onclick="openEditMember(<%= m.id %>)" title="Bearbeiten">&#9998;</button>
+          <div class="mcard-actions">
+            <button class="mcard-action-btn" onclick="openEditMember(<%= m.id %>)" title="Bearbeiten">&#9998;</button>
             <% if (m.id !== currentUser.id) { %>
               <form method="post" action="/members/delete" data-confirm="Mitglied <%= m.first_name %> wirklich loeschen? Alle zugehoerigen Daten werden entfernt!" style="display:inline;">
                 <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
                 <input type="hidden" name="memberId" value="<%= m.id %>" />
-                <button type="submit" class="btn btn-sm btn-danger" title="Loeschen">&#10005;</button>
+                <button type="submit" class="mcard-action-btn mcard-action-danger" title="Loeschen">&#10005;</button>
               </form>
             <% } %>
           </div>
@@ -62,6 +64,46 @@
       </li>
     <% }) %>
   </ul>
+
+  <% if (guestMembers.length > 0) { %>
+    <div class="member-guest-divider">
+      <span>Gaeste</span>
+    </div>
+    <ul class="member-grid">
+      <% guestMembers.forEach((m, idx) => { %>
+        <li class="mcard mcard-guest" data-id="<%= m.id %>" style="animation-delay: <%= (regularMembers.length + idx) * 30 %>ms" <% if (isAdmin) { %>draggable="true"<% } %>>
+          <% if (isAdmin) { %>
+            <span class="drag-handle" title="Reihenfolge aendern">&#9776;</span>
+          <% } %>
+          <div class="mcard-avatar mcard-avatar-sm">
+            <% if (m.avatar) { %>
+              <img src="/uploads/avatars/<%= m.avatar %>" alt="" />
+            <% } else { %>
+              <span class="mcard-avatar-initials"><%= m.first_name ? m.first_name[0].toUpperCase() : '' %><%= m.last_name ? m.last_name[0].toUpperCase() : '' %></span>
+            <% } %>
+          </div>
+          <div class="mcard-body">
+            <div class="mcard-name-row">
+              <strong class="mcard-name"><%= m.first_name %><%= m.last_name ? ` ${m.last_name}` : "" %></strong>
+              <span class="badge badge-muted">Gast</span>
+            </div>
+          </div>
+          <% if (isAdmin) { %>
+            <div class="mcard-actions">
+              <button class="mcard-action-btn" onclick="openEditMember(<%= m.id %>)" title="Bearbeiten">&#9998;</button>
+              <% if (m.id !== currentUser.id) { %>
+                <form method="post" action="/members/delete" data-confirm="Mitglied <%= m.first_name %> wirklich loeschen? Alle zugehoerigen Daten werden entfernt!" style="display:inline;">
+                  <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+                  <input type="hidden" name="memberId" value="<%= m.id %>" />
+                  <button type="submit" class="mcard-action-btn mcard-action-danger" title="Loeschen">&#10005;</button>
+                </form>
+              <% } %>
+            </div>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
 
   <% if (isAdmin) { %>
     <!-- Reihenfolge speichern (hidden form) -->

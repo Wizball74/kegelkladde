@@ -565,29 +565,45 @@ function calculateMonteTotals(gamedayId) {
     }
   }
 
-  // In attendance zurückschreiben
-  const updateMonte = db.prepare("UPDATE attendance SET monte = ? WHERE gameday_id = ? AND user_id = ?");
-  const updateExtra = db.prepare("UPDATE attendance SET monte_extra = ? WHERE gameday_id = ? AND user_id = ?");
-  const resetExtras = db.prepare("UPDATE attendance SET monte_extra = 0 WHERE gameday_id = ?");
+  // Prüfe ob Monte komplett ist (jeder Spieler hat jede Spalte gesetzt)
+  const totalPlayers = presentIds.size;
+  let monteComplete = totalPlayers > 0;
+  for (let col = 1; col <= 10 && monteComplete; col++) {
+    const colData = roundMap.get(col);
+    if (!colData || colData.size < totalPlayers) { monteComplete = false; }
+  }
+  // "?"-Spalte nur prüfen wenn questionValue gesetzt ist
+  if (monteComplete && questionValue != null) {
+    const qColData = roundMap.get(11);
+    if (!qColData || qColData.size < totalPlayers) { monteComplete = false; }
+  }
 
-  const trx = db.transaction(() => {
-    resetExtras.run(gamedayId);
-    for (const [uid, eur] of totals) {
-      const rounded = Math.round(eur * 100) / 100;
-      updateMonte.run(rounded, gamedayId, uid);
-    }
-    if (extraWinnerId) {
-      updateExtra.run(1, gamedayId, extraWinnerId);
-    }
-  });
-  trx();
+  // Nur in attendance zurückschreiben wenn Monte komplett ist
+  // (sonst sehen Teilwerte in der Kladde wie "beendet" aus)
+  if (monteComplete) {
+    const updateMonte = db.prepare("UPDATE attendance SET monte = ? WHERE gameday_id = ? AND user_id = ?");
+    const updateExtra = db.prepare("UPDATE attendance SET monte_extra = ? WHERE gameday_id = ? AND user_id = ?");
+    const resetExtras = db.prepare("UPDATE attendance SET monte_extra = 0 WHERE gameday_id = ?");
+
+    const trx = db.transaction(() => {
+      resetExtras.run(gamedayId);
+      for (const [uid, eur] of totals) {
+        const rounded = Math.round(eur * 100) / 100;
+        updateMonte.run(rounded, gamedayId, uid);
+      }
+      if (extraWinnerId) {
+        updateExtra.run(1, gamedayId, extraWinnerId);
+      }
+    });
+    trx();
+  }
 
   // Return als Objekt { userId: eurBetrag }
   const result = {};
   for (const [uid, eur] of totals) {
     result[uid] = Math.round(eur * 100) / 100;
   }
-  return { totals: result, extraWinnerId };
+  return { totals: result, extraWinnerId, complete: monteComplete };
 }
 
 // Backup functions

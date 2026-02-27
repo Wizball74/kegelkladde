@@ -3922,6 +3922,7 @@ function initMemberDragDrop() {
             questionValue: data.questionValue,
             totals: data.totals || {},
             extraWinnerId: data.extraWinnerId,
+            complete: !!data.complete,
             pickedValue: savedMonteLive.pickedValue,
             editMode: savedMonteLive.editMode,
             lastPlacement: null
@@ -6419,6 +6420,7 @@ function initMemberDragDrop() {
           questionValue: data.questionValue,
           totals: data.totals || {},
           extraWinnerId: data.extraWinnerId,
+          complete: !!data.complete,
           pickedValue: null,
           editMode: false,
           lastPlacement: null
@@ -6571,6 +6573,7 @@ function initMemberDragDrop() {
           if (data.ok) {
             monteState.totals = data.totals;
             monteState.extraWinnerId = data.extraWinnerId;
+            monteState.complete = !!data.complete;
             updateMonteTotals();
             highlightMonteLosers();
             syncMonteToKladde();
@@ -7013,6 +7016,7 @@ function initMemberDragDrop() {
       if (data.ok) {
         monteState.totals = data.totals;
         monteState.extraWinnerId = data.extraWinnerId;
+        monteState.complete = !!data.complete;
         updateMonteTotals();
         highlightMonteLosers();
         syncMonteToKladde();
@@ -7097,6 +7101,10 @@ function initMemberDragDrop() {
   }
 
   function syncMonteToKladde() {
+    // Erst zur Kladde synchronisieren wenn Monte komplett ist
+    // (sonst sehen Teilwerte in der Kladde wie "beendet" aus)
+    if (!monteState.complete) return;
+
     players.forEach(function(p) {
       var hasOverride = monteOverrides[p.id] != null;
       var total = hasOverride ? monteOverrides[p.id] : (monteState.totals[p.id] || 0);

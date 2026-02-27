@@ -1009,13 +1009,14 @@ router.get("/kegelkladde/monte-rounds", requireAuth, (req, res) => {
 
   const rounds = db.prepare("SELECT user_id, round_number, roll_value FROM monte_rounds WHERE gameday_id = ?").all(gamedayId);
   const meta = db.prepare("SELECT question_value FROM monte_round_meta WHERE gameday_id = ?").get(gamedayId);
-  const { totals, extraWinnerId } = calculateMonteTotals(gamedayId);
+  const { totals, extraWinnerId, complete } = calculateMonteTotals(gamedayId);
 
   res.json({
     rounds,
     questionValue: meta ? meta.question_value : null,
     totals,
-    extraWinnerId
+    extraWinnerId,
+    complete
   });
 });
 
@@ -1047,8 +1048,8 @@ router.post("/kegelkladde/monte-round", requireAuth, verifyCsrf, (req, res) => {
     ).run(gamedayId, memberId, roundNumber, rollValue);
   }
 
-  const { totals, extraWinnerId } = calculateMonteTotals(gamedayId);
-  res.json({ ok: true, totals, extraWinnerId });
+  const { totals, extraWinnerId, complete } = calculateMonteTotals(gamedayId);
+  res.json({ ok: true, totals, extraWinnerId, complete });
 });
 
 router.post("/kegelkladde/monte-question", requireAuth, verifyCsrf, (req, res) => {
@@ -1074,8 +1075,8 @@ router.post("/kegelkladde/monte-question", requireAuth, verifyCsrf, (req, res) =
     ).run(gamedayId, questionValue);
   }
 
-  const { totals, extraWinnerId } = calculateMonteTotals(gamedayId);
-  res.json({ ok: true, totals, extraWinnerId });
+  const { totals, extraWinnerId, complete } = calculateMonteTotals(gamedayId);
+  res.json({ ok: true, totals, extraWinnerId, complete });
 });
 
 module.exports = router;

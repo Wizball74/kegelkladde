@@ -38,6 +38,7 @@
 
   /* ═══ Flock ═══ */
   var flock = [];
+  var dismissed = false;
 
   /* ═══ Aging helpers ═══ */
   function getAgeFactor(sh) {
@@ -699,6 +700,7 @@
   }
 
   function saveFlock() {
+    if (dismissed) return;
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serializeFlock()));
     } catch (e) { /* quota exceeded — ignore */ }
@@ -820,6 +822,7 @@
     count: function () { return flock.length; },
     save: saveFlock,
     dismiss: function (tx, ty) {
+      dismissed = true;
       for (var fi = 0; fi < flock.length; fi++) {
         var sh = flock[fi];
         sh.state = 'departing';
@@ -827,6 +830,7 @@
         sh.stTimer = 0;
         sh.propSpeed = PROP_MAX;
       }
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
     },
   };
 

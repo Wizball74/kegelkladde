@@ -35,7 +35,8 @@ function showToast(message, type = "success") {
   const icons = {
     success: "✓",
     error: "✕",
-    warning: "⚠"
+    warning: "⚠",
+    info: "ℹ"
   };
 
   toast.innerHTML = `
@@ -299,9 +300,10 @@ function updateMontePoints() {
 
   const hasValues = entries.some(e => e.isActive && !e.isStruck && e.value > 0);
 
-  // Rank eligible (active + not struck + below cutoff) players: lowest value = best
+  // Rank eligible (active + not struck + value > 0 + below cutoff) players: lowest value = best
+  // value === 0 means "nicht geworfen" = zahlend/busted
   const eligible = entries
-    .filter(e => e.isActive && !e.isStruck && e.value < MONTE_CUTOFF_ZEHNTEL)
+    .filter(e => e.isActive && !e.isStruck && e.value > 0 && e.value < MONTE_CUTOFF_ZEHNTEL)
     .sort((a, b) => a.value - b.value || a.tiebreak - b.tiebreak);
 
   const ptsMap = new Map();
@@ -324,9 +326,9 @@ function updateMontePoints() {
       if (group.length > 1) group.forEach(e => tiedSet.add(e.td));
     });
 
-    // Extrapunkt for cutoff players (>= 2,00 €) who have the extra radio
+    // Extrapunkt for busted players (0 or >= 2,00 €) who have the extra radio
     entries.forEach(e => {
-      if (e.isActive && !e.isStruck && e.value >= MONTE_CUTOFF_ZEHNTEL && e.hasExtra) {
+      if (e.isActive && !e.isStruck && (e.value === 0 || e.value >= MONTE_CUTOFF_ZEHNTEL) && e.hasExtra) {
         ptsMap.set(e.td, 1);
       }
     });
@@ -387,7 +389,7 @@ function cycleMonteTiebreak(clickedTd) {
     const isStruck = td.classList.contains("cell-struck");
     const input = td.querySelector(".game-col-input");
     const value = Number(input?.value || 0);
-    if (!isActive || isStruck || value >= MONTE_CUTOFF_ZEHNTEL) return;
+    if (!isActive || isStruck || value === 0 || value >= MONTE_CUTOFF_ZEHNTEL) return;
     if (value !== clickedValue) return;
     const tbInput = row.querySelector('[data-tiebreak="monte"]');
     const tiebreak = Number(tbInput?.value || 0);
@@ -786,14 +788,15 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
     if (kladdeData && kladdeData.dataset.gags === "1" && op === "inc" && window.matchMedia("(min-width: 900px)").matches) {
       if (target === "pudel") gagPudel(controlsEl);
       if (target === "triclops") gagConfetti(controlsEl);
-      if (target === "alle9" || target === "kranz") {
+      if ((target === "alle9" || target === "kranz") && event.isTrusted) {
         if (window.flyingSheep) {
           const row = controlsEl.closest("tr");
           const memberId = row?.dataset.memberId;
-          const name = row?.querySelector(".name-col")?.textContent.trim() || "?";
+          const nameCol = row?.querySelector(".name-col");
+          const name = nameCol?.dataset.name || nameCol?.textContent.trim() || "?";
           const letter = name.charAt(0).toUpperCase();
           const rect = controlsEl.getBoundingClientRect();
-          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, memberId, letter);
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, memberId, letter, name);
         }
       }
     }
@@ -1706,11 +1709,18 @@ function initMobileByGame() {
   const rows = Array.from(table.querySelectorAll("tbody tr[data-member-id]"));
   if (rows.length === 0) return;
 
-  const members = rows.map(row => ({
-    id: row.dataset.memberId,
-    name: row.querySelector(".name-col")?.textContent?.trim() || "",
-    row
-  }));
+  const members = rows.map(row => {
+    const nameCol = row.querySelector(".name-col");
+    const avatarEl = nameCol?.querySelector(".kladde-avatar");
+    let avatarHtml = "";
+    if (avatarEl) avatarHtml = avatarEl.outerHTML;
+    return {
+      id: row.dataset.memberId,
+      name: nameCol?.dataset.name || nameCol?.textContent?.trim() || "",
+      avatarHtml,
+      row
+    };
+  });
 
   // --- Toggle UI ---
   const toggle = document.createElement("div");
@@ -1750,7 +1760,7 @@ function initMobileByGame() {
       const tcb = m.row.querySelector("[data-present]");
       if (!tcb) return;
       const r = makeRow(m);
-      r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
+      r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<label class="present-toggle"><input type="checkbox" data-mp="' + m.id + '"' +
         (tcb.checked ? " checked" : "") + (tcb.disabled ? " disabled" : "") +
         ' /><img src="/sheep.png" alt="" class="present-icon" /></label>';
@@ -1779,7 +1789,7 @@ function initMobileByGame() {
       if (!ti) return;
       const r = makeRow(m);
       r.dataset.mk = key;
-      r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
+      r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<div class="gc-marker">' +
         '<button type="button" class="mark-btn mark-dec"' + (ti.disabled ? " disabled" : "") + '>&minus;</button>' +
         '<span class="marker-strip" data-md="' + key + '_' + m.id + '">' + (td ? td.innerHTML : "") + '</span>' +
@@ -1814,7 +1824,7 @@ function initMobileByGame() {
       if (!ti) return;
       any = true;
       const r = makeRow(m);
-      r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
+      r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<span class="money-inline"><input type="number" min="0" max="999" step="' + (isGame ? '1' : '0.10') + '" value="' + ti.value +
         '" class="mini-number no-spin" data-mi="' + prefix + '_' + m.id + '"' +
         (ti.disabled ? " disabled" : "") + ' />' + (isGame ? '' : '&euro;') + '</span>';
@@ -1837,7 +1847,7 @@ function initMobileByGame() {
         const ti = m.row.querySelector('[data-custom-game-id="' + cgId + '"]');
         if (!ti) return;
         const r = makeRow(m);
-        r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
+        r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
           '<span class="money-inline"><input type="number" min="0" max="999" step="1" value="' + ti.value +
           '" class="mini-number no-spin" data-mcg="' + cgId + '_' + m.id + '"' +
           (ti.disabled ? " disabled" : "") + ' /></span>';
@@ -1874,7 +1884,7 @@ function initMobileByGame() {
       const topay = m.row.querySelector("[data-topay]");
       const rest = m.row.querySelector("[data-rest]");
       const r = makeRow(m);
-      r.innerHTML = '<span class="gcn">' + m.name + '</span>' +
+      r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<span class="game-card-topay" data-mtp="' + m.id + '">' + (topay ? topay.textContent.trim() : "") + '</span>' +
         '<span class="money-inline"><input type="number" min="0" max="9999" step="0.10" value="' + ti.value +
         '" class="mini-number no-spin" />&euro;</span>' +
@@ -1895,7 +1905,7 @@ function initMobileByGame() {
       const rest = m.row.querySelector("[data-rest]");
       const r = makeRow(m);
       r.className += " gc-summary";
-      let h = '<span class="gcn">' + m.name + '</span>' +
+      let h = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<span class="money-text" data-mts="' + m.id + '">' + (topay ? topay.textContent.trim() : "") + '</span>';
       if (rest) h += '<span class="money-text" data-mrss="' + m.id + '" style="color:' + (rest.style.color || "") + '">' + rest.textContent.trim() + '</span>';
       r.innerHTML = h;
@@ -2467,7 +2477,8 @@ if (ranglistenSingleDay && ranglistenSelect) {
             ';" title="' + shortDate + ': ' + pts + ' Pkt."><span class="st-bar-val">' + pts + '</span></div></td>';
         } else if (bustedSet[gdId] != null) {
           var mVal = bustedSet[gdId].toFixed(2).replace('.', ',');
-          rowsHtml += '<td class="st-cell st-busted" title="\u00fcber 2,00 \u20ac \u2013 busted!"><img src="/sheep_dead.png" alt="" class="st-busted-sheep" /><span class="st-busted-val">' + mVal + '\u20ac</span></td>';
+          var bustTitle = bustedSet[gdId] === 0 ? 'Zahlt \u2013 0 geworfen' : '\u00fcber 2,00 \u20ac \u2013 busted!';
+          rowsHtml += '<td class="st-cell st-busted" title="' + bustTitle + '"><img src="/sheep_dead.png" alt="" class="st-busted-sheep" /><span class="st-busted-val">' + mVal + '\u20ac</span></td>';
         } else if (!presentSet[gdId]) {
           rowsHtml += '<td class="st-cell st-absent"></td>';
         } else {
@@ -3802,7 +3813,7 @@ function initMemberDragDrop() {
       var cb = row.querySelector("[data-present]");
       if (cb && cb.checked) {
         var nameEl = row.querySelector(".name-col");
-        var name = nameEl ? nameEl.textContent.trim().split("\n")[0].trim() : "?";
+        var name = nameEl && nameEl.dataset.name ? nameEl.dataset.name : (nameEl ? nameEl.textContent.trim().split("\n")[0].trim() : "?");
         var avatarImg = row.querySelector(".kladde-avatar");
         var avatar = avatarImg ? avatarImg.src : null;
         presentMap[row.dataset.memberId] = { id: row.dataset.memberId, name: name, avatar: avatar, row: row };
@@ -4000,7 +4011,7 @@ function initMemberDragDrop() {
       const cb = row.querySelector("[data-present]");
       if (cb && cb.checked) {
         const nameEl = row.querySelector(".name-col");
-        const name = nameEl ? nameEl.textContent.trim().split("\n")[0].trim() : "?";
+        const name = nameEl?.dataset.name || (nameEl ? nameEl.textContent.trim().split("\n")[0].trim() : "?");
         const avatarImg = row.querySelector(".kladde-avatar");
         const avatar = avatarImg ? avatarImg.src : null;
         players.push({ id: row.dataset.memberId, name, avatar, row });
@@ -5182,6 +5193,15 @@ function initMemberDragDrop() {
       liveFx.stop(); liveFx.explosion(btn, "purple");
     }
 
+    // Flying Sheep bei 9er/Kranz
+    if ((marker === "alle9" || marker === "kranz") && window.flyingSheep) {
+      var p = gameOrder[currentTurnIdx];
+      if (p) {
+        var rect = btn.getBoundingClientRect();
+        window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+      }
+    }
+
     if (vaState.currentThrow >= 5) {
       // Volle done for this player -> next
       var player = gameOrder[currentTurnIdx];
@@ -5792,6 +5812,12 @@ function initMemberDragDrop() {
       liveFx.stop(); liveFx.explosion(btn, "purple");
     }
 
+    // Flying Sheep bei 9er/Kranz
+    if ((marker === "alle9" || marker === "kranz") && window.flyingSheep) {
+      var rect = btn.getBoundingClientRect();
+      window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, player.id, player.name.charAt(0).toUpperCase(), player.name);
+    }
+
     // Advance to next player
     aussteigenState.currentPlayerIdx++;
 
@@ -6174,6 +6200,11 @@ function initMemberDragDrop() {
     liveControls.renderVolle({
       onPick: function(throwVal, marker, btn) {
         onSechsTageValue(throwVal);
+        // Flying Sheep bei 9er/Kranz
+        if ((marker === "alle9" || marker === "kranz") && window.flyingSheep && activePlayer) {
+          var rect = btn.getBoundingClientRect();
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, activePlayer.id, activePlayer.name.charAt(0).toUpperCase(), activePlayer.name);
+        }
       },
       onUndo: function() {
         undoSechsTage();
@@ -6709,6 +6740,7 @@ function initMemberDragDrop() {
       document.getElementById("monteEditBtn").addEventListener("click", function() {
         monteState.editMode = true;
         monteState.pickedValue = null;
+        monteState.pickedMarker = null;
         renderMontePlayerUI();
       });
     }
@@ -6760,6 +6792,7 @@ function initMemberDragDrop() {
   // --- Monte callbacks for unified picker ---
   function monteOnPick(val, marker, btn) {
     monteState.pickedValue = val;
+    monteState.pickedMarker = marker;
     liveControls.highlightPick(val);
     showMonteCursor(val);
     updateMonteSidebarHighlight();
@@ -6780,6 +6813,7 @@ function initMemberDragDrop() {
   function monteOnUndo() {
     if (monteState.pickedValue != null) {
       monteState.pickedValue = null;
+      monteState.pickedMarker = null;
       hideMonteCursor();
       renderMontePlayerUI();
     } else if (monteState.lastPlacement) {
@@ -6814,6 +6848,7 @@ function initMemberDragDrop() {
       document.getElementById("monteEditDoneBtn").addEventListener("click", function() {
         monteState.editMode = false;
         monteState.pickedValue = null;
+        monteState.pickedMarker = null;
         if (headingEl) headingEl.style.fontSize = "";
         skipFilledMontePlayers();
         renderMontePlayerUI();
@@ -6838,6 +6873,7 @@ function initMemberDragDrop() {
       document.getElementById("monteEditBtn2").addEventListener("click", function() {
         monteState.editMode = true;
         monteState.pickedValue = null;
+        monteState.pickedMarker = null;
         if (headingEl) headingEl.style.fontSize = "";
         renderMontePlayerUI();
       });
@@ -6849,12 +6885,26 @@ function initMemberDragDrop() {
 
   function placeMonteValue(uid, round, cell) {
     var value = monteState.pickedValue;
+    var marker = monteState.pickedMarker;
     if (value == null) return;
 
     // Save placement for undo
     monteState.lastPlacement = { uid: uid, round: round, value: value };
     monteState.pickedValue = null;
+    monteState.pickedMarker = null;
     hideMonteCursor();
+
+    // Flying Sheep bei 9er/Kranz — erst beim tatsächlichen Setzen
+    if ((marker === "alle9" || marker === "kranz") && window.flyingSheep) {
+      var p = null;
+      for (var gi = 0; gi < gameOrder.length; gi++) {
+        if (String(gameOrder[gi].id) === String(uid)) { p = gameOrder[gi]; break; }
+      }
+      if (p) {
+        var rect = cell ? cell.getBoundingClientRect() : { left: W / 2, top: H / 2, width: 0 };
+        window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+      }
+    }
 
     // Update local state + cell display + server
     selectMonteValue(uid, round, value, cell);

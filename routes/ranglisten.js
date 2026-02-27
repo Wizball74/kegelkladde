@@ -296,8 +296,8 @@ function computeMonteForGameday(gamedayId, monteMap) {
     if (entry) entry.presentGds.push(gamedayId);
   });
 
-  // Spieler mit >= 2,00 € ausfiltern
-  const eligible = rows.filter((r) => r.monte < MONTE_CUTOFF);
+  // Spieler mit 0 oder >= 2,00 € ausfiltern (0 = nicht geworfen = zahlend)
+  const eligible = rows.filter((r) => r.monte > 0 && r.monte < MONTE_CUTOFF);
 
   eligible.forEach((row, i) => {
     const placePts = i < MONTE_POINTS.length ? MONTE_POINTS[i] : 0;
@@ -313,9 +313,9 @@ function computeMonteForGameday(gamedayId, monteMap) {
     }
   });
 
-  // Nicht-eligible Spieler (>= 2,00 €): busted markieren + ggf. Extrapunkt
+  // Nicht-eligible Spieler (0 oder >= 2,00 €): busted markieren + ggf. Extrapunkt
   rows.forEach((row) => {
-    if (row.monte >= MONTE_CUTOFF) {
+    if (row.monte === 0 || row.monte >= MONTE_CUTOFF) {
       const entry = monteMap.get(row.user_id);
       if (entry) {
         entry.busted.push({ gamedayId, monte: row.monte });

@@ -201,6 +201,7 @@
       hw: HEAD_W * traits.headMul, hh: HEAD_H * traits.headMul,
       hr: HEAD_R * traits.headMul,
       ownerId: ownerId || null,
+      ownerName: (opts && opts.ownerName) || '',
       letter: letter || '',
       sizeMultiplier: opts.sizeMultiplier || 1.0,
       age: opts.age || 0,
@@ -620,6 +621,29 @@
   /* ═══ Drag ═══ */
   var dragSheep = null, dragOX = 0, dragOY = 0, dragLX = 0, dragLY = 0, dragLT = 0;
   var velBuf = [];
+  var dragBubble = null;
+
+  function showDragBubble(sh) {
+    if (!sh.ownerName) return;
+    if (!dragBubble) {
+      dragBubble = document.createElement('div');
+      dragBubble.className = 's-drag-bubble';
+      document.body.appendChild(dragBubble);
+    }
+    dragBubble.textContent = sh.ownerName;
+    dragBubble.style.display = 'block';
+    moveDragBubble(sh.x, sh.y, sh.sizeMultiplier);
+  }
+
+  function moveDragBubble(x, y, sizeMul) {
+    if (!dragBubble || dragBubble.style.display === 'none') return;
+    dragBubble.style.left = x + 'px';
+    dragBubble.style.top = (y - 28 * (sizeMul || 1) - 14) + 'px';
+  }
+
+  function hideDragBubble() {
+    if (dragBubble) dragBubble.style.display = 'none';
+  }
 
   function findNearest(x, y) {
     var best = null, bestD = 40;
@@ -643,6 +667,7 @@
     dragOX = sh.x - e.clientX; dragOY = sh.y - e.clientY;
     dragLX = e.clientX; dragLY = e.clientY; dragLT = performance.now();
     velBuf.length = 0;
+    showDragBubble(sh);
     /* Herde aufscheuchen */
     for (var fi = 0; fi < flock.length; fi++) {
       var o = flock[fi];
@@ -670,6 +695,7 @@
     }
     dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
     dragSheep.propSpeed = Math.min(dragSheep.propSpeed + .5, PROP_MAX);
+    moveDragBubble(dragSheep.x, dragSheep.y, dragSheep.sizeMultiplier);
   });
 
   document.addEventListener('pointerup', function () {
@@ -680,6 +706,7 @@
     dragSheep.throwBoost = 2500; dragSheep.resumeDelay = 1200;
     dragSheep.wobbleV += (Math.random() - .5) * 12;
     velBuf.length = 0; dragSheep = null;
+    hideDragBubble();
   });
 
   /* ═══ Persistence ═══ */
@@ -690,7 +717,7 @@
       sheep.push({
         x: sh.x, y: sh.y, vx: sh.vx, vy: sh.vy,
         traits: sh.traits,
-        ownerId: sh.ownerId, letter: sh.letter,
+        ownerId: sh.ownerId, ownerName: sh.ownerName, letter: sh.letter,
         sizeMultiplier: sh.sizeMultiplier, age: sh.age,
         state: sh.state, tailSide: sh.tailSide,
         solo: sh.solo, bank: sh.bank, propSpeed: sh.propSpeed,
@@ -716,10 +743,13 @@
     var elapsed = Math.max(0, Date.now() - (data.timestamp || 0));
     for (var i = 0; i < data.sheep.length; i++) {
       var s = data.sheep[i];
+      /* Skip stuck sheep near top-left corner */
+      if (s.x < MARGIN + 5 && s.y < MARGIN + 5) continue;
       /* Clamp position to current viewport */
       var x = Math.max(MARGIN, Math.min(W - MARGIN, s.x || W / 2));
       var y = Math.max(MARGIN, Math.min(H - MARGIN, s.y || H / 2));
       createSheep(x, y, s.ownerId, s.letter, {
+        ownerName: s.ownerName || '',
         traits: s.traits,
         sizeMultiplier: s.sizeMultiplier || 1,
         age: (s.age || 0) + elapsed,
@@ -755,10 +785,14 @@
       }
     }
     sheepCollisions();
-    /* Cleanup: Schafe die den Screen verlassen haben */
+    /* Cleanup: Schafe die den Screen verlassen haben oder stuck sind */
     for (var i = flock.length - 1; i >= 0; i--) {
       var sh = flock[i];
       if (sh === dragSheep) continue;
+      /* Stuck in top-left corner */
+      if (sh.x < MARGIN + 5 && sh.y < MARGIN + 5) {
+        removeSheep(sh); continue;
+      }
       /* Departing: off-screen */
       if (sh.state === 'departing' && (sh.x < -60 || sh.x > W + 60 || sh.y < -60 || sh.y > H + 60)) {
         removeSheep(sh); continue;
@@ -773,7 +807,9 @@
 
   /* ═══ Public API ═══ */
   window.flyingSheep = {
-    spawn: function (x, y, ownerId, letter) {
+    spawn: function (x, y, ownerId, letter, ownerName) {
+      /* Ungültige Position → nicht spawnen */
+      if (x < MARGIN + 5 && y < MARGIN + 5) return null;
       /* Existiert schon ein Schaf mit dieser ownerId? → wachsen */
       if (ownerId) {
         for (var i = 0; i < flock.length; i++) {
@@ -783,6 +819,7 @@
             sh.wobbleV += (Math.random() > .5 ? 1 : -1) * 14;
             sh.wideEyes = 600;
             sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
+            if (ownerName && !sh.ownerName) sh.ownerName = ownerName;
             saveFlock();
             return sh;
           }
@@ -796,7 +833,7 @@
         }
         removeSheep(oldest);
       }
-      var sh = createSheep(x, y, String(ownerId || ''), letter);
+      var sh = createSheep(x, y, String(ownerId || ''), letter, { ownerName: ownerName || '' });
       sh.propSpeed = PROP_MAX * 0.7;
       sh.state = 'dart';
       sh.target = newTarget();

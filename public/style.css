@@ -704,6 +704,12 @@ textarea:focus {
   color: #744210;
 }
 
+.toast-info {
+  background: var(--card-bg);
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+
 .toast-icon {
   font-size: 1.25rem;
 }
@@ -2361,6 +2367,15 @@ td.col-active.cell-empty:not(.marker-cell) > * {
     font-weight: 600;
     font-size: 0.85rem;
     min-width: 75px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .gcn .kladde-avatar {
+    width: 22px;
+    height: 22px;
     flex-shrink: 0;
   }
 

@@ -176,3 +176,17 @@
   0%   { opacity: 1; transform: translate(0,0) scale(1) rotate(0); }
   100% { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(.1) rotate(400deg); }
 }
+
+.s-drag-bubble {
+  position: fixed;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 100001;
+  background: rgba(0,0,0,.72);
+  color: #fff;
+  font: 600 .7rem/1 system-ui, sans-serif;
+  padding: 3px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  display: none;
+}

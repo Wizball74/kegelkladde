@@ -7473,6 +7473,20 @@ function initMemberDragDrop() {
   var HEAD_W = 12, HEAD_H = 12;
   var LEG_W = 2, LEG_H = 8;
 
+  /* Sprite-Bilder vorladen */
+  var hatsImg = new Image();
+  hatsImg.src = '/spritesheets/hats.png';
+  var glassesImg = new Image();
+  glassesImg.src = '/spritesheets/glasses.png';
+  var stacheImg = new Image();
+  stacheImg.src = '/img/sheep_stuff.png';
+  var spriteImagesLoaded = 0;
+  function onSpriteImgLoad() {
+    spriteImagesLoaded++;
+    if (spriteImagesLoaded >= 3) canvases.forEach(drawSheepOnCanvas);
+  }
+  hatsImg.onload = glassesImg.onload = stacheImg.onload = onSpriteImgLoad;
+
   function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -7714,6 +7728,33 @@ function initMemberDragDrop() {
       ctx.fillStyle = tr.accColor;
       ctx.fillRect(headX + 1, headY + hh - 2, hw - 2, 3);
       ctx.fillRect(headX + hw * 0.3, headY + hh + 1, 2, 4);
+    }
+
+    // Sprite Hat
+    if (tr.spriteHat >= 0 && hatsImg.complete) {
+      var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
+      var sx = hatCol * 98.5, sy = hatRow * 88.5, sw = 98, sh = 88;
+      var dw = 12, dh = dw * (sh / sw);
+      ctx.drawImage(hatsImg, sx, sy, sw, sh, headX + hw / 2 - dw / 2, headY - dh * 0.7, dw, dh);
+    }
+
+    // Sprite Glasses
+    if (tr.spriteGlasses >= 0 && glassesImg.complete) {
+      var glCol = tr.spriteGlasses % 7, glRow = (tr.spriteGlasses / 7) | 0;
+      var sx = glCol * 55.14, sy = glRow * 75.2, sw = 55, sh = 75;
+      var dw = 8, dh = dw * (sh / sw);
+      ctx.drawImage(glassesImg, sx, sy, sw, sh, headX + hw / 2 - dw / 2, headY + hh * 0.15, dw, dh);
+    }
+
+    // Sprite Stache
+    if (tr.spriteStache >= 0 && stacheImg.complete) {
+      var stacheRegions = [
+        {x:5,y:18,w:100,h:55},{x:110,y:5,w:100,h:65},{x:5,y:108,w:90,h:65},{x:105,y:108,w:105,h:65},
+        {x:5,y:210,w:95,h:60},{x:105,y:200,w:105,h:55},{x:5,y:290,w:95,h:70},{x:105,y:275,w:105,h:65}
+      ];
+      var sr = stacheRegions[tr.spriteStache];
+      var dw = 7, dh = dw * (sr.h / sr.w);
+      ctx.drawImage(stacheImg, sr.x, sr.y, sr.w, sr.h, headX + hw / 2 - dw / 2, headY + hh * 0.65, dw, dh);
     }
 
     ctx.restore();

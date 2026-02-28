@@ -12,9 +12,9 @@
   let W = innerWidth, H = innerHeight;
 
   const PROP_BASE = 8, PROP_MAX = 90;
-  const BASE_MAX_SPEED = 3.0;
-  const BASE_STEER = 0.06;
-  const FRICTION = 0.985;
+  const BASE_MAX_SPEED = 2.0;
+  const BASE_STEER = 0.045;
+  const FRICTION = 0.98;
   const MARGIN = 35;
   const MAX_SHEEP = 10;
 
@@ -47,38 +47,72 @@
   }
   function getMaxSpeed(sh) {
     var sizeFactor = 1 / Math.sqrt(sh.sizeMultiplier);
-    return BASE_MAX_SPEED * sizeFactor * (1 - getAgeFactor(sh) * 0.6);
+    var energyFactor = sh.traits.energy != null ? sh.traits.energy : 1;
+    return BASE_MAX_SPEED * sizeFactor * energyFactor * (1 - getAgeFactor(sh) * 0.6);
   }
   function getSteer(sh) {
     var sizeFactor = 1 / Math.sqrt(sh.sizeMultiplier);
-    return BASE_STEER * sizeFactor * (1 - getAgeFactor(sh) * 0.7);
+    var energyFactor = sh.traits.energy != null ? sh.traits.energy : 1;
+    return BASE_STEER * sizeFactor * energyFactor * (1 - getAgeFactor(sh) * 0.7);
   }
 
   /* ═══ Traits ═══ */
   function generateTraits() {
     var isBlack = Math.random() < 0.08;
-    var scale = 0.75 + Math.random() * 0.5;
-    var chub = 0.85 + Math.random() * 0.35;
-    var legMul = 0.75 + Math.random() * 0.5;
-    var headMul = 0.9 + Math.random() * 0.2;
-    var woolColors = ['white', 'white', 'white', 'white', '#f5f0e0', '#eee', '#f0e6d3'];
+    var scale = 0.6 + Math.random() * 0.8;
+    var chub = 0.7 + Math.random() * 0.7;
+    var legMul = 0.9 + Math.random() * 0.8;
+    var headMul = 0.75 + Math.random() * 0.5;
+    var woolColors = ['white', 'white', 'white', '#f5f0e0', '#eee', '#f0e6d3',
+                      '#e8ddd0', '#f5e6f0', '#e0f0e8', '#f0f0d8', '#ffe8d6'];
     var woolColor = isBlack ? '#3a3a3a' : woolColors[Math.random() * woolColors.length | 0];
     var borderColor = isBlack ? '#1a1a1a' : '#444';
     var skinColor = isBlack ? '#2a2a2a' : '#444';
     var accColors = ['#e44', '#44e', '#4a4', '#e4e', '#fa0', '#0cd', '#f80', '#c44'];
     var accColor = accColors[Math.random() * accColors.length | 0];
+    var spriteHat = Math.random() < 0.55 ? (Math.random() * 16 | 0) : -1;
+    var spriteGlasses = Math.random() < 0.40 ? (Math.random() * 35 | 0) : -1;
+    var spriteStache = Math.random() < 0.35 ? (Math.random() * 8 | 0) : -1;
     var accessory = null;
     var r = Math.random();
-    if (r < .10) accessory = 'tophat';
-    else if (r < .18) accessory = 'partyhat';
-    else if (r < .22) accessory = 'crown';
-    else if (r < .32) accessory = 'beanie';
-    else if (r < .42) accessory = 'glasses';
-    else if (r < .50) accessory = 'bowtie';
-    else if (r < .57) accessory = 'bell';
-    else if (r < .64) accessory = 'flower';
-    else if (r < .72) accessory = 'scarf';
-    else if (r < .80) accessory = 'shoes';
+    if (spriteHat < 0 && spriteGlasses < 0) {
+      // Kein Sprite-Hut/Brille → alte CSS-Accessoires möglich
+      if (r < .10) accessory = 'tophat';
+      else if (r < .18) accessory = 'partyhat';
+      else if (r < .22) accessory = 'crown';
+      else if (r < .32) accessory = 'beanie';
+      else if (r < .42) accessory = 'glasses';
+      else if (r < .50) accessory = 'bowtie';
+      else if (r < .57) accessory = 'bell';
+      else if (r < .64) accessory = 'flower';
+      else if (r < .72) accessory = 'scarf';
+      else if (r < .80) accessory = 'shoes';
+    } else if (spriteHat >= 0 && spriteGlasses < 0) {
+      // Hat Sprite-Hut → keine CSS-Hüte, aber Nicht-Hut-Accessoires erlaubt
+      if (r < .15) accessory = 'bowtie';
+      else if (r < .25) accessory = 'bell';
+      else if (r < .35) accessory = 'flower';
+      else if (r < .45) accessory = 'scarf';
+      else if (r < .55) accessory = 'shoes';
+    } else if (spriteHat < 0 && spriteGlasses >= 0) {
+      // Hat Sprite-Brille → keine CSS-Brille, aber Hüte erlaubt
+      if (r < .10) accessory = 'tophat';
+      else if (r < .18) accessory = 'partyhat';
+      else if (r < .22) accessory = 'crown';
+      else if (r < .32) accessory = 'beanie';
+      else if (r < .40) accessory = 'bowtie';
+      else if (r < .47) accessory = 'bell';
+      else if (r < .54) accessory = 'flower';
+      else if (r < .62) accessory = 'scarf';
+      else if (r < .70) accessory = 'shoes';
+    } else {
+      // Beides Sprite → nur Nicht-Hut/Brille-Accessoires
+      if (r < .15) accessory = 'bowtie';
+      else if (r < .25) accessory = 'bell';
+      else if (r < .35) accessory = 'flower';
+      else if (r < .45) accessory = 'scarf';
+      else if (r < .55) accessory = 'shoes';
+    }
     var legSpread = 3 + Math.random() * 5;
     var legYBase = 4.5 + Math.random() * 3;
     var legBackOff = 0.5 + Math.random() * 1.5;
@@ -101,7 +135,11 @@
       (Math.random() - .5) * 12,
     ];
     var tailSize = 3 + Math.random() * 3;
-    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize };
+    // Persönlichkeit: beeinflusst Verhalten pro Schaf
+    var energy = 0.4 + Math.random() * 1.2;       // 0.4–1.6: faul bis hyperaktiv
+    var curiosity = 0.3 + Math.random() * 1.0;    // 0.3–1.3: ängstlich bis neugierig
+    var sociability = Math.random();               // 0–1: Einzelgänger bis Herdentier
+    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability };
   }
 
   /* ═══ DOM-Factory ═══ */
@@ -187,6 +225,38 @@
       }
     }
 
+    /* Sprite-Overlays */
+    if (tr.spriteHat >= 0) {
+      var hatEl = document.createElement('div');
+      hatEl.className = 's-sprite-hat';
+      var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
+      // Sheet 394×354, 4×4 → Slot 98.5×88.5, skaliert ÷10
+      hatEl.style.backgroundPosition = -(hatCol * 9.85) + 'px ' + -(hatRow * 8.85) + 'px';
+      head.appendChild(hatEl);
+    }
+    if (tr.spriteGlasses >= 0) {
+      var glEl = document.createElement('div');
+      glEl.className = 's-sprite-glasses';
+      var glCol = tr.spriteGlasses % 7, glRow = (tr.spriteGlasses / 7) | 0;
+      // Sheet 386×376, 7×5 → Slot 55.14×75.2, skaliert ÷10
+      glEl.style.backgroundPosition = -(glCol * 5.514) + 'px ' + -(glRow * 7.52) + 'px';
+      head.appendChild(glEl);
+    }
+    if (tr.spriteStache >= 0) {
+      var stEl = document.createElement('div');
+      stEl.className = 's-sprite-stache';
+      var stacheRegions = [
+        {x:5,y:18,w:100,h:55},{x:110,y:5,w:100,h:65},{x:5,y:108,w:90,h:65},{x:105,y:108,w:105,h:65},
+        {x:5,y:210,w:95,h:60},{x:105,y:200,w:105,h:55},{x:5,y:290,w:95,h:70},{x:105,y:275,w:105,h:65}
+      ];
+      var sr = stacheRegions[tr.spriteStache];
+      // skaliert ÷10
+      stEl.style.backgroundPosition = -(sr.x / 10) + 'px ' + -(sr.y / 10) + 'px';
+      stEl.style.width = (sr.w / 10) + 'px';
+      stEl.style.height = (sr.h / 10) + 'px';
+      head.appendChild(stEl);
+    }
+
     return { wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl, lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, pole: pole, hub: hub, bwrap: bwrap, blades: blades, eyeL: eyeL, eyeR: eyeR };
   }
 
@@ -217,11 +287,11 @@
       target: { x: 0, y: 0 }, state: opts.state || 'dart', stTimer: 0, stDur: 500,
       resumeDelay: 0, throwBoost: 0,
       orbitCenter: { x: 0, y: 0 }, orbitAngle: 0, orbitRadius: 40, orbitDir: 1,
-      blinkTimer: 1500 + Math.random() * 3000, isBlinking: false, blinkDur: 0,
-      wideEyes: 0, kickLeg: -1, kickTimer: 0, kickCD: 1500 + Math.random() * 2500,
+      blinkTimer: (1500 + Math.random() * 3000) / (traits.energy || 1), isBlinking: false, blinkDur: 0,
+      wideEyes: 0, kickLeg: -1, kickTimer: 0, kickCD: (1500 + Math.random() * 2500) / (traits.energy || 1),
       socialTarget: null, collisionCD: 0,
       scareCorner: null, canSpreadFear: false,
-      solo: opts.solo != null ? opts.solo : Math.random() < 0.35,
+      solo: opts.solo != null ? opts.solo : Math.random() < (1 - (traits.sociability != null ? traits.sociability : 0.5)),
       soloTimer: 4000 + Math.random() * 12000,
       tailSide: opts.tailSide || 0,
       legDragX: 0, legDragY: 0,
@@ -1056,18 +1126,16 @@
       while (velBuf.length && now - velBuf[0].t > 80) velBuf.shift();
     }
     dragSheep.x = e.clientX + dragOX; dragSheep.y = e.clientY + dragOY;
-    if (dtt > 1) {
-      dragSheep.vx += ((e.clientX - dragLX) / dtt * 12 - dragSheep.vx) * .3;
-      dragSheep.vy += ((e.clientY - dragLY) / dtt * 12 - dragSheep.vy) * .3;
-    }
-    dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
-    /* Shake-Erkennung: Richtungswechsel akkumulieren */
+    /* Shake-Erkennung: Richtungswechsel akkumulieren (vor dragLX-Update!) */
     if (dtt > 1) {
       var curVX = (e.clientX - dragLX) / dtt * 12, curVY = (e.clientY - dragLY) / dtt * 12;
       dragShakeScore = Math.min(dragShakeScore + Math.hypot(curVX - dragPrevVX, curVY - dragPrevVY) * 0.12, 40);
       dragPrevVX = curVX; dragPrevVY = curVY;
+      dragSheep.vx += (curVX - dragSheep.vx) * .3;
+      dragSheep.vy += (curVY - dragSheep.vy) * .3;
     }
     dragShakeScore *= 0.97;
+    dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
     dragSheep.propSpeed = Math.min(dragSheep.propSpeed + .5, PROP_MAX);
     moveDragBubble(dragSheep.x, dragSheep.y, dragSheep.sizeMultiplier);
   });

@@ -168,6 +168,38 @@
 .s-shoe { position: absolute; pointer-events: none; bottom: -2px; left: -.5px;
   width: 4px; height: 2.5px; border-radius: .5px 2px 1px .5px; }
 
+/* Sprite Hut — Sheet 394×354, 4×4 Grid → Slot ~98×88px, skaliert ÷10 */
+.s-sprite-hat {
+  position: absolute; pointer-events: none; z-index: 11;
+  width: 10px; height: 9px;
+  top: -8px; left: 50%; transform: translateX(-50%);
+  background-image: url(/spritesheets/hats.png);
+  background-size: 40px 36px;
+  background-repeat: no-repeat;
+  image-rendering: auto;
+}
+
+/* Sprite Brille — Sheet 386×376, 7×5 Grid → Slot ~55×75px, skaliert ÷10 */
+.s-sprite-glasses {
+  position: absolute; pointer-events: none; z-index: 11;
+  width: 6px; height: 8px;
+  top: 1.5px; left: 50%; transform: translateX(-50%);
+  background-image: url(/spritesheets/glasses.png);
+  background-size: 39px 38px;
+  background-repeat: no-repeat;
+  image-rendering: auto;
+}
+
+/* Sprite Schnurrbart — Sheet 446×393, skaliert ÷10 */
+.s-sprite-stache {
+  position: absolute; pointer-events: none; z-index: 11;
+  bottom: -1px; left: 50%; transform: translateX(-50%);
+  background-image: url(/img/sheep_stuff.png);
+  background-size: 44.6px 39.3px;
+  background-repeat: no-repeat;
+  image-rendering: auto;
+}
+
 .star {
   position: absolute; pointer-events: none; z-index: 30;
   animation: pop 400ms ease-out forwards;

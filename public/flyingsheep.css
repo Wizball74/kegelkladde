@@ -41,7 +41,7 @@
 }
 .s-ear {
   position: absolute; width: 4px; height: 5px;
-  border-radius: 50%; top: 1.5px; z-index: -1;
+  border-radius: 50%; top: -1.5px; z-index: -1;
 }
 .s-ear.l { left: -2.5px; transform: rotate(-15deg); }
 .s-ear.r { right: -2.5px; transform: rotate(15deg); }

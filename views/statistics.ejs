@@ -1,6 +1,11 @@
 <%- include("partials/top") %>
 <%
   const formatEuro = (value) => Number(value || 0).toFixed(2).replace(".", ",");
+  const formatDateDE = (d) => {
+    if (!d) return '';
+    const parts = d.split('-');
+    return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : d;
+  };
 %>
 <section class="card fade-in">
   <div class="section-head">
@@ -11,67 +16,218 @@
   <!-- Tabs -->
   <nav class="tab-nav">
     <button type="button" class="tab-btn active" data-tab="neuner-kraenze">Neuner / Kränze</button>
+    <button type="button" class="tab-btn" data-tab="wurf-analyse">Wurf-Analyse</button>
     <button type="button" class="tab-btn" data-tab="allgemein">Allgemein</button>
+    <button type="button" class="tab-btn" data-tab="ahnengalerie">Ahnengalerie</button>
   </nav>
 
-  <!-- Tab: Neuner / Kränze -->
+  <!-- Tab 1: Neuner / Kränze -->
   <div class="tab-panel active" id="tab-neuner-kraenze">
-    <div class="split-grid">
-      <div>
-        <h2 style="margin-top: 0;">Neuner (Alle 9)</h2>
-        <% if (neunerStats.length > 0) { %>
-          <div class="records-table-wrap">
-            <table class="records-table sortable-table">
-              <thead>
-                <tr>
-                  <th data-sort="string">Name</th>
-                  <th data-sort="number">Gesamt</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% neunerStats.forEach((item) => { %>
-                  <tr>
-                    <td><%= item.first_name %> <%= item.last_name || '' %></td>
-                    <td data-value="<%= item.total %>"><%= item.total %></td>
-                  </tr>
-                <% }) %>
-              </tbody>
-            </table>
-          </div>
-        <% } else { %>
-          <p class="subtle" style="text-align: center; padding: 2rem 0;">Noch keine Daten.</p>
-        <% } %>
+    <div class="nk-grid">
+
+    <!-- Neuner -->
+    <div class="nk-section">
+      <div class="nk-section-header">
+        <span class="nk-section-icon">&#127923;</span>
+        <h2>Neuner (Alle 9)</h2>
       </div>
-      <div>
-        <h2 style="margin-top: 0;">Kränze</h2>
-        <% if (kraenzeStats.length > 0) { %>
-          <div class="records-table-wrap">
-            <table class="records-table sortable-table">
-              <thead>
-                <tr>
-                  <th data-sort="string">Name</th>
-                  <th data-sort="number">Gesamt</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% kraenzeStats.forEach((item) => { %>
-                  <tr>
-                    <td><%= item.first_name %> <%= item.last_name || '' %></td>
-                    <td data-value="<%= item.total %>"><%= item.total %></td>
-                  </tr>
-                <% }) %>
-              </tbody>
-            </table>
-          </div>
-        <% } else { %>
-          <p class="subtle" style="text-align: center; padding: 2rem 0;">Noch keine Daten.</p>
-        <% } %>
-      </div>
+      <% if (neunerStats.length > 0) { %>
+        <div class="hbar-chart">
+          <% neunerStats.forEach((item, i) => {
+            const pct = maxNeuner > 0 ? Math.max((item.total / maxNeuner) * 100, 3) : 3;
+            const rankClass = i === 0 ? 'hbar-rank-gold' : i === 1 ? 'hbar-rank-silver' : i === 2 ? 'hbar-rank-bronze' : '';
+          %>
+            <div class="hbar-row">
+              <div class="hbar-label">
+                <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
+                <span class="hbar-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              </div>
+              <div class="hbar-track">
+                <div class="hbar-fill" style="width: <%= pct %>%;">
+                  <div class="hbar-seg hbar-base" style="flex: 1;"></div>
+                </div>
+              </div>
+              <span class="hbar-inline-value"><%= item.total %></span>
+            </div>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="empty-state">
+          <div class="empty-state-icon">&#127923;</div>
+          <p>Noch keine Neuner-Daten vorhanden.</p>
+        </div>
+      <% } %>
     </div>
+
+    <!-- Kränze -->
+    <div class="nk-section">
+      <div class="nk-section-header">
+        <span class="nk-section-icon">&#128081;</span>
+        <h2>Kränze</h2>
+      </div>
+      <% if (kraenzeStats.length > 0) { %>
+        <div class="hbar-chart">
+          <% kraenzeStats.forEach((item, i) => {
+            const pct = maxKraenze > 0 ? Math.max((item.total / maxKraenze) * 100, 3) : 3;
+            const rankClass = i === 0 ? 'hbar-rank-gold' : i === 1 ? 'hbar-rank-silver' : i === 2 ? 'hbar-rank-bronze' : '';
+          %>
+            <div class="hbar-row">
+              <div class="hbar-label">
+                <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
+                <span class="hbar-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              </div>
+              <div class="hbar-track">
+                <div class="hbar-fill" style="width: <%= pct %>%;">
+                  <div class="hbar-seg hbar-gold" style="flex: 1;"></div>
+                </div>
+              </div>
+              <span class="hbar-inline-value"><%= item.total %></span>
+            </div>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="empty-state">
+          <div class="empty-state-icon">&#128081;</div>
+          <p>Noch keine Kränze-Daten vorhanden.</p>
+        </div>
+      <% } %>
+    </div>
+    </div><!-- /nk-grid -->
   </div>
 
-  <!-- Tab: Allgemein -->
+  <!-- Tab 2: Wurf-Analyse -->
+  <div class="tab-panel" id="tab-wurf-analyse">
+    <% if (!hasThrowLogData) { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128202;</div>
+        <p>Noch keine Wurfdaten vorhanden.</p>
+        <p class="subtle">Wurfdaten werden ab dem nächsten Spieltag automatisch erfasst.</p>
+      </div>
+    <% } else { %>
+
+      <!-- Gesamt gefallene Pins -->
+      <div class="nk-section">
+        <div class="nk-section-header">
+          <span class="nk-section-icon">&#127935;</span>
+          <h2>Gesamt gefallene Pins</h2>
+        </div>
+        <% if (totalPinsPerPlayer.length > 0) { %>
+          <%
+            const maxPins = totalPinsPerPlayer[0].total_pins;
+          %>
+          <div class="hbar-chart">
+            <% totalPinsPerPlayer.forEach((item, i) => {
+              const pct = maxPins > 0 ? Math.max((item.total_pins / maxPins) * 100, 3) : 3;
+              const rankClass = i === 0 ? 'hbar-rank-gold' : i === 1 ? 'hbar-rank-silver' : i === 2 ? 'hbar-rank-bronze' : '';
+            %>
+              <div class="hbar-row">
+                <div class="hbar-label">
+                  <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
+                  <span class="hbar-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+                </div>
+                <div class="hbar-track">
+                  <div class="hbar-fill" style="width: <%= pct %>%;">
+                    <div class="hbar-seg hbar-teal" style="flex: 1;"></div>
+                  </div>
+                </div>
+                <span class="hbar-inline-value"><%= item.total_pins %></span>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Pin-Verteilung -->
+      <div class="nk-section">
+        <div class="nk-section-header">
+          <span class="nk-section-icon">&#128200;</span>
+          <h2>Pin-Verteilung</h2>
+        </div>
+        <% if (pinDistribution.length > 0) { %>
+          <div class="pin-dist-grid">
+            <% pinDistribution.forEach((player) => {
+              const maxCount = Math.max(...player.distribution, 1);
+            %>
+              <div class="pin-dist-card">
+                <div class="pin-dist-header">
+                  <span class="pin-dist-name"><%= player.first_name %> <%= player.last_name || '' %></span>
+                  <span class="pin-dist-total"><%= player.totalThrows %> Würfe</span>
+                </div>
+                <div class="pin-dist-bars">
+                  <% for (let v = 0; v <= 9; v++) {
+                    const count = player.distribution[v];
+                    const heightPct = (count / maxCount) * 100;
+                  %>
+                    <div class="pin-dist-col">
+                      <span class="pin-dist-count"><%= count > 0 ? count : '' %></span>
+                      <div class="pin-dist-bar pin-dist-v<%= v %>" style="height: <%= heightPct %>%;"></div>
+                      <span class="pin-dist-label"><%= v %></span>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Wurf-Schnitt pro Spieltag -->
+      <div class="nk-section">
+        <div class="nk-section-header">
+          <span class="nk-section-icon">&#128197;</span>
+          <h2>Wurf-Schnitt pro Spieltag</h2>
+        </div>
+        <% throwAvgByGameday.forEach((gd) => { %>
+          <div class="throw-avg-gameday">
+            <div class="throw-avg-date"><%= formatDateDE(gd.match_date) %></div>
+            <div class="hbar-chart hbar-chart-compact">
+              <% gd.players.forEach((p, i) => {
+                const pct = Math.max((p.avg_throw / 9) * 100, 3);
+                const rankClass = i === 0 ? 'hbar-rank-gold' : i === 1 ? 'hbar-rank-silver' : i === 2 ? 'hbar-rank-bronze' : '';
+              %>
+                <div class="hbar-row">
+                  <div class="hbar-label">
+                    <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
+                    <span class="hbar-name"><%= p.first_name %> <%= p.last_name || '' %></span>
+                  </div>
+                  <div class="hbar-track">
+                    <div class="hbar-fill" style="width: <%= pct %>%;">
+                      <div class="hbar-seg hbar-base" style="flex: 1;"></div>
+                    </div>
+                  </div>
+                  <span class="hbar-inline-value"><%= p.avg_throw.toFixed(2) %></span>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+
+    <% } %>
+  </div>
+
+  <!-- Tab 3: Allgemein -->
   <div class="tab-panel" id="tab-allgemein">
+
+    <!-- Dickstes Schaf -->
+    <% if (dickstesSchaf) { %>
+      <%
+        const sheepScale = Math.min(2.5, 1 + dickstesSchaf.combined / 500);
+      %>
+      <div class="dickstes-schaf-card" style="--sheep-scale: <%= sheepScale.toFixed(2) %>;">
+        <div class="dickstes-schaf-title">Dickstes Schaf</div>
+        <div class="dickstes-schaf-img">
+          <img src="/sheep.png" alt="Schaf">
+        </div>
+        <div class="dickstes-schaf-name"><%= dickstesSchaf.first_name %> <%= dickstesSchaf.last_name || '' %></div>
+        <div class="dickstes-schaf-counts">
+          <strong><%= dickstesSchaf.total_neuner %></strong> Neuner +
+          <strong><%= dickstesSchaf.total_kraenze %></strong> Kränze =
+          <strong><%= dickstesSchaf.combined %></strong> gesamt
+        </div>
+      </div>
+    <% } %>
+
     <!-- Summary stats -->
     <div class="stats-grid">
       <div class="stat-card">
@@ -195,6 +351,57 @@
             <% }) %>
           </tbody>
         </table>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Tab 4: Ahnengalerie -->
+  <div class="tab-panel" id="tab-ahnengalerie">
+    <% if (deadSheep.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">&#129702;</div>
+        <p>Die Ahnengalerie ist noch leer.</p>
+        <p class="subtle">Hier erscheinen alle Schafe, die das Zeitliche gesegnet haben.</p>
+      </div>
+    <% } else { %>
+      <div class="gy-stats">
+        <span class="gy-stat"><strong><%= graveyardStats.total %></strong> Schafe</span>
+        <% if (graveyardStats.evicted > 0) { %><span class="gy-stat">&#128116; <%= graveyardStats.evicted %> verdrängt</span><% } %>
+        <% if (graveyardStats.thrown > 0) { %><span class="gy-stat">&#128640; <%= graveyardStats.thrown %> geworfen</span><% } %>
+        <% if (graveyardStats.dismissed > 0) { %><span class="gy-stat">&#128075; <%= graveyardStats.dismissed %> verscheucht</span><% } %>
+        <% if (graveyardStats.departed > 0) { %><span class="gy-stat">&#9992;&#65039; <%= graveyardStats.departed %> abgehauen</span><% } %>
+        <% if (graveyardStats.stuck > 0) { %><span class="gy-stat">&#128027; <%= graveyardStats.stuck %> stuck</span><% } %>
+      </div>
+
+      <div class="gy-grid">
+        <% deadSheep.forEach((sheep) => {
+          const traits = JSON.parse(sheep.traits_json);
+          const ageSec = Math.floor(sheep.age_ms / 1000);
+          const ageMin = Math.floor(ageSec / 60);
+          const ageH = Math.floor(ageMin / 60);
+          let ageStr = ageSec < 60 ? ageSec + 's' : ageMin < 60 ? ageMin + 'min' : ageH + 'h ' + (ageMin % 60) + 'min';
+          const causeLabels = { eviction: '&#128116; Verdrängt', stuck: '&#128027; Stuck', dismissed: '&#128075; Verscheucht', thrown: '&#128640; Geworfen', departed: '&#9992;&#65039; Abgehauen', unknown: '&#10067;' };
+          const causeLabel = causeLabels[sheep.death_cause] || sheep.death_cause;
+          const diedDate = sheep.died_at ? sheep.died_at.substring(0, 10).split('-').reverse().join('.') : '';
+        %>\
+          <div class="gy-card">
+            <canvas class="gy-sheep-canvas"
+              width="120" height="100"
+              data-traits="<%= encodeURIComponent(JSON.stringify(traits)) %>"
+              data-size="<%= sheep.size_multiplier %>"
+              data-letter="<%= sheep.letter %>">
+            </canvas>
+            <div class="gy-info">
+              <div class="gy-letter"><%= sheep.letter || '?' %></div>
+              <% if (sheep.owner_name) { %><div class="gy-owner"><%= sheep.owner_name %></div><% } %>
+              <div class="gy-meta">
+                <span title="Lebensdauer">&#9201; <%= ageStr %></span>
+                <span title="Todesursache"><%- causeLabel %></span>
+              </div>
+              <div class="gy-date"><%= diedDate %></div>
+            </div>
+          </div>
+        <% }) %>
       </div>
     <% } %>
   </div>

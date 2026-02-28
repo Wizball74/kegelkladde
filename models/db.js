@@ -270,6 +270,34 @@ db.exec(`
     question_value INTEGER,
     FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS throw_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gameday_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    game_type TEXT NOT NULL,
+    phase TEXT,
+    round_num INTEGER,
+    throw_num INTEGER NOT NULL,
+    throw_value INTEGER NOT NULL,
+    marker TEXT,
+    fallen_pins TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS sheep_graveyard (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT,
+    owner_name TEXT NOT NULL DEFAULT '',
+    letter TEXT NOT NULL DEFAULT '',
+    traits_json TEXT NOT NULL,
+    size_multiplier REAL NOT NULL DEFAULT 1.0,
+    age_ms INTEGER NOT NULL DEFAULT 0,
+    death_cause TEXT NOT NULL DEFAULT 'unknown',
+    died_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migration: alte gameday_costs Tabelle entfernen falls vorhanden
@@ -738,6 +766,50 @@ const userCount = db.prepare("SELECT COUNT(*) as c FROM users").get().c;
 const gamedayCount = db.prepare("SELECT COUNT(*) as c FROM gamedays").get().c;
 console.log(`[DB] Users: ${userCount}, Spieltage: ${gamedayCount}`);
 
+// Throw-Log speichern (bulk, mit Replay-Handling via DELETE+INSERT)
+const throwLogDel = db.prepare("DELETE FROM throw_log WHERE gameday_id = ? AND game_type = ? AND user_id = ?");
+const throwLogIns = db.prepare(
+  `INSERT INTO throw_log (gameday_id, user_id, game_type, phase, round_num, throw_num, throw_value, marker, fallen_pins)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+function saveThrowLog(gamedayId, gameType, throws) {
+  const userIds = [...new Set(throws.map(t => t.userId))];
+  db.transaction(() => {
+    userIds.forEach(uid => throwLogDel.run(gamedayId, gameType, uid));
+    throws.forEach(t => throwLogIns.run(gamedayId, t.userId, gameType, t.phase || null, t.roundNum ?? null, t.throwNum, t.throwValue, t.marker || null, t.fallenPins || null));
+  })();
+}
+
+// Throw-Log abrufen (für Statistiken)
+function getThrowLog(gamedayId, gameType) {
+  return db.prepare("SELECT * FROM throw_log WHERE gameday_id = ? AND game_type = ? ORDER BY user_id, throw_num").all(gamedayId, gameType);
+}
+
+// Sheep Graveyard
+function addDeadSheep(data) {
+  return db.prepare(`
+    INSERT INTO sheep_graveyard (owner_id, owner_name, letter, traits_json, size_multiplier, age_ms, death_cause)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(data.ownerId || '', data.ownerName || '', data.letter || '',
+    JSON.stringify(data.traits), data.sizeMultiplier || 1, data.ageMs || 0, data.deathCause || 'unknown');
+}
+
+function getDeadSheep(limit) {
+  return db.prepare("SELECT * FROM sheep_graveyard ORDER BY died_at DESC LIMIT ?").all(limit || 100);
+}
+
+function getGraveyardStats() {
+  return db.prepare(`
+    SELECT COUNT(*) as total,
+      SUM(CASE WHEN death_cause = 'eviction' THEN 1 ELSE 0 END) as evicted,
+      SUM(CASE WHEN death_cause = 'thrown' THEN 1 ELSE 0 END) as thrown,
+      SUM(CASE WHEN death_cause = 'dismissed' THEN 1 ELSE 0 END) as dismissed,
+      SUM(CASE WHEN death_cause = 'stuck' THEN 1 ELSE 0 END) as stuck,
+      SUM(CASE WHEN death_cause = 'departed' THEN 1 ELSE 0 END) as departed
+    FROM sheep_graveyard
+  `).get();
+}
+
 module.exports = {
   db,
   encrypt,
@@ -756,5 +828,10 @@ module.exports = {
   listBackups,
   listBackupGamedays,
   restoreGamedays,
-  backupDir
+  backupDir,
+  saveThrowLog,
+  getThrowLog,
+  addDeadSheep,
+  getDeadSheep,
+  getGraveyardStats
 };

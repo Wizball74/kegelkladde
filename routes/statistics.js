@@ -1,8 +1,20 @@
 const express = require("express");
-const { db } = require("../models/db");
+const { db, addDeadSheep, getDeadSheep, getGraveyardStats } = require("../models/db");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Sheep Graveyard API
+router.post("/api/sheep-graveyard", requireAuth, (req, res) => {
+  const { ownerId, ownerName, letter, traits, sizeMultiplier, ageMs, deathCause } = req.body;
+  if (!traits || typeof traits !== 'object') return res.status(400).json({ error: 'Missing traits' });
+  try {
+    addDeadSheep({ ownerId, ownerName, letter, traits, sizeMultiplier, ageMs, deathCause });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'DB error' });
+  }
+});
 
 router.get("/statistik", requireAuth, (req, res) => {
   // Total gamedays
@@ -135,6 +147,116 @@ router.get("/statistik", requireAuth, (req, res) => {
     ORDER BY total DESC
   `).all();
 
+  // Max-Werte für Bar-Skalierung
+  const maxNeuner = neunerStats.length > 0 ? neunerStats[0].total : 0;
+  const maxKraenze = kraenzeStats.length > 0 ? kraenzeStats[0].total : 0;
+
+  // Dickstes Schaf: Spieler mit meisten 9er+Kränze kombiniert
+  const dickstesSchaf = db.prepare(`
+    SELECT u.id, u.first_name, u.last_name, u.avatar,
+      COALESCE(SUM(a.alle9), 0) + COALESCE(iv.initial_alle9, 0) as total_neuner,
+      COALESCE(SUM(a.kranz), 0) + COALESCE(iv.initial_kranz, 0) as total_kraenze,
+      (COALESCE(SUM(a.alle9), 0) + COALESCE(iv.initial_alle9, 0) +
+       COALESCE(SUM(a.kranz), 0) + COALESCE(iv.initial_kranz, 0)) as combined
+    FROM attendance a
+    JOIN users u ON a.user_id = u.id
+    LEFT JOIN member_initial_values iv ON iv.user_id = u.id
+    WHERE a.present = 1
+    GROUP BY a.user_id
+    HAVING combined > 0
+    ORDER BY combined DESC
+    LIMIT 1
+  `).get() || null;
+
+  // throw_log Daten vorhanden?
+  const hasThrowLogData = db.prepare("SELECT COUNT(*) as count FROM throw_log").get().count > 0;
+
+  // Wurf-Analyse Daten (nur wenn throw_log Daten vorhanden)
+  let totalPinsPerPlayer = [];
+  let pinDistribution = [];
+  let throwAvgByGameday = [];
+
+  if (hasThrowLogData) {
+    // Gesamt gefallene Pins pro Spieler
+    totalPinsPerPlayer = db.prepare(`
+      SELECT tl.user_id, u.first_name, u.last_name,
+        SUM(tl.throw_value) as total_pins,
+        COUNT(tl.id) as total_throws,
+        ROUND(AVG(tl.throw_value * 1.0), 2) as avg_throw
+      FROM throw_log tl
+      JOIN users u ON tl.user_id = u.id
+      GROUP BY tl.user_id
+      ORDER BY total_pins DESC
+    `).all();
+
+    // Pin-Verteilung (Wurfwerte 0-9) pro Spieler
+    const rawPinDist = db.prepare(`
+      SELECT tl.user_id, u.first_name, u.last_name, tl.throw_value, COUNT(*) as count
+      FROM throw_log tl
+      JOIN users u ON tl.user_id = u.id
+      GROUP BY tl.user_id, tl.throw_value
+      ORDER BY tl.user_id, tl.throw_value
+    `).all();
+
+    // Gruppieren nach Spieler
+    const pinMap = new Map();
+    for (const row of rawPinDist) {
+      if (!pinMap.has(row.user_id)) {
+        pinMap.set(row.user_id, {
+          user_id: row.user_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          distribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          totalThrows: 0
+        });
+      }
+      const entry = pinMap.get(row.user_id);
+      if (row.throw_value >= 0 && row.throw_value <= 9) {
+        entry.distribution[row.throw_value] = row.count;
+        entry.totalThrows += row.count;
+      }
+    }
+    pinDistribution = Array.from(pinMap.values())
+      .sort((a, b) => b.totalThrows - a.totalThrows);
+
+    // Wurf-Schnitt pro Spieltag
+    const rawThrowAvg = db.prepare(`
+      SELECT tl.gameday_id, g.match_date, tl.user_id, u.first_name, u.last_name,
+        ROUND(AVG(tl.throw_value * 1.0), 2) as avg_throw,
+        COUNT(tl.id) as throw_count,
+        SUM(tl.throw_value) as total_pins
+      FROM throw_log tl
+      JOIN users u ON tl.user_id = u.id
+      JOIN gamedays g ON tl.gameday_id = g.id
+      GROUP BY tl.gameday_id, tl.user_id
+      ORDER BY g.match_date DESC, avg_throw DESC
+    `).all();
+
+    // Gruppieren nach Spieltag
+    const gdMap = new Map();
+    for (const row of rawThrowAvg) {
+      if (!gdMap.has(row.gameday_id)) {
+        gdMap.set(row.gameday_id, {
+          gameday_id: row.gameday_id,
+          match_date: row.match_date,
+          players: []
+        });
+      }
+      gdMap.get(row.gameday_id).players.push({
+        first_name: row.first_name,
+        last_name: row.last_name,
+        avg_throw: row.avg_throw,
+        throw_count: row.throw_count,
+        total_pins: row.total_pins
+      });
+    }
+    throwAvgByGameday = Array.from(gdMap.values());
+  }
+
+  // Sheep Graveyard
+  const deadSheep = getDeadSheep(200);
+  const graveyardStats = getGraveyardStats();
+
   res.render("statistics", {
     totalGamedays,
     settledGamedays,
@@ -151,7 +273,16 @@ router.get("/statistik", requireAuth, (req, res) => {
     monthlySummary: formattedMonthlySummary,
     currentYear,
     neunerStats,
-    kraenzeStats
+    kraenzeStats,
+    maxNeuner,
+    maxKraenze,
+    dickstesSchaf,
+    hasThrowLogData,
+    totalPinsPerPlayer,
+    pinDistribution,
+    throwAvgByGameday,
+    deadSheep,
+    graveyardStats
   });
 });
 

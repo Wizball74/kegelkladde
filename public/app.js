@@ -5,6 +5,43 @@ document.addEventListener("contextmenu", function(e) {
   e.preventDefault();
 });
 
+// Global: Live-Status in Navigation anzeigen
+(function initNavLiveIndicator() {
+  var btn = document.getElementById("navLiveBtn");
+  var btnMobile = document.getElementById("navLiveBtnMobile");
+  if (!btn && !btnMobile) return;
+
+  function hasActiveLiveState() {
+    try {
+      for (var i = 0; i < sessionStorage.length; i++) {
+        var key = sessionStorage.key(i);
+        if (key && key.indexOf("liveState_") === 0) {
+          var raw = sessionStorage.getItem(key);
+          if (raw) {
+            var state = JSON.parse(raw);
+            if (state && state.version === 1) return true;
+          }
+        }
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  function updateNavLive() {
+    var active = hasActiveLiveState();
+    if (btn) btn.style.display = active ? "" : "none";
+    if (btnMobile) btnMobile.style.display = active ? "" : "none";
+  }
+
+  updateNavLive();
+
+  // Re-check when sessionStorage changes (from other tabs or after live mode closes)
+  window.addEventListener("storage", updateNavLive);
+
+  // Re-check periodically for same-tab changes
+  setInterval(updateNavLive, 2000);
+})();
+
 // Mobile menu toggle
 const menuToggle = document.getElementById("menuToggle");
 const mobileNav = document.getElementById("mobileNav");
@@ -3507,10 +3544,11 @@ function initMemberDragDrop() {
 
     // Render Volle picker into shuffleArea (RIGHT side)
     renderVolle: function(opts) {
-      // opts: { onPick(val, marker, btn), onUndo(), canUndo: bool }
+      // opts: { onPick(val, marker, btn), onUndo(), canUndo: bool, headerHtml?: string }
       this.mode = "volle";
       this.opts = opts;
       var html = '<div class="va-phase-container">';
+      if (opts.headerHtml) html += opts.headerHtml;
       html += renderVAPicker();
       html += '<div class="va-actions-row">';
       html += '<button type="button" class="va-picker-btn va-picker-clear va-actions-undo" id="liveCtrlUndo"' + (opts.canUndo ? '' : ' disabled') + '>\u00D7 R\u00fcckg\u00e4ngig</button>';
@@ -3522,11 +3560,15 @@ function initMemberDragDrop() {
 
     // Render Abräumen pin diamond into shuffleArea (RIGHT side)
     renderAbraeumen: function(opts) {
-      // opts: { onConfirm(fallenPins), onUndo(), onInvert(), canUndo, canInvert, fallenCount, throwNum }
+      // opts: { onConfirm(fallenPins), onUndo(), onInvert(), canUndo, canInvert, fallenCount, throwNum, headerHtml?: string }
       this.mode = "abraeumen";
       this.opts = opts;
       var html = '<div class="va-phase-container">';
-      html += '<div class="va-abraeumen-throw-num">Wurf ' + (opts.throwNum || 1) + '<span class="va-abraeumen-throw-total"> / 5</span></div>';
+      if (opts.headerHtml) {
+        html += opts.headerHtml;
+      } else {
+        html += '<div class="va-abraeumen-throw-num">Wurf ' + (opts.throwNum || 1) + '<span class="va-abraeumen-throw-total"> / 5</span></div>';
+      }
       html += renderPinDiamond();
       html += '<div class="va-abraeumen-actions">';
       html += '<span class="va-fallen-count" id="vaFallenCount">Getroffen: ' + (opts.fallenCount || 0) + '</span>';
@@ -3713,6 +3755,7 @@ function initMemberDragDrop() {
     currentPlayerIdx: 0,      // index into remaining[]
     roundThrows: {},          // {playerId: {val, marker}} for current round
     throwHistory: [],         // [{playerId, val, marker}] for undo
+    allThrows: [],            // [{playerId, round, val, marker}] persistent across rounds for throw-log
     cumulativeTotals: {},     // {playerId: runningSum} across all rounds
     roundSnapshots: [],       // [{position, cumulatives: {id: total}, eliminatedIds: []}]
     currentPosition: 0,       // cost-column index the current round maps to
@@ -3726,6 +3769,22 @@ function initMemberDragDrop() {
     currentTeamIdx: 0,  // aktuelles Team
     currentSlot: 1      // 1 = P1, 2 = P2
   };
+
+  // --- Throw-Log: Einzelwürfe in DB speichern ---
+  function saveThrowLog(gameType, throws) {
+    if (!kladdeData || !throws.length) return;
+    fetch("/kegelkladde/throw-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": kladdeData.dataset.csrf },
+      body: JSON.stringify({
+        csrfToken: kladdeData.dataset.csrf,
+        gamedayId: kladdeData.dataset.gamedayId,
+        gameType: gameType,
+        throws: throws
+      }),
+      keepalive: true
+    }).catch(function() {});
+  }
 
   // --- Live State Persistence (sessionStorage) ---
   var liveStateKey = "liveState_" + gamedayId;
@@ -3769,6 +3828,7 @@ function initMemberDragDrop() {
         currentPlayerIdx: aussteigenState.currentPlayerIdx,
         roundThrows: JSON.parse(JSON.stringify(aussteigenState.roundThrows)),
         throwHistory: JSON.parse(JSON.stringify(aussteigenState.throwHistory)),
+        allThrows: JSON.parse(JSON.stringify(aussteigenState.allThrows)),
         cumulativeTotals: JSON.parse(JSON.stringify(aussteigenState.cumulativeTotals)),
         roundSnapshots: JSON.parse(JSON.stringify(aussteigenState.roundSnapshots)),
         currentPosition: aussteigenState.currentPosition
@@ -3864,6 +3924,7 @@ function initMemberDragDrop() {
         currentPlayerIdx: as.currentPlayerIdx || 0,
         roundThrows: as.roundThrows || {},
         throwHistory: as.throwHistory || [],
+        allThrows: as.allThrows || [],
         cumulativeTotals: as.cumulativeTotals || {},
         roundSnapshots: as.roundSnapshots || [],
         currentPosition: as.currentPosition || 0,
@@ -4773,41 +4834,128 @@ function initMemberDragDrop() {
     return -1;
   }
 
-  function advanceTurn(onTurnChange) {
-    // Remember who just played (before incrementing)
-    var justPlayed = gameOrder[currentTurnIdx];
-    var justPlayedId = justPlayed ? justPlayed.id : null;
+  // Phase 1: Capture old positions + update data (before re-render)
+  // Phase 2: playPinklerFlip() applies INVERT+PLAY on fresh DOM (after re-render)
+  var pendingPinklerFlip = null;
 
-    // First advance to next player
-    currentTurnIdx++;
+  function restorePinklerIfNeeded() {
+    var current = gameOrder[currentTurnIdx];
+    if (!current) return;
+    var currentId = current.id;
 
-    // Then restore pinkler to original position (after advancing, so next player is correct)
-    if (justPlayedId && pinklerSlots.length > 0) {
-      var psIdx = -1;
-      for (var pi = 0; pi < pinklerSlots.length; pi++) {
-        if (pinklerSlots[pi].playerId === justPlayedId) { psIdx = pi; break; }
-      }
-      if (psIdx !== -1) {
-        // Remove from pinkler tracking
-        pinklerSlots.splice(psIdx, 1);
-        // Find current position of the player who just threw
-        var removePos = currentTurnIdx - 1;
-        gameOrder.splice(removePos, 1);
-        // Adjust currentTurnIdx since we removed before it
-        currentTurnIdx--;
-        // Find correct insert position based on original order
-        var origIdx = gameOrderOriginal.indexOf(justPlayedId);
-        var insertIdx = 0;
-        for (var i = 0; i < gameOrder.length; i++) {
-          if (gameOrderOriginal.indexOf(gameOrder[i].id) < origIdx) insertIdx = i + 1;
-        }
-        gameOrder.splice(insertIdx, 0, justPlayed);
-        // Adjust currentTurnIdx if we inserted before or at it
-        if (insertIdx <= currentTurnIdx) currentTurnIdx++;
+    // Check if current player is a pinkler
+    var psIdx = -1;
+    for (var pi = 0; pi < pinklerSlots.length; pi++) {
+      if (pinklerSlots[pi].playerId === currentId) { psIdx = pi; break; }
+    }
+    if (psIdx === -1) return; // Not a pinkler, nothing to do
+
+    // Remove from pinkler tracking
+    pinklerSlots.splice(psIdx, 1);
+
+    // Find where the player should go based on original order
+    var origIdx = gameOrderOriginal.indexOf(currentId);
+    var currentPos = currentTurnIdx;
+
+    // Calculate target insert position (where pinkler belongs in original order)
+    var targetIdx = 0;
+    for (var i = 0; i < gameOrder.length; i++) {
+      if (i === currentPos) continue; // Skip the pinkler's current position
+      if (gameOrderOriginal.indexOf(gameOrder[i].id) < origIdx) targetIdx++;
+    }
+
+    // FIRST: Capture positions of all sidebar rows before DOM change
+    var table = document.getElementById("shuffleSidebarTable");
+    var firstRects = {};
+    if (table) {
+      var tbody = table.querySelector("tbody");
+      if (tbody) {
+        tbody.querySelectorAll(".sst-row").forEach(function(row) {
+          firstRects[row.dataset.playerId] = row.getBoundingClientRect();
+        });
       }
     }
 
-    if (onTurnChange) onTurnChange();
+    // Update gameOrder: remove from current position, insert at target
+    if (targetIdx !== currentPos) {
+      var pinklerEntry = gameOrder.splice(currentPos, 1)[0];
+      // Adjust targetIdx if removal shifted it
+      if (currentPos < targetIdx) targetIdx--;
+      gameOrder.splice(targetIdx, 0, pinklerEntry);
+      // Pinkler is the current player — update currentTurnIdx to follow them
+      currentTurnIdx = targetIdx;
+    }
+
+    // Store FLIP data for Phase 2 (after re-render rebuilds the DOM)
+    pendingPinklerFlip = { firstRects: firstRects, pinklerId: currentId };
+
+    saveLiveState();
+  }
+
+  function playPinklerFlip() {
+    if (!pendingPinklerFlip) return;
+    var data = pendingPinklerFlip;
+    pendingPinklerFlip = null;
+
+    var table = document.getElementById("shuffleSidebarTable");
+    if (!table) return;
+    var tbody = table.querySelector("tbody");
+    if (!tbody) return;
+
+    // If no old positions captured, skip animation
+    if (!Object.keys(data.firstRects).length) return;
+
+    var pinklerRow = tbody.querySelector('.sst-row[data-player-id="' + data.pinklerId + '"]');
+
+    // INVERT: Calculate position differences and apply inverse transforms
+    var rows = tbody.querySelectorAll(".sst-row");
+    var animatedRows = [];
+    rows.forEach(function(row) {
+      var pid = row.dataset.playerId;
+      if (!data.firstRects[pid]) return;
+      var newRect = row.getBoundingClientRect();
+      var deltaY = data.firstRects[pid].top - newRect.top;
+      if (deltaY === 0 && pid !== data.pinklerId) return;
+
+      // Temporarily disable transition, set inverse transform
+      row.style.transition = "none";
+      if (pid === data.pinklerId) {
+        row.style.transform = "translateY(" + deltaY + "px) scale(1.08)";
+        row.classList.add("pinkler-returning");
+      } else {
+        row.style.transform = "translateY(" + deltaY + "px)";
+      }
+      animatedRows.push(row);
+    });
+
+    if (!animatedRows.length) return;
+
+    // PLAY: Remove transforms in next frame → CSS transition animates to final position
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        animatedRows.forEach(function(row) {
+          row.style.transition = "";
+          if (row.dataset.playerId === data.pinklerId) {
+            row.style.transform = "scale(1.08)";
+          } else {
+            row.style.transform = "";
+          }
+        });
+
+        // After main slide animation (500ms), scale pinkler back to normal
+        if (pinklerRow) {
+          setTimeout(function() {
+            pinklerRow.style.transition = "transform 300ms ease, box-shadow 300ms ease";
+            pinklerRow.style.transform = "";
+            pinklerRow.classList.remove("pinkler-returning");
+            // Clean up inline styles
+            setTimeout(function() {
+              pinklerRow.style.transition = "";
+            }, 350);
+          }, 500);
+        }
+      });
+    });
   }
 
   function triggerPinkelpause(onTurnChange) {
@@ -4978,12 +5126,17 @@ function initMemberDragDrop() {
   function updateShuffleScores() {
     var table = document.getElementById("shuffleSidebarTable");
     if (!table) return;
-    // Highlight active game column header
+    // Highlight active game column header + column cells
     var ths = table.querySelectorAll("th.sst-game");
     ths.forEach(function(th) { th.classList.remove("sst-game-active"); });
+    table.querySelectorAll(".sst-col-active").forEach(function(c) { c.classList.remove("sst-col-active"); });
     if (vaState && vaState.round) {
       var activeIdx = vaState.round === "volle" ? 0 : 1;
       if (ths[activeIdx]) ths[activeIdx].classList.add("sst-game-active");
+      var colName = vaState.round === "volle" ? "volle" : "abraeumen";
+      table.querySelectorAll('.sst-game-cell[data-sst-col="' + colName + '"]').forEach(function(c) {
+        c.classList.add("sst-col-active");
+      });
     }
 
     gameOrder.forEach(function(p, i) {
@@ -5095,17 +5248,16 @@ function initMemberDragDrop() {
       liveControls.clear();
       attachVADirectEntryHandlers();
     } else if (vaState.phase === "volle") {
-      mainHtml += renderVAVolleMain(player);
       mainHtml += '<button type="button" class="va-direct-btn" id="vaDirectBtn">Direkt eingeben \u270F\uFE0F</button>';
       mainHtml += buildShuffleSidebarHtml();
       gameContent.innerHTML = mainHtml;
       liveControls.renderVolle({
         onPick: vaOnVollePick,
         onUndo: vaOnVolleUndo,
-        canUndo: vaState.currentThrow > 0 || currentTurnIdx > 0
+        canUndo: vaState.currentThrow > 0 || currentTurnIdx > 0,
+        headerHtml: renderVAVolleMain(player)
       });
     } else if (vaState.phase === "abraeumen") {
-      mainHtml += renderVAAbraeumenMain(player);
       mainHtml += '<button type="button" class="va-direct-btn" id="vaDirectBtn">Direkt eingeben \u270F\uFE0F</button>';
       mainHtml += buildShuffleSidebarHtml();
       gameContent.innerHTML = mainHtml;
@@ -5116,7 +5268,8 @@ function initMemberDragDrop() {
         canUndo: vaState.abraeumenThrows.length > 0,
         canInvert: vaState.standingPins.length === 9,
         fallenCount: 0,
-        throwNum: vaState.abraeumenThrows.length + 1
+        throwNum: vaState.abraeumenThrows.length + 1,
+        headerHtml: renderVAAbraeumenMain(player)
       });
     }
 
@@ -5132,9 +5285,12 @@ function initMemberDragDrop() {
     updateShuffleHighlight(currentTurnIdx);
     updateShuffleScores();
     saveLiveState();
+
+    // Phase 2 der Pinkler-Rückkehr-Animation (INVERT+PLAY auf frischem DOM)
+    playPinklerFlip();
   }
 
-  // Returns only the LEFT side HTML for Volle phase (throw slots)
+  // Returns header HTML for Volle phase (phase title + throw slots) — rendered on RIGHT side via liveControls
   function renderVAVolleMain(player) {
     var sum = vaState.volleThrows.reduce(function(a, b) { return a + b.val; }, 0);
     var html = '<div class="va-phase-title">5 in die Vollen, Wurf ' + (vaState.currentThrow + 1) + '/5:</div>';
@@ -5160,7 +5316,7 @@ function initMemberDragDrop() {
     return html;
   }
 
-  // Returns only the LEFT side HTML for Abräumen phase (previous throws)
+  // Returns header HTML for Abräumen phase (phase title + previous throws) — rendered on RIGHT side via liveControls
   function renderVAAbraeumenMain(player) {
     var throwNum = vaState.abraeumenThrows.length;
     var html = '<div class="va-phase-title">5 Abr\u00e4umen, Wurf ' + (throwNum + 1) + '/5:</div>';
@@ -5178,6 +5334,9 @@ function initMemberDragDrop() {
   function vaOnVollePick(throwVal, marker, btn) {
     vaState.volleThrows.push({ val: throwVal, marker: marker });
     vaState.currentThrow = vaState.volleThrows.length;
+
+    // Bei erstem Wurf: Pinkler zurück an Originalposition animieren
+    if (vaState.volleThrows.length === 1) restorePinklerIfNeeded();
 
     // Trigger marker if applicable
     if (marker) triggerAutoMarker(gameOrder[currentTurnIdx], marker, 1);
@@ -5267,9 +5426,25 @@ function initMemberDragDrop() {
     if (wasAlle9 && fromFull) {
       triggerAutoMarker(gameOrder[currentTurnIdx], "alle9", 1);
       liveFx.fireworks(20000);
+      // Flying Sheep bei 9er im Abräumen
+      if (window.flyingSheep) {
+        var p = gameOrder[currentTurnIdx];
+        if (p && confirmBtn) {
+          var rect = confirmBtn.getBoundingClientRect();
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+        }
+      }
     } else if (wasKranz && fromFull) {
       triggerAutoMarker(gameOrder[currentTurnIdx], "kranz", 1);
       if (confirmBtn) liveFx.confetti(confirmBtn);
+      // Flying Sheep bei Kranz im Abräumen
+      if (window.flyingSheep) {
+        var p = gameOrder[currentTurnIdx];
+        if (p && confirmBtn) {
+          var rect = confirmBtn.getBoundingClientRect();
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+        }
+      }
     } else if (count > 0 && confirmBtn) {
       liveFx.explosion(confirmBtn, "accent", count * 5);
     }
@@ -5279,6 +5454,9 @@ function initMemberDragDrop() {
     }
 
     vaState.abraeumenThrows.push({ fallen: fallenPins, count: count, standingPinsBefore: standingPinsBefore, wasAlle9: wasAlle9, wasKranz: wasKranz, fromFull: fromFull });
+
+    // Bei erstem Wurf: Pinkler zurück an Originalposition animieren
+    if (vaState.abraeumenThrows.length === 1) restorePinklerIfNeeded();
 
     if (vaState.abraeumenThrows.length >= 5) {
       finishVAPlayer();
@@ -5503,6 +5681,35 @@ function initMemberDragDrop() {
   }
 
   function renderVAResults() {
+    // Throw-Log: Einzelwürfe in DB speichern
+    var throwLogEntries = [];
+    gameOrder.forEach(function(p) {
+      var hist = vaState.throwHistory[p.id];
+      if (!hist) return;
+      if (hist.volleThrows && hist.volleThrows.length > 0 && !hist.volleThrows[0].direct) {
+        hist.volleThrows.forEach(function(t, i) {
+          throwLogEntries.push({
+            userId: p.id, phase: "volle", roundNum: null,
+            throwNum: i + 1, throwValue: t.val, marker: t.marker || null,
+            fallenPins: null
+          });
+        });
+      }
+      if (hist.abraeumenThrows && hist.abraeumenThrows.length > 0 && !(hist.abraeumenThrows[0] && hist.abraeumenThrows[0].direct)) {
+        hist.abraeumenThrows.forEach(function(t, i) {
+          var marker = null;
+          if (t.wasAlle9) marker = "alle9";
+          throwLogEntries.push({
+            userId: p.id, phase: "abraeumen", roundNum: null,
+            throwNum: i + 1, throwValue: t.count,
+            marker: marker,
+            fallenPins: t.fallen ? JSON.stringify(t.fallen) : null
+          });
+        });
+      }
+    });
+    saveThrowLog("va", throwLogEntries);
+
     // Kosten separat für Volle und Abräumen berechnen
     var volleCosts = calcVARankCosts("volle");
     var abraeumenCosts = calcVARankCosts("abraeumen");
@@ -5601,6 +5808,7 @@ function initMemberDragDrop() {
       currentPlayerIdx: 0,
       roundThrows: {},
       throwHistory: [],
+      allThrows: [],
       cumulativeTotals: cumInit,
       roundSnapshots: [],
       currentPosition: 0,
@@ -5755,6 +5963,7 @@ function initMemberDragDrop() {
           }
         }
 
+        if (isCurrent && !isSkipped) cellClass += ' ast-col-active';
         if (isCurrentPlayer && isCurrent && !isSkipped) cellClass += ' ast-cell-current';
         html += '<td class="' + cellClass + '">' + cellContent + '</td>';
       }
@@ -5797,6 +6006,7 @@ function initMemberDragDrop() {
     // Store throw
     aussteigenState.roundThrows[player.id] = { val: throwVal, marker: marker };
     aussteigenState.throwHistory.push({ playerId: player.id, val: throwVal, marker: marker });
+    aussteigenState.allThrows.push({ playerId: player.id, round: aussteigenState.currentRound, val: throwVal, marker: marker });
 
     // Trigger auto-markers
     if (marker) triggerAutoMarker(player, marker, 1);
@@ -5834,6 +6044,7 @@ function initMemberDragDrop() {
     if (aussteigenState.throwHistory.length === 0) return;
 
     var lastThrow = aussteigenState.throwHistory.pop();
+    if (aussteigenState.allThrows.length > 0) aussteigenState.allThrows.pop();
     var playerId = lastThrow.playerId;
 
     // Remove this player's round throw
@@ -5921,6 +6132,16 @@ function initMemberDragDrop() {
   }
 
   function renderAussteigenResults() {
+    // Throw-Log: Einzelwürfe in DB speichern
+    var throwLogEntries = aussteigenState.allThrows.map(function(t) {
+      return {
+        userId: t.playerId, phase: null, roundNum: t.round,
+        throwNum: 1, throwValue: t.val, marker: t.marker || null,
+        fallenPins: null
+      };
+    });
+    saveThrowLog("aussteigen", throwLogEntries);
+
     var totalPlayers = gameOrder.length;
     var costs = calcAussteigenCosts(aussteigenState.eliminated, totalPlayers);
     var winner = aussteigenState.remaining[0];
@@ -6302,6 +6523,30 @@ function initMemberDragDrop() {
   }
 
   function renderSechsTageResults() {
+    // Throw-Log: Einzelwürfe in DB speichern
+    var throwLogEntries = [];
+    sechsTageState.teams.forEach(function(team) {
+      for (var day = 1; day <= 6; day++) {
+        var dayThrows = team.throws[day];
+        if (!dayThrows) continue;
+        if (dayThrows.p1 != null) {
+          throwLogEntries.push({
+            userId: team.p1.id, phase: null, roundNum: day,
+            throwNum: 1, throwValue: dayThrows.p1, marker: null,
+            fallenPins: null
+          });
+        }
+        if (team.p2 && dayThrows.p2 != null) {
+          throwLogEntries.push({
+            userId: team.p2.id, phase: null, roundNum: day,
+            throwNum: 1, throwValue: dayThrows.p2, marker: null,
+            fallenPins: null
+          });
+        }
+      }
+    });
+    saveThrowLog("sechs_tage", throwLogEntries);
+
     var teams = sechsTageState.teams;
     var costs = calcSechsTageCosts();
 
@@ -7217,4 +7462,262 @@ function initMemberDragDrop() {
   } else {
     restoreLiveState();
   }
+})();
+
+/* ═══ Sheep Graveyard Canvas Renderer ═══ */
+(function() {
+  var canvases = document.querySelectorAll('.gy-sheep-canvas');
+  if (!canvases.length) return;
+
+  var TORSO_W = 17, TORSO_H = 14;
+  var HEAD_W = 12, HEAD_H = 12;
+  var LEG_W = 2, LEG_H = 8;
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawSheepOnCanvas(canvas) {
+    var raw = canvas.dataset.traits;
+    if (!raw) return;
+    var tr;
+    try { tr = JSON.parse(decodeURIComponent(raw)); } catch(e) { return; }
+    var sizeMul = parseFloat(canvas.dataset.size) || 1;
+    var letter = canvas.dataset.letter || '';
+
+    var ctx = canvas.getContext('2d');
+    var cw = canvas.width, ch = canvas.height;
+    ctx.clearRect(0, 0, cw, ch);
+
+    var baseScale = 2.2;
+    var s = baseScale * Math.min(sizeMul, 1.8);
+    ctx.save();
+    ctx.translate(cw / 2, ch / 2 + 2);
+    ctx.scale(s, s);
+
+    var tw = TORSO_W * (tr.chub || 1);
+    var th = TORSO_H;
+    var hw = HEAD_W * (tr.headMul || 1);
+    var hh = HEAD_H * (tr.headMul || 1);
+    var lh = LEG_H * (tr.legMul || 1);
+
+    var woolColor = tr.woolColor || 'white';
+    var borderColor = tr.borderColor || '#444';
+    var skinColor = tr.skinColor || '#444';
+    var earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
+    var eyeColor = tr.isBlack ? '#eee' : '#222';
+
+    // Legs (behind torso)
+    ctx.fillStyle = skinColor;
+    if (tr.legs && tr.legs.length === 4) {
+      // Back legs first
+      for (var li = 2; li < 4; li++) {
+        var leg = tr.legs[li];
+        ctx.fillRect(leg.lx - LEG_W / 2, leg.ly - 2, LEG_W, lh);
+      }
+      // Front legs
+      for (var li = 0; li < 2; li++) {
+        var leg = tr.legs[li];
+        ctx.fillRect(leg.lx - LEG_W / 2, leg.ly - 2, LEG_W, lh);
+      }
+      // Shoes
+      if (tr.accessory === 'shoes' && tr.accColor) {
+        ctx.fillStyle = tr.accColor;
+        for (var li = 0; li < 4; li++) {
+          var leg = tr.legs[li];
+          ctx.fillRect(leg.lx - LEG_W / 2 - 0.5, leg.ly - 2 + lh - 2, LEG_W + 1, 2.5);
+        }
+      }
+    } else {
+      // Fallback legs
+      ctx.fillRect(-4, 4, LEG_W, lh);
+      ctx.fillRect(2, 4, LEG_W, lh);
+      ctx.fillRect(-3, 5, LEG_W, lh);
+      ctx.fillRect(3, 5, LEG_W, lh);
+    }
+
+    // Tail
+    var tailSize = tr.tailSize || 4;
+    ctx.fillStyle = woolColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.arc(tw / 2 + tailSize / 2, 0, tailSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Torso
+    ctx.fillStyle = woolColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.8;
+    roundRect(ctx, -tw / 2, -th / 2, tw, th, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Letter on torso
+    if (letter) {
+      ctx.fillStyle = tr.isBlack ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.25)';
+      ctx.font = 'bold 6px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter, 0, 0);
+    }
+
+    // Bowtie (on torso, under head)
+    if (tr.accessory === 'bowtie' && tr.accColor) {
+      var btx = -tw / 2 - 1;
+      var bty = -1;
+      ctx.fillStyle = tr.accColor;
+      ctx.beginPath();
+      ctx.moveTo(btx, bty);
+      ctx.lineTo(btx - 3.5, bty - 2.5);
+      ctx.lineTo(btx - 3.5, bty + 2.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(btx, bty);
+      ctx.lineTo(btx + 3.5, bty - 2.5);
+      ctx.lineTo(btx + 3.5, bty + 2.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Head
+    var headX = -tw / 2 - hw * 0.6;
+    var headY = -th / 2 - hh * 0.2;
+    ctx.fillStyle = woolColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.8;
+    roundRect(ctx, headX, headY, hw, hh, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Ears
+    ctx.fillStyle = earColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.5;
+    // Left ear
+    ctx.beginPath();
+    ctx.ellipse(headX + 1, headY + 2, 2, 3, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Right ear
+    ctx.beginPath();
+    ctx.ellipse(headX + hw - 1, headY + 2, 2, 3, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Eyes
+    ctx.fillStyle = eyeColor;
+    var eyeY = headY + hh * 0.42;
+    ctx.beginPath();
+    ctx.arc(headX + hw * 0.3, eyeY, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(headX + hw * 0.7, eyeY, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mouth
+    ctx.strokeStyle = tr.isBlack ? '#1a1a1a' : '#666';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    var mouthY = headY + hh * 0.68;
+    ctx.arc(headX + hw / 2, mouthY, 1.5, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+
+    // Accessories
+    if (tr.accessory === 'tophat') {
+      var hatColor = tr.isBlack ? '#555' : '#222';
+      ctx.fillStyle = hatColor;
+      ctx.fillRect(headX + hw * 0.15, headY - 7, hw * 0.7, 7);
+      ctx.fillRect(headX + hw * 0.05, headY - 1, hw * 0.9, 2);
+    } else if (tr.accessory === 'partyhat' && tr.accColor) {
+      ctx.fillStyle = tr.accColor;
+      ctx.beginPath();
+      ctx.moveTo(headX + hw / 2, headY - 8);
+      ctx.lineTo(headX + hw * 0.2, headY);
+      ctx.lineTo(headX + hw * 0.8, headY);
+      ctx.closePath();
+      ctx.fill();
+    } else if (tr.accessory === 'crown') {
+      ctx.fillStyle = '#ffd700';
+      ctx.strokeStyle = '#b8860b';
+      ctx.lineWidth = 0.5;
+      var cy = headY - 1;
+      ctx.beginPath();
+      ctx.moveTo(headX + hw * 0.15, cy);
+      ctx.lineTo(headX + hw * 0.2, cy - 5);
+      ctx.lineTo(headX + hw * 0.35, cy - 2);
+      ctx.lineTo(headX + hw * 0.5, cy - 6);
+      ctx.lineTo(headX + hw * 0.65, cy - 2);
+      ctx.lineTo(headX + hw * 0.8, cy - 5);
+      ctx.lineTo(headX + hw * 0.85, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (tr.accessory === 'beanie' && tr.accColor) {
+      ctx.fillStyle = tr.accColor;
+      ctx.beginPath();
+      ctx.arc(headX + hw / 2, headY + 1, hw * 0.45, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = tr.accColor;
+      ctx.beginPath();
+      ctx.arc(headX + hw / 2, headY - hw * 0.35, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (tr.accessory === 'glasses') {
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 0.6;
+      var gy = headY + hh * 0.42;
+      ctx.beginPath();
+      ctx.arc(headX + hw * 0.3, gy, 2.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(headX + hw * 0.7, gy, 2.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(headX + hw * 0.3 + 2.2, gy);
+      ctx.lineTo(headX + hw * 0.7 - 2.2, gy);
+      ctx.stroke();
+    } else if (tr.accessory === 'bell') {
+      ctx.fillStyle = '#d4a017';
+      ctx.beginPath();
+      ctx.arc(headX + hw / 2, headY + hh + 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.arc(headX + hw / 2, headY + hh + 3, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (tr.accessory === 'flower' && tr.accColor) {
+      ctx.fillStyle = tr.accColor;
+      for (var pi = 0; pi < 5; pi++) {
+        var pa = (pi / 5) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(headX + hw * 0.75 + Math.cos(pa) * 2, headY + 1 + Math.sin(pa) * 2, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#ffe066';
+      ctx.beginPath();
+      ctx.arc(headX + hw * 0.75, headY + 1, 1, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (tr.accessory === 'scarf' && tr.accColor) {
+      ctx.fillStyle = tr.accColor;
+      ctx.fillRect(headX + 1, headY + hh - 2, hw - 2, 3);
+      ctx.fillRect(headX + hw * 0.3, headY + hh + 1, 2, 4);
+    }
+
+    ctx.restore();
+  }
+
+  canvases.forEach(drawSheepOnCanvas);
 })();

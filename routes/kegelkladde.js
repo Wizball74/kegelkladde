@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
@@ -1077,6 +1077,37 @@ router.post("/kegelkladde/monte-question", requireAuth, verifyCsrf, (req, res) =
 
   const { totals, extraWinnerId, complete } = calculateMonteTotals(gamedayId);
   res.json({ ok: true, totals, extraWinnerId, complete });
+});
+
+// Throw-Log: Einzelwürfe speichern
+router.post("/kegelkladde/throw-log", requireAuth, verifyCsrf, (req, res) => {
+  const gamedayId = Number.parseInt(req.body.gamedayId, 10);
+  const gameType = req.body.gameType;
+  const throws = req.body.throws;
+
+  if (!Number.isInteger(gamedayId) || !gameType || !Array.isArray(throws) || throws.length === 0) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const validGameTypes = ["va", "aussteigen", "sechs_tage"];
+  if (!validGameTypes.includes(gameType)) {
+    return res.status(400).json({ error: "Ungültiger Spieltyp." });
+  }
+
+  const dayExists = db.prepare("SELECT id FROM gamedays WHERE id = ?").get(gamedayId);
+  if (!dayExists) {
+    return res.status(400).json({ error: "Spieltag nicht gefunden." });
+  }
+
+  // Validierung der einzelnen Würfe
+  for (const t of throws) {
+    if (!Number.isInteger(t.userId) || !Number.isInteger(t.throwNum) || !Number.isInteger(t.throwValue)) {
+      return res.status(400).json({ error: "Ungültige Wurf-Daten." });
+    }
+  }
+
+  saveThrowLog(gamedayId, gameType, throws);
+  res.json({ ok: true });
 });
 
 module.exports = router;

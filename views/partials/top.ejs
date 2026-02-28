@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#2f8f6d" />
+  <meta name="csrf-token" content="<%= csrfToken %>" />
   <meta name="description" content="KC Schaf Zeilsheim - Vereinsportal für Kegelclub-Verwaltung" />
   <title>KC Schaf Zeilsheim</title>
   <link rel="stylesheet" href="/style.css" />
@@ -42,6 +43,7 @@
         <a href="/pinnwand" class="<%= currentPath === '/pinnwand' ? 'active' : '' %>">Pinnwand</a>
         <a href="/members" class="<%= currentPath === '/members' ? 'active' : '' %>">Mitglieder</a>
         <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
+        <a href="/kegelkladde" class="nav-live-btn" id="navLiveBtn" style="display:none;" title="Zum laufenden Spiel"><img src="/img/live-sign.png" alt="LIVE" class="nav-live-img" /></a>
       </nav>
 
       <!-- Desktop profile + logout -->
@@ -78,6 +80,7 @@
       <a href="/pinnwand" class="<%= currentPath === '/pinnwand' ? 'active' : '' %>">Pinnwand</a>
       <a href="/members" class="<%= currentPath === '/members' ? 'active' : '' %>">Mitglieder</a>
       <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
+      <a href="/kegelkladde" class="nav-live-btn" id="navLiveBtnMobile" style="display:none;" title="Zum laufenden Spiel"><img src="/img/live-sign.png" alt="LIVE" class="nav-live-img" /></a>
       <a href="/profil" class="<%= currentPath === '/profil' ? 'active' : '' %>">
         <span class="mobile-nav-profile">
           <% if (currentUser.avatar) { %>

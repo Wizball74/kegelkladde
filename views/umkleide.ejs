@@ -1,0 +1,165 @@
+<%- include("partials/top") %>
+
+<section class="card fade-in umkleide-page">
+  <div class="section-head" style="display:flex;align-items:center;flex-wrap:wrap;gap:.75rem;">
+    <div style="flex:1;">
+      <h1 style="margin:0;">Schaf-Umkleide</h1>
+      <p class="subtle" style="margin:.25rem 0 0;">Accessoire-Positionen und -Gr&ouml;&szlig;en testen und dauerhaft anpassen.</p>
+    </div>
+    <a href="/admin" class="btn-sm">&larr; Einstellungen</a>
+  </div>
+
+  <div class="umkleide-layout">
+    <!-- Vorschau -->
+    <div class="umkleide-preview-panel">
+      <div class="umkleide-preview" id="umkleidePreview"></div>
+
+      <details class="umkleide-body-details" open>
+        <summary>K&ouml;rper (nur Vorschau)</summary>
+        <div class="umkleide-body-controls">
+          <label>Gr&ouml;&szlig;e <input type="range" id="pScale" min="0.4" max="1.6" step="0.05" value="1.0"><span id="pScaleV">1.0</span></label>
+          <label>Rundung <input type="range" id="pChub" min="0.5" max="1.5" step="0.05" value="1.0"><span id="pChubV">1.0</span></label>
+          <label>Kopf <input type="range" id="pHead" min="0.6" max="1.4" step="0.05" value="1.0"><span id="pHeadV">1.0</span></label>
+          <label>Beine <input type="range" id="pLegs" min="0.7" max="1.8" step="0.05" value="1.2"><span id="pLegsV">1.2</span></label>
+          <label>Schwanz <input type="range" id="pTail" min="2" max="7" step="0.5" value="4"><span id="pTailV">4</span></label>
+          <label>Schwarz <input type="checkbox" id="pBlack"></label>
+          <label>Propeller <input type="checkbox" id="pPropeller" checked></label>
+          <label>Farbe <input type="color" id="pAccColor" value="#e44444"></label>
+          <div style="margin-top:.5rem;">
+            <button type="button" class="btn-sm" id="btnRandomBody">Zuf&auml;lliges Schaf</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Accessoire-Controls -->
+    <div class="umkleide-controls-panel">
+      <div class="tab-nav">
+        <button type="button" class="tab-btn active" data-tab="u-huete">H&uuml;te</button>
+        <button type="button" class="tab-btn" data-tab="u-brillen">Brillen</button>
+        <button type="button" class="tab-btn" data-tab="u-baerte">B&auml;rte</button>
+        <button type="button" class="tab-btn" data-tab="u-css">CSS-Acc.</button>
+        <button type="button" class="tab-btn" data-tab="u-gesicht">Gesicht</button>
+      </div>
+
+      <!-- Sprite-H&uuml;te -->
+      <div id="tab-u-huete" class="tab-panel active">
+        <div class="umkleide-sprite-grid" id="hatGrid"></div>
+        <div class="umkleide-upload" data-category="spriteHat">
+          <div class="umkleide-upload-row">
+            <input type="file" accept="image/png,image/webp,image/jpeg" hidden />
+            <button type="button" class="btn-sm umkleide-upload-btn">Spritesheet hochladen</button>
+            <span class="umkleide-upload-status">Standard</span>
+            <button type="button" class="btn-sm umkleide-upload-reset" style="display:none;">Zur&uuml;cksetzen</button>
+          </div>
+        </div>
+        <div class="umkleide-sliders">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Alle H&uuml;te (global)</h3>
+          <label>Position Y <input type="range" id="hatY" min="-20" max="5" step="0.5" value="-8"><span id="hatYV">-8</span>px</label>
+          <label>Position X <input type="range" id="hatX" min="-10" max="10" step="0.5" value="0"><span id="hatXV">0</span>px</label>
+          <label>Gr&ouml;&szlig;e <input type="range" id="hatS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="hatSV">1.0</span>x</label>
+        </div>
+        <div class="umkleide-sliders" id="hatItemSliders" style="margin-top:.5rem;display:none;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Hut <span id="hatItemLabel">#0</span> (Feinkorrektur)</h3>
+          <label>dY <input type="range" id="hatIdY" min="-8" max="8" step="0.5" value="0"><span id="hatIdYV">0</span>px</label>
+          <label>dX <input type="range" id="hatIdX" min="-8" max="8" step="0.5" value="0"><span id="hatIdXV">0</span>px</label>
+          <label>dGr&ouml;&szlig;e <input type="range" id="hatIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="hatIdSV">1</span>x</label>
+        </div>
+      </div>
+
+      <!-- Sprite-Brillen -->
+      <div id="tab-u-brillen" class="tab-panel">
+        <div class="umkleide-sprite-grid" id="glassesGrid"></div>
+        <div class="umkleide-upload" data-category="spriteGlasses">
+          <div class="umkleide-upload-row">
+            <input type="file" accept="image/png,image/webp,image/jpeg" hidden />
+            <button type="button" class="btn-sm umkleide-upload-btn">Spritesheet hochladen</button>
+            <span class="umkleide-upload-status">Standard</span>
+            <button type="button" class="btn-sm umkleide-upload-reset" style="display:none;">Zur&uuml;cksetzen</button>
+          </div>
+        </div>
+        <div class="umkleide-sliders">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Alle Brillen (global)</h3>
+          <label>Position Y <input type="range" id="glY" min="-10" max="10" step="0.5" value="1.5"><span id="glYV">1.5</span>px</label>
+          <label>Position X <input type="range" id="glX" min="-10" max="10" step="0.5" value="0"><span id="glXV">0</span>px</label>
+          <label>Gr&ouml;&szlig;e <input type="range" id="glS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="glSV">1.0</span>x</label>
+        </div>
+        <div class="umkleide-sliders" id="glItemSliders" style="margin-top:.5rem;display:none;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Brille <span id="glItemLabel">#0</span> (Feinkorrektur)</h3>
+          <label>dY <input type="range" id="glIdY" min="-8" max="8" step="0.5" value="0"><span id="glIdYV">0</span>px</label>
+          <label>dX <input type="range" id="glIdX" min="-8" max="8" step="0.5" value="0"><span id="glIdXV">0</span>px</label>
+          <label>dGr&ouml;&szlig;e <input type="range" id="glIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="glIdSV">1</span>x</label>
+        </div>
+      </div>
+
+      <!-- Sprite-B&auml;rte -->
+      <div id="tab-u-baerte" class="tab-panel">
+        <div class="umkleide-sprite-grid" id="stacheGrid"></div>
+        <div class="umkleide-upload" data-category="spriteStache">
+          <div class="umkleide-upload-row">
+            <input type="file" accept="image/png,image/webp,image/jpeg" hidden />
+            <button type="button" class="btn-sm umkleide-upload-btn">Spritesheet hochladen</button>
+            <span class="umkleide-upload-status">Standard</span>
+            <button type="button" class="btn-sm umkleide-upload-reset" style="display:none;">Zur&uuml;cksetzen</button>
+          </div>
+        </div>
+        <div class="umkleide-sliders">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Alle B&auml;rte (global)</h3>
+          <label>Position Y <input type="range" id="stY" min="-8" max="8" step="0.5" value="-1"><span id="stYV">-1</span>px</label>
+          <label>Position X <input type="range" id="stX" min="-10" max="10" step="0.5" value="0"><span id="stXV">0</span>px</label>
+          <label>Gr&ouml;&szlig;e <input type="range" id="stS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="stSV">1.0</span>x</label>
+        </div>
+        <div class="umkleide-sliders" id="stItemSliders" style="margin-top:.5rem;display:none;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Bart <span id="stItemLabel">#0</span> (Feinkorrektur)</h3>
+          <label>dY <input type="range" id="stIdY" min="-8" max="8" step="0.5" value="0"><span id="stIdYV">0</span>px</label>
+          <label>dX <input type="range" id="stIdX" min="-8" max="8" step="0.5" value="0"><span id="stIdXV">0</span>px</label>
+          <label>dGr&ouml;&szlig;e <input type="range" id="stIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="stIdSV">1</span>x</label>
+        </div>
+      </div>
+
+      <!-- CSS-Accessoires -->
+      <div id="tab-u-css" class="tab-panel">
+        <div class="umkleide-css-btns" id="cssBtns"></div>
+        <div class="umkleide-sliders">
+          <label>Offset Y <input type="range" id="cssY" min="-10" max="10" step="0.5" value="0"><span id="cssYV">0</span>px</label>
+          <label>Offset X <input type="range" id="cssX" min="-10" max="10" step="0.5" value="0"><span id="cssXV">0</span>px</label>
+          <label>Gr&ouml;&szlig;e <input type="range" id="cssS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="cssSV">1.0</span>x</label>
+        </div>
+      </div>
+
+      <!-- Gesicht -->
+      <div id="tab-u-gesicht" class="tab-panel">
+        <div class="umkleide-sliders">
+          <h3 style="margin:0 0 .5rem;font-size:.9rem;">Augen</h3>
+          <label>H&ouml;he <input type="range" id="fEyeY" min="0" max="8" step="0.5" value="3.5"><span id="fEyeYV">3.5</span>px</label>
+          <label>Links X <input type="range" id="fEyeLX" min="0" max="5" step="0.25" value="2"><span id="fEyeLXV">2</span>px</label>
+          <label>Rechts X <input type="range" id="fEyeRX" min="0" max="5" step="0.25" value="2"><span id="fEyeRXV">2</span>px</label>
+        </div>
+        <div class="umkleide-sliders" style="margin-top:.75rem;">
+          <h3 style="margin:0 0 .5rem;font-size:.9rem;">Ohren</h3>
+          <label>H&ouml;he <input type="range" id="fEarY" min="-5" max="3" step="0.5" value="-1.5"><span id="fEarYV">-1.5</span>px</label>
+          <label>Links X <input type="range" id="fEarLX" min="-5" max="0" step="0.25" value="-2.5"><span id="fEarLXV">-2.5</span>px</label>
+          <label>Rechts X <input type="range" id="fEarRX" min="-5" max="0" step="0.25" value="-2.5"><span id="fEarRXV">-2.5</span>px</label>
+        </div>
+        <div class="umkleide-sliders" style="margin-top:.75rem;">
+          <h3 style="margin:0 0 .5rem;font-size:.9rem;">Mund</h3>
+          <label>H&ouml;he <input type="range" id="fMouthY" min="0" max="5" step="0.25" value="2"><span id="fMouthYV">2</span>px</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="umkleide-actions">
+    <button type="button" class="btn-primary" id="btnSave">Konfiguration speichern</button>
+    <button type="button" id="btnReset">Auf Standard zur&uuml;cksetzen</button>
+    <span style="flex:1;"></span>
+    <button type="button" class="btn-sm" id="btnExport" title="Config als JSON exportieren">Exportieren</button>
+    <button type="button" class="btn-sm" id="btnImport" title="Config-JSON importieren">Importieren</button>
+    <input type="file" id="importFile" accept=".json" hidden />
+  </div>
+</section>
+
+<script>window.__umkleideConfig = <%- JSON.stringify(sheepConfig) %>;</script>
+<link rel="stylesheet" href="/flyingsheep.css" />
+<script src="/umkleide.js"></script>
+<%- include("partials/bottom") %>

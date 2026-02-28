@@ -92,7 +92,7 @@
     if (!window.flyingSheep || !window.flyingSheep.spawn) return;
     updatePerch();
     var p = window.flyingSheepPerch;
-    window.flyingSheep.spawn(p.x + 60, p.y - 20);
+    window.flyingSheep.spawn(p.x + 60, p.y - 20, null, null, null, { vanilla: true });
   }
   setTimeout(spawnLoginSheep, 1800);
 })();

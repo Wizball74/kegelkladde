@@ -4,6 +4,9 @@
   const overlay = document.getElementById('sheep-overlay');
   if (!overlay) return;
 
+  /* ═══ Accessoire-Config (aus Admin-Umkleide) ═══ */
+  function sheepCfg() { return window.__sheepConfig || {}; }
+
   /* ═══ Constants ═══ */
   const HEAD_R = 5, HEAD_W = 12, HEAD_H = 12;
   const TORSO_W = 17, TORSO_H = 14;
@@ -71,8 +74,8 @@
     var accColors = ['#e44', '#44e', '#4a4', '#e4e', '#fa0', '#0cd', '#f80', '#c44'];
     var accColor = accColors[Math.random() * accColors.length | 0];
     var spriteHat = Math.random() < 0.55 ? (Math.random() * 16 | 0) : -1;
-    var spriteGlasses = Math.random() < 0.40 ? (Math.random() * 35 | 0) : -1;
-    var spriteStache = Math.random() < 0.35 ? (Math.random() * 8 | 0) : -1;
+    var spriteGlasses = Math.random() < 0.40 ? (Math.random() * 32 | 0) : -1;
+    var spriteStache = Math.random() < 0.35 ? (Math.random() * 12 | 0) : -1;
     var accessory = null;
     var r = Math.random();
     if (spriteHat < 0 && spriteGlasses < 0) {
@@ -144,6 +147,7 @@
 
   /* ═══ DOM-Factory ═══ */
   function createSheepDOM(tr, letter) {
+    var cfg = sheepCfg(); // jedes Mal frisch lesen
     var wrap = document.createElement('div');
     wrap.className = 's-wrap';
     overlay.appendChild(wrap);
@@ -171,14 +175,22 @@
     var legEls = [lfl, lfr, lbl, lbr];
     for (var li = 0; li < legEls.length; li++) legEls[li].style.cssText += 'height:' + lh + 'px;background:' + tr.skinColor + ';';
 
+    var fc = cfg.face || {};
     var earL = document.createElement('div'); earL.className = 's-ear l'; head.appendChild(earL);
     var earR = document.createElement('div'); earR.className = 's-ear r'; head.appendChild(earR);
     var earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
     earL.style.background = earR.style.background = earColor;
     earL.style.border = earR.style.border = '.8px solid ' + tr.borderColor;
+    if (fc.earY != null) { earL.style.top = fc.earY + 'px'; earR.style.top = fc.earY + 'px'; }
+    if (fc.earLeftX != null) earL.style.left = fc.earLeftX + 'px';
+    if (fc.earRightX != null) earR.style.right = fc.earRightX + 'px';
     var eyeL = document.createElement('div'); eyeL.className = 's-eye l'; head.appendChild(eyeL);
     var eyeR = document.createElement('div'); eyeR.className = 's-eye r'; head.appendChild(eyeR);
+    if (fc.eyeY != null) { eyeL.style.top = fc.eyeY + 'px'; eyeR.style.top = fc.eyeY + 'px'; }
+    if (fc.eyeLeftX != null) eyeL.style.left = fc.eyeLeftX + 'px';
+    if (fc.eyeRightX != null) eyeR.style.right = fc.eyeRightX + 'px';
     var mouth = document.createElement('div'); mouth.className = 's-mouth'; head.appendChild(mouth);
+    if (fc.mouthY != null) mouth.style.bottom = fc.mouthY + 'px';
     if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = tr.borderColor; }
 
     var pole = mk('s-pole'); var hub = mk('s-hub');
@@ -187,73 +199,102 @@
     blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
     blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
 
-    /* Accessoire */
+    /* Accessoire (mit Config-Overrides) */
+    var cssAccCfg = cfg.cssAccessories || {};
+    var cssAccDefY = {tophat:-9,partyhat:-12,crown:-7,beanie:-5,glasses:2.5,bowtie:-3,bell:-2,flower:-1,scarf:-2.5,shoes:-2};
+    function applyCssAccOff(el, type) {
+      var c = cssAccCfg[type]; if (!c) return;
+      if (c.offsetY) el.style.top = ((cssAccDefY[type] || 0) + c.offsetY) + 'px';
+      if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
+      if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
+    }
     if (tr.accessory === 'tophat') {
       var h = document.createElement('div'); h.className = 's-acc s-tophat';
       h.style.background = tr.isBlack ? '#555' : '#222';
-      head.appendChild(h);
+      head.appendChild(h); applyCssAccOff(h, 'tophat');
     } else if (tr.accessory === 'partyhat') {
       var h = document.createElement('div'); h.className = 's-acc s-partyhat';
       h.style.borderBottomColor = tr.accColor; h.style.borderBottomWidth = '10px';
-      head.appendChild(h);
+      head.appendChild(h); applyCssAccOff(h, 'partyhat');
     } else if (tr.accessory === 'crown') {
       var h = document.createElement('div'); h.className = 's-acc s-crown';
-      head.appendChild(h);
+      head.appendChild(h); applyCssAccOff(h, 'crown');
     } else if (tr.accessory === 'beanie') {
       var h = document.createElement('div'); h.className = 's-acc s-beanie';
       h.style.background = tr.accColor;
-      head.appendChild(h);
+      head.appendChild(h); applyCssAccOff(h, 'beanie');
     } else if (tr.accessory === 'glasses') {
       var g = document.createElement('div'); g.className = 's-acc s-glasses';
       g.innerHTML = '<span class="s-lens"></span><span class="s-lens"></span><span class="s-bridge"></span>';
-      head.appendChild(g);
+      head.appendChild(g); applyCssAccOff(g, 'glasses');
     } else if (tr.accessory === 'bowtie') {
       var bt = document.createElement('div'); bt.className = 's-acc s-bowtie';
       bt.style.borderLeftColor = bt.style.borderRightColor = tr.accColor;
       bt.style.borderLeftWidth = bt.style.borderRightWidth = '3.5px';
-      torso.appendChild(bt);
+      torso.appendChild(bt); applyCssAccOff(bt, 'bowtie');
     } else if (tr.accessory === 'bell') {
-      var b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b);
+      var b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b); applyCssAccOff(b, 'bell');
     } else if (tr.accessory === 'flower') {
-      var f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f);
+      var f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f); applyCssAccOff(f, 'flower');
     } else if (tr.accessory === 'scarf') {
       var s = document.createElement('div'); s.className = 's-acc s-scarf'; s.style.background = tr.accColor;
-      head.appendChild(s);
+      head.appendChild(s); applyCssAccOff(s, 'scarf');
     } else if (tr.accessory === 'shoes') {
       for (var si = 0; si < legEls.length; si++) {
         var sh = document.createElement('div'); sh.className = 's-shoe'; sh.style.background = tr.accColor; legEls[si].appendChild(sh);
       }
     }
 
-    /* Sprite-Overlays */
+    /* Sprite-Overlays (mit Config-Overrides) */
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
       hatEl.className = 's-sprite-hat';
       var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-      // Sheet 394×354, 4×4 → Slot 98.5×88.5, skaliert ÷10
-      hatEl.style.backgroundPosition = -(hatCol * 9.85) + 'px ' + -(hatRow * 8.85) + 'px';
+      var hCfg = cfg.spriteHat || {};
+      var hItem = (hCfg.items && hCfg.items[tr.spriteHat]) || {};
+      if (hCfg.customSheet) hatEl.style.backgroundImage = 'url(' + hCfg.customSheet + ')';
+      hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
+      hatEl.style.top = ((hCfg.offsetY != null ? hCfg.offsetY : -8) + (hItem.dY || 0)) + 'px';
+      var hTotalX = (hCfg.offsetX || 0) + (hItem.dX || 0);
+      if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
+      var hTotalS = (hCfg.scale || 1) * (hItem.dS || 1);
+      if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
       head.appendChild(hatEl);
     }
     if (tr.spriteGlasses >= 0) {
       var glEl = document.createElement('div');
       glEl.className = 's-sprite-glasses';
-      var glCol = tr.spriteGlasses % 7, glRow = (tr.spriteGlasses / 7) | 0;
-      // Sheet 386×376, 7×5 → Slot 55.14×75.2, skaliert ÷10
-      glEl.style.backgroundPosition = -(glCol * 5.514) + 'px ' + -(glRow * 7.52) + 'px';
+      var gCfg = cfg.spriteGlasses || {};
+      var gItem = (gCfg.items && gCfg.items[tr.spriteGlasses]) || {};
+      if (gCfg.customSheet) glEl.style.backgroundImage = 'url(' + gCfg.customSheet + ')';
+      var glCols = gCfg.cols || 4;
+      var glSlotW = gCfg.slotW || 16.975;
+      var glSlotH = gCfg.slotH || 8.3375;
+      var glCol = tr.spriteGlasses % glCols, glRow = (tr.spriteGlasses / glCols) | 0;
+      glEl.style.backgroundPosition = -(glCol * glSlotW) + 'px ' + -(glRow * glSlotH) + 'px';
+      glEl.style.top = ((gCfg.offsetY != null ? gCfg.offsetY : 1.5) + (gItem.dY || 0)) + 'px';
+      var gTotalX = (gCfg.offsetX || 0) + (gItem.dX || 0);
+      if (gTotalX) glEl.style.left = 'calc(50% + ' + gTotalX + 'px)';
+      var gTotalS = (gCfg.scale != null ? gCfg.scale : 0.65) * (gItem.dS || 1);
+      if (gTotalS !== 1) glEl.style.transform = 'translateX(-50%) scale(' + gTotalS + ')';
       head.appendChild(glEl);
     }
     if (tr.spriteStache >= 0) {
       var stEl = document.createElement('div');
       stEl.className = 's-sprite-stache';
-      var stacheRegions = [
-        {x:5,y:18,w:100,h:55},{x:110,y:5,w:100,h:65},{x:5,y:108,w:90,h:65},{x:105,y:108,w:105,h:65},
-        {x:5,y:210,w:95,h:60},{x:105,y:200,w:105,h:55},{x:5,y:290,w:95,h:70},{x:105,y:275,w:105,h:65}
-      ];
-      var sr = stacheRegions[tr.spriteStache];
-      // skaliert ÷10
-      stEl.style.backgroundPosition = -(sr.x / 10) + 'px ' + -(sr.y / 10) + 'px';
-      stEl.style.width = (sr.w / 10) + 'px';
-      stEl.style.height = (sr.h / 10) + 'px';
+      var sCfg = cfg.spriteStache || {};
+      var sItem = (sCfg.items && sCfg.items[tr.spriteStache]) || {};
+      if (sCfg.customSheet) stEl.style.backgroundImage = 'url(' + sCfg.customSheet + ')';
+      var stCols = sCfg.cols || 3;
+      var stSlotW = sCfg.slotW || 40;
+      var stSlotH = sCfg.slotH || 30;
+      var stCol = tr.spriteStache % stCols, stRow = (tr.spriteStache / stCols) | 0;
+      stEl.style.backgroundPosition = -(stCol * stSlotW) + 'px ' + -(stRow * stSlotH) + 'px';
+      stEl.style.bottom = ((sCfg.offsetY != null ? sCfg.offsetY : -1) + (sItem.dY || 0)) + 'px';
+      var sTotalX = (sCfg.offsetX || 0) + (sItem.dX || 0);
+      if (sTotalX) stEl.style.left = 'calc(50% + ' + sTotalX + 'px)';
+      var sTotalS = (sCfg.scale != null ? sCfg.scale : 0.25) * (sItem.dS || 1);
+      if (sTotalS !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sTotalS + ')';
       head.appendChild(stEl);
     }
 
@@ -1009,11 +1050,11 @@
     d.eyeL.style.transform = 'translate(' + sh.eyeX + 'px,' + sh.eyeY + 'px)' + ee;
     d.eyeR.style.transform = 'translate(' + sh.eyeX + 'px,' + sh.eyeY + 'px)' + ee;
 
-    /* Propeller */
-    var topX = hx - Math.sin(headRad) * (sh.hr + 1);
-    var topY = hy - Math.cos(headRad) * (sh.hr + 1);
-    var hd = sh.hr + POLE_H + 1;
-    var hubX = hx - Math.sin(headRad) * hd, hubY = hy - Math.cos(headRad) * hd;
+    /* Propeller (am Rücken/Torso fixiert) */
+    var backTop = rot(0, -sh.th / 2 - 1, bankRad);
+    var topX = tx + backTop.x, topY = ty + backTop.y;
+    var backHub = rot(0, -sh.th / 2 - POLE_H - 2, bankRad);
+    var hubX = tx + backHub.x, hubY = ty + backHub.y;
     var pdx = hubX - topX, pdy = hubY - topY, pL = Math.hypot(pdx, pdy);
     d.pole.style.height = pL + 'px'; d.pole.style.left = topX + 'px'; d.pole.style.top = topY + 'px';
     d.pole.style.transform = 'translateX(-50%) rotate(' + Math.atan2(pdx, -pdy) + 'rad)';
@@ -1262,7 +1303,8 @@
 
   /* ═══ Public API ═══ */
   window.flyingSheep = {
-    spawn: function (x, y, ownerId, letter, ownerName) {
+    spawn: function (x, y, ownerId, letter, ownerName, opts) {
+      opts = opts || {};
       /* Ungültige Koordinaten → zufällige sichere Position */
       if (x == null || x < MARGIN || x > W - MARGIN) x = MARGIN + Math.random() * (W - MARGIN * 2);
       if (y == null || y < MARGIN || y > H - MARGIN) y = MARGIN + Math.random() * (H - MARGIN * 2);
@@ -1289,7 +1331,17 @@
         }
         removeSheep(oldest, 'eviction');
       }
-      var sh = createSheep(x, y, String(ownerId || ''), letter, { ownerName: ownerName || '' });
+      var createOpts = { ownerName: ownerName || '' };
+      /* Vanilla-Modus: Schaf ohne jedes Accessoire */
+      if (opts.vanilla) {
+        var tr = generateTraits();
+        tr.accessory = null;
+        tr.spriteHat = -1;
+        tr.spriteGlasses = -1;
+        tr.spriteStache = -1;
+        createOpts.traits = tr;
+      }
+      var sh = createSheep(x, y, String(ownerId || ''), letter, createOpts);
       sh.propSpeed = PROP_MAX * 0.7;
       sh.state = 'dart';
       sh.target = newTarget();

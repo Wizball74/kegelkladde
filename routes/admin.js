@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, getRecentAuditLog, getUsersWithLastLogin, createBackup, rotateBackups, listBackups, listBackupGamedays, restoreGamedays, backupDir } = require("../models/db");
@@ -286,6 +287,138 @@ router.post("/admin/backup/restore", requireAuth, requireAdmin, verifyCsrf, asyn
     console.error("[Backup] Restore fehlgeschlagen:", err.message);
     res.status(500).json({ error: "Wiederherstellung fehlgeschlagen: " + err.message });
   }
+});
+
+// ═══ Schaf-Umkleide ═══
+
+router.get("/admin/umkleide", requireAuth, requireAdmin, (req, res) => {
+  const configRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
+  let sheepConfig = {};
+  try { sheepConfig = configRow ? JSON.parse(configRow.value) : {}; } catch (e) { /* ignore */ }
+  res.render("umkleide", { sheepConfig });
+});
+
+router.post("/admin/umkleide/save", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const config = req.body.config;
+  if (!config || typeof config !== "object") {
+    return res.status(400).json({ error: "Ungültige Konfiguration." });
+  }
+  const jsonStr = JSON.stringify(config);
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(jsonStr);
+  logAudit(req.session.userId, "SHEEP_CONFIG_UPDATE", "settings", null, { configKeys: Object.keys(config) });
+  res.json({ ok: true, message: "Accessoire-Konfiguration gespeichert." });
+});
+
+router.post("/admin/umkleide/reset", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  // Custom-Spritesheets vom Filesystem löschen
+  const configRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
+  if (configRow) {
+    try {
+      const cfg = JSON.parse(configRow.value);
+      for (const cat of ["spriteHat", "spriteGlasses", "spriteStache"]) {
+        if (cfg[cat] && cfg[cat].customSheet) {
+          const filename = path.basename(cfg[cat].customSheet);
+          const filepath = path.join(spriteUploadDir, filename);
+          fs.unlink(filepath, () => {});
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+  db.prepare("DELETE FROM settings WHERE key = 'sheep_accessory_config'").run();
+  logAudit(req.session.userId, "SHEEP_CONFIG_RESET", "settings", null, {});
+  res.json({ ok: true, message: "Auf Standardwerte zurückgesetzt." });
+});
+
+// ═══ Spritesheet-Upload ═══
+
+const spriteUploadDir = path.join(__dirname, "..", "data", "uploads", "spritesheets");
+if (!fs.existsSync(spriteUploadDir)) {
+  fs.mkdirSync(spriteUploadDir, { recursive: true });
+}
+
+const spriteStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, spriteUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, uniqueName);
+  }
+});
+
+const spriteUpload = multer({
+  storage: spriteStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [".png", ".jpg", ".jpeg", ".webp"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, allowed.includes(ext));
+  }
+});
+
+router.post("/admin/umkleide/upload-sprite", requireAuth, requireAdmin, spriteUpload.single("spritesheet"), verifyCsrf, (req, res) => {
+  const validCats = ["spriteHat", "spriteGlasses", "spriteStache"];
+  const category = req.body.category;
+  if (!validCats.includes(category)) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    return res.status(400).json({ error: "Ungültige Kategorie." });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: "Keine Datei hochgeladen." });
+  }
+
+  const url = "/uploads/spritesheets/" + req.file.filename;
+
+  // Config laden, customSheet setzen, altes Sheet löschen
+  const configRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
+  let cfg = {};
+  try { cfg = configRow ? JSON.parse(configRow.value) : {}; } catch (e) { /* ignore */ }
+
+  if (!cfg[category]) cfg[category] = {};
+
+  // Altes Custom-Sheet löschen
+  if (cfg[category].customSheet) {
+    const oldFile = path.basename(cfg[category].customSheet);
+    const oldPath = path.join(spriteUploadDir, oldFile);
+    fs.unlink(oldPath, () => {});
+  }
+
+  cfg[category].customSheet = url;
+  const jsonStr = JSON.stringify(cfg);
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(jsonStr);
+
+  logAudit(req.session.userId, "SPRITE_UPLOAD", "settings", null, { category, filename: req.file.filename });
+  res.json({ ok: true, url, message: "Spritesheet hochgeladen." });
+});
+
+router.post("/admin/umkleide/remove-sprite", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const validCats = ["spriteHat", "spriteGlasses", "spriteStache"];
+  const category = req.body.category;
+  if (!validCats.includes(category)) {
+    return res.status(400).json({ error: "Ungültige Kategorie." });
+  }
+
+  const configRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
+  let cfg = {};
+  try { cfg = configRow ? JSON.parse(configRow.value) : {}; } catch (e) { /* ignore */ }
+
+  if (cfg[category] && cfg[category].customSheet) {
+    const oldFile = path.basename(cfg[category].customSheet);
+    const oldPath = path.join(spriteUploadDir, oldFile);
+    fs.unlink(oldPath, () => {});
+    delete cfg[category].customSheet;
+
+    const jsonStr = JSON.stringify(cfg);
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(jsonStr);
+  }
+
+  logAudit(req.session.userId, "SPRITE_REMOVE", "settings", null, { category });
+  res.json({ ok: true, message: "Standard-Spritesheet wiederhergestellt." });
 });
 
 // API: Kassenstand als JSON (Spieltag-bezogen)

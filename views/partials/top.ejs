@@ -9,6 +9,7 @@
   <title>KC Schaf Zeilsheim</title>
   <link rel="stylesheet" href="/style.css" />
   <% if (sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css" />
+  <% if (sheepConfig) { %><script>window.__sheepConfig=<%- typeof sheepConfig === 'string' ? sheepConfig : JSON.stringify(sheepConfig) %>;</script><% } %>
   <script defer src="/flyingsheep.js"></script><% } %>
   <script defer src="/app.js"></script>
 </head>
@@ -26,7 +27,7 @@
 
   <header class="topbar">
     <a href="/kegelkladde" class="brand">
-      <img src="/sheep_title.png" alt="KC Schaf Maskottchen" class="brand-mascot" />
+      <img src="/img/sheep_title.png" alt="KC Schaf Maskottchen" class="brand-mascot" />
       <div>
         <strong>KC Schaf Zeilsheim</strong>
         <small>Per aspera ad astra - määh!</small>

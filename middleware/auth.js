@@ -58,6 +58,8 @@ function setLocals(req, res, next) {
   res.locals.currentPath = req.path;
   const sheepRow = db.prepare("SELECT value FROM settings WHERE key = 'flying_sheep'").get();
   res.locals.sheepEnabled = sheepRow ? sheepRow.value === "1" : true;
+  const sheepCfgRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
+  res.locals.sheepConfig = sheepCfgRow ? sheepCfgRow.value : null;
   next();
 }
 

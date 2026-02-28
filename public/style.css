@@ -896,7 +896,7 @@ textarea:focus {
 
 .kladde-table {
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 1rem;
   table-layout: fixed;
   width: 100%;
 }
@@ -1324,8 +1324,8 @@ td.col-active.cell-empty:not(.marker-cell) > * {
 }
 
 .kladde-avatar {
-  width: 20px;
-  height: 20px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   object-fit: cover;
   vertical-align: middle;
@@ -1795,7 +1795,7 @@ td.col-active.cell-empty:not(.marker-cell) > * {
   align-items: stretch;
   border: 1px solid var(--line);
   border-radius: 999px;
-  overflow: hidden;
+  overflow: visible;
   background: #fff;
   position: fixed;
   bottom: 1rem;
@@ -1805,6 +1805,8 @@ td.col-active.cell-empty:not(.marker-cell) > * {
   box-shadow: var(--shadow-md);
   animation: none;
 }
+.gameday-nav > button:first-child { border-radius: 999px 0 0 999px; }
+.gameday-nav > button:last-child  { border-radius: 0 999px 999px 0; }
 
 .gameday-nav button {
   background: none;
@@ -3059,8 +3061,11 @@ tr.row-locked td.name-col {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .gy-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-.gy-sheep-canvas {
+.gy-sheep-dom {
+  position: relative;
+  width: 120px; height: 100px;
   display: block; margin: 0 auto 0.5rem;
+  overflow: visible;
 }
 .gy-info { font-size: 0.8rem; }
 .gy-letter {
@@ -7589,5 +7594,86 @@ td.ast-col-active::after {
   .pin-dist-bars { height: 60px; }
   .dickstes-schaf-name { font-size: 1.2rem; }
   .gy-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
-  .gy-sheep-canvas { width: 90px; height: 75px; }
+  .gy-sheep-dom { width: 90px; height: 75px; }
+}
+
+/* ═══ Schaf-Umkleide ═══ */
+.umkleide-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+.umkleide-preview-panel { position: sticky; top: 5rem; align-self: start; }
+.umkleide-preview {
+  width: 300px; height: 300px;
+  background: radial-gradient(ellipse at 50% 70%, #e8f5ef 0%, #f5f2e8 100%);
+  border: 2px solid var(--line); border-radius: var(--radius-md);
+  position: relative; overflow: visible;
+}
+.umkleide-body-details { margin-top: .75rem; }
+.umkleide-body-details summary { font-weight: 600; font-size: .9rem; cursor: pointer; user-select: none; }
+.umkleide-body-controls { padding-top: .5rem; }
+.umkleide-body-controls label {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .82rem; margin-bottom: .3rem; white-space: nowrap;
+}
+.umkleide-body-controls input[type="range"] { flex: 1; min-width: 80px; }
+.umkleide-body-controls span { min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; font-size: .8rem; }
+.umkleide-controls-panel { min-width: 0; }
+.umkleide-controls-panel .tab-panel { display: none; }
+.umkleide-controls-panel .tab-panel.active { display: block; }
+.umkleide-sprite-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 6px; margin-bottom: 1rem;
+}
+.umkleide-sprite-tile {
+  width: 48px; height: 48px;
+  border: 2px solid var(--line); border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; background: var(--panel); overflow: hidden;
+  transition: border-color .15s, background .15s;
+}
+.umkleide-sprite-tile:hover { border-color: var(--accent); background: var(--accent-light); }
+.umkleide-sprite-tile.active { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 2px var(--accent); }
+.umkleide-sliders {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 1rem;
+}
+.umkleide-sliders label {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .82rem; margin-bottom: .4rem; white-space: nowrap;
+}
+.umkleide-sliders input[type="range"] { flex: 1; min-width: 100px; }
+.umkleide-sliders span { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-size: .8rem; }
+.umkleide-css-btns {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem;
+}
+.umkleide-css-btns button {
+  padding: .35rem .7rem; font-size: .82rem; border: 2px solid var(--line);
+  border-radius: var(--radius-sm); background: var(--panel); cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.umkleide-css-btns button:hover { border-color: var(--accent); }
+.umkleide-css-btns button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.umkleide-upload { margin: .5rem 0; }
+.umkleide-upload-row {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  font-size: .8rem;
+}
+.umkleide-upload-status {
+  color: var(--muted); font-size: .78rem;
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.umkleide-upload-reset {
+  font-size: .75rem; color: var(--danger, #c44); border-color: var(--danger, #c44);
+}
+.umkleide-actions {
+  display: flex; gap: .75rem; margin-top: 1.5rem;
+  padding-top: 1.5rem; border-top: 2px solid var(--line);
+}
+@media (max-width: 900px) {
+  .umkleide-layout { grid-template-columns: 1fr; }
+  .umkleide-preview-panel { position: static; }
+  .umkleide-preview { width: 100%; max-width: 340px; margin: 0 auto; }
 }

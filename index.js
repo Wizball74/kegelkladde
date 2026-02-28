@@ -34,6 +34,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/uploads/pinnwand", express.static(path.join(__dirname, "data", "uploads", "pinnwand")));
 app.use("/uploads/avatars", express.static(path.join(__dirname, "data", "uploads", "avatars")));
+app.use("/uploads/spritesheets", express.static(path.join(__dirname, "data", "uploads", "spritesheets")));
 
 // Session configuration
 app.use(

@@ -257,6 +257,34 @@ router.get("/statistik", requireAuth, (req, res) => {
   const deadSheep = getDeadSheep(200);
   const graveyardStats = getGraveyardStats();
 
+  // Display-Namen: Vorname, bei Doppel-Vornamen + Nachname-Initial
+  function addDisplayNames(...lists) {
+    // Alle Vornamen sammeln, um Duplikate zu erkennen
+    const allNames = [];
+    for (const list of lists) {
+      if (!list) continue;
+      const arr = Array.isArray(list) ? list : [list];
+      for (const item of arr) {
+        if (item && item.first_name) allNames.push(item);
+      }
+    }
+    const firstNameCounts = {};
+    for (const item of allNames) {
+      firstNameCounts[item.first_name] = (firstNameCounts[item.first_name] || 0) + 1;
+    }
+    for (const item of allNames) {
+      if (firstNameCounts[item.first_name] > 1 && item.last_name) {
+        item.display_name = item.first_name + ' ' + item.last_name.charAt(0) + '.';
+      } else {
+        item.display_name = item.first_name;
+      }
+    }
+  }
+  // Alle Listen und Einzelobjekte durchlaufen
+  const allThrowPlayers = throwAvgByGameday.flatMap(gd => gd.players || []);
+  addDisplayNames(topAttendance, topPayers, topAlle9, topKranz, mostPudel,
+    neunerStats, kraenzeStats, dickstesSchaf, totalPinsPerPlayer, pinDistribution, allThrowPlayers);
+
   res.render("statistics", {
     totalGamedays,
     settledGamedays,

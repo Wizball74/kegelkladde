@@ -1800,7 +1800,7 @@ function initMobileByGame() {
       r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<label class="present-toggle"><input type="checkbox" data-mp="' + m.id + '"' +
         (tcb.checked ? " checked" : "") + (tcb.disabled ? " disabled" : "") +
-        ' /><img src="/sheep.png" alt="" class="present-icon" /></label>';
+        ' /><img src="/img/spritesheet_sheep.png" alt="" class="present-icon" /></label>';
       r.querySelector("input").addEventListener("change", function() {
         tcb.checked = this.checked;
         tcb.dispatchEvent(new Event("change", { bubbles: true }));
@@ -2515,7 +2515,7 @@ if (ranglistenSingleDay && ranglistenSelect) {
         } else if (bustedSet[gdId] != null) {
           var mVal = bustedSet[gdId].toFixed(2).replace('.', ',');
           var bustTitle = bustedSet[gdId] === 0 ? 'Zahlt \u2013 0 geworfen' : '\u00fcber 2,00 \u20ac \u2013 busted!';
-          rowsHtml += '<td class="st-cell st-busted" title="' + bustTitle + '"><img src="/sheep_dead.png" alt="" class="st-busted-sheep" /><span class="st-busted-val">' + mVal + '\u20ac</span></td>';
+          rowsHtml += '<td class="st-cell st-busted" title="' + bustTitle + '"><img src="/img/sheep_dead.png" alt="" class="st-busted-sheep" /><span class="st-busted-val">' + mVal + '\u20ac</span></td>';
         } else if (!presentSet[gdId]) {
           rowsHtml += '<td class="st-cell st-absent"></td>';
         } else {
@@ -2665,18 +2665,9 @@ if (ranglistenSingleDay && ranglistenSelect) {
 function showCelebration(items) {
   if (!items || items.length === 0) return;
   let index = 0;
-  let repeatCount = 0;
 
   function showNext() {
-    if (index >= items.length) {
-      // Repeat up to 3 more times with a pause
-      if (repeatCount < 3) {
-        repeatCount++;
-        index = 0;
-        setTimeout(showNext, 6000);
-      }
-      return;
-    }
+    if (index >= items.length) return;
     const item = items[index];
     index++;
 
@@ -4158,7 +4149,7 @@ function initMemberDragDrop() {
     pinkBtn.className = "pinkelpause-sidebar-btn";
     pinkBtn.id = "pinkelpauseSidebarBtn";
     pinkBtn.title = "Pinkelpause";
-    pinkBtn.innerHTML = '<img src="/pee.png" alt="Pinkelpause" class="pinkelpause-img" />';
+    pinkBtn.innerHTML = '<img src="/img/pee.png" alt="Pinkelpause" class="pinkelpause-img" />';
     if (closeBtn) {
       header.insertBefore(pinkBtn, closeBtn);
     } else {
@@ -4213,7 +4204,7 @@ function initMemberDragDrop() {
       if (img) {
         // Save original src from template on first run (live.png vs notlive.png)
         if (!img.dataset.origSrc) img.dataset.origSrc = img.getAttribute("src");
-        img.src = played ? "/closed.png" : img.dataset.origSrc;
+        img.src = played ? "/img/closed.png" : img.dataset.origSrc;
       }
     });
   }
@@ -4561,7 +4552,7 @@ function initMemberDragDrop() {
     html += '</div></div>';
     html += '<div class="shuffle-btn-col">';
     html += '<button type="button" class="shuffle-start-btn" id="shuffleStartBtn">';
-    html += '<img src="/start.png" alt="Mischen" class="shuffle-start-img" />';
+    html += '<img src="/img/start.png" alt="Mischen" class="shuffle-start-img" />';
     html += '</button>';
     html += '<div class="shuffle-start-label">Mischen!</div>';
     html += '<button type="button" class="shuffle-go-btn" id="shuffleGoBtn" style="display:none">Los geht\'s &#9654;</button>';
@@ -4799,7 +4790,7 @@ function initMemberDragDrop() {
     html += '<span class="turn-name">' + escHtml(current.name) + '</span>';
     html += '</div>';
     html += '<div class="turn-actions">';
-    html += '<button type="button" class="pinkelpause-btn" id="pinkelpauseBtn" title="Pinkelpause"><img src="/pee.png" alt="Pinkelpause" class="pinkelpause-img" /></button>';
+    html += '<button type="button" class="pinkelpause-btn" id="pinkelpauseBtn" title="Pinkelpause"><img src="/img/pee.png" alt="Pinkelpause" class="pinkelpause-img" /></button>';
     html += '</div>';
     if (next) {
       html += '<div class="turn-next">';
@@ -7428,7 +7419,7 @@ function initMemberDragDrop() {
       if (btn) {
         btn.classList.add("live-btn-pulse");
         var img = btn.querySelector("img");
-        if (img) img.src = "/live.png";
+        if (img) img.src = "/img/live.png";
       }
     } catch(e) {}
   }
@@ -7464,301 +7455,215 @@ function initMemberDragDrop() {
   }
 })();
 
-/* ═══ Sheep Graveyard Canvas Renderer ═══ */
+/* ═══ Sheep Graveyard DOM Renderer ═══ */
 (function() {
-  var canvases = document.querySelectorAll('.gy-sheep-canvas');
-  if (!canvases.length) return;
+  var containers = document.querySelectorAll('.gy-sheep-dom');
+  if (!containers.length) return;
 
   var TORSO_W = 17, TORSO_H = 14;
   var HEAD_W = 12, HEAD_H = 12;
   var LEG_W = 2, LEG_H = 8;
+  var POLE_H = 3, HUB_SZ = 4;
+  var sheepCfg = window.__sheepConfig || {};
 
-  /* Sprite-Bilder vorladen */
-  var hatsImg = new Image();
-  hatsImg.src = '/spritesheets/hats.png';
-  var glassesImg = new Image();
-  glassesImg.src = '/spritesheets/glasses.png';
-  var stacheImg = new Image();
-  stacheImg.src = '/img/sheep_stuff.png';
-  var spriteImagesLoaded = 0;
-  function onSpriteImgLoad() {
-    spriteImagesLoaded++;
-    if (spriteImagesLoaded >= 3) canvases.forEach(drawSheepOnCanvas);
-  }
-  hatsImg.onload = glassesImg.onload = stacheImg.onload = onSpriteImgLoad;
-
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
-
-  function drawSheepOnCanvas(canvas) {
-    var raw = canvas.dataset.traits;
+  function renderGraveyardSheep(container) {
+    var raw = container.dataset.traits;
     if (!raw) return;
     var tr;
     try { tr = JSON.parse(decodeURIComponent(raw)); } catch(e) { return; }
-    var sizeMul = parseFloat(canvas.dataset.size) || 1;
-    var letter = canvas.dataset.letter || '';
+    var sizeMul = parseFloat(container.dataset.size) || 1;
+    var letter = container.dataset.letter || '';
 
-    var ctx = canvas.getContext('2d');
-    var cw = canvas.width, ch = canvas.height;
-    ctx.clearRect(0, 0, cw, ch);
+    var s = 2.5 * Math.min(sizeMul, 1.6);
 
-    var baseScale = 2.2;
-    var s = baseScale * Math.min(sizeMul, 1.8);
-    ctx.save();
-    ctx.translate(cw / 2, ch / 2 + 2);
-    ctx.scale(s, s);
-
-    var tw = TORSO_W * (tr.chub || 1);
-    var th = TORSO_H;
-    var hw = HEAD_W * (tr.headMul || 1);
-    var hh = HEAD_H * (tr.headMul || 1);
+    var tw = TORSO_W * (tr.chub || 1), th = TORSO_H;
+    var hw = HEAD_W * (tr.headMul || 1), hh = HEAD_H * (tr.headMul || 1);
     var lh = LEG_H * (tr.legMul || 1);
-
+    var hr = HEAD_W / 2 * (tr.headMul || 1);
     var woolColor = tr.woolColor || 'white';
     var borderColor = tr.borderColor || '#444';
     var skinColor = tr.skinColor || '#444';
     var earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
-    var eyeColor = tr.isBlack ? '#eee' : '#222';
 
-    // Legs (behind torso)
-    ctx.fillStyle = skinColor;
-    if (tr.legs && tr.legs.length === 4) {
-      // Back legs first
-      for (var li = 2; li < 4; li++) {
-        var leg = tr.legs[li];
-        ctx.fillRect(leg.lx - LEG_W / 2, leg.ly - 2, LEG_W, lh);
-      }
-      // Front legs
-      for (var li = 0; li < 2; li++) {
-        var leg = tr.legs[li];
-        ctx.fillRect(leg.lx - LEG_W / 2, leg.ly - 2, LEG_W, lh);
-      }
-      // Shoes
-      if (tr.accessory === 'shoes' && tr.accColor) {
-        ctx.fillStyle = tr.accColor;
-        for (var li = 0; li < 4; li++) {
-          var leg = tr.legs[li];
-          ctx.fillRect(leg.lx - LEG_W / 2 - 0.5, leg.ly - 2 + lh - 2, LEG_W + 1, 2.5);
-        }
-      }
-    } else {
-      // Fallback legs
-      ctx.fillRect(-4, 4, LEG_W, lh);
-      ctx.fillRect(2, 4, LEG_W, lh);
-      ctx.fillRect(-3, 5, LEG_W, lh);
-      ctx.fillRect(3, 5, LEG_W, lh);
+    var inner = document.createElement('div');
+    inner.style.cssText = 'position:absolute;top:55%;left:50%;transform:translate(-50%,-50%) scale(' + s + ');';
+    container.appendChild(inner);
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;width:0;height:0;';
+    inner.appendChild(wrap);
+
+    function mk(cls) {
+      var el = document.createElement('div');
+      el.className = cls;
+      el.style.position = 'absolute';
+      wrap.appendChild(el);
+      return el;
     }
 
-    // Tail
+    var tx = 0, ty = 0;
+    var hx = tx, hy = ty - 5;
+
+    // Beine
+    var legEls = [];
+    var legDefs = tr.legs && tr.legs.length === 4
+      ? [{cls:'s-leg bk',l:tr.legs[2]},{cls:'s-leg bk',l:tr.legs[3]},{cls:'s-leg fr',l:tr.legs[0]},{cls:'s-leg fr',l:tr.legs[1]}]
+      : [{cls:'s-leg bk',l:{lx:-3,ly:5.5}},{cls:'s-leg bk',l:{lx:3,ly:5.5}},{cls:'s-leg fr',l:{lx:-2,ly:6}},{cls:'s-leg fr',l:{lx:2,ly:6}}];
+    for (var li = 0; li < legDefs.length; li++) {
+      var ld = legDefs[li];
+      var leg = mk(ld.cls);
+      var hipX = tx + ld.l.lx, hipY = ty + ld.l.ly;
+      leg.style.cssText += 'left:' + (hipX - LEG_W/2) + 'px;top:' + hipY + 'px;width:' + LEG_W + 'px;height:' + lh + 'px;background:' + skinColor + ';border-radius:1px;transform-origin:1px 0;';
+      legEls.push(leg);
+    }
+
+    // Schwanz
     var tailSize = tr.tailSize || 4;
-    ctx.fillStyle = woolColor;
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.arc(tw / 2 + tailSize / 2, 0, tailSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    var tail = mk('s-tail');
+    var tailX = tx + tw/2 + tailSize * 0.3, tailY = ty + 1;
+    tail.style.cssText += 'width:' + tailSize + 'px;height:' + tailSize + 'px;background:' + woolColor + ';border:1px solid ' + borderColor + ';left:' + (tailX - tailSize/2) + 'px;top:' + (tailY - tailSize/2) + 'px;';
 
     // Torso
-    ctx.fillStyle = woolColor;
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 0.8;
-    roundRect(ctx, -tw / 2, -th / 2, tw, th, 4);
-    ctx.fill();
-    ctx.stroke();
+    var torso = mk('s-torso');
+    torso.style.cssText += 'width:' + tw + 'px;height:' + th + 'px;background:' + woolColor + ';border-color:' + borderColor + ';left:' + (tx - tw/2) + 'px;top:' + (ty - th/2) + 'px;';
 
-    // Letter on torso
+    // Buchstabe
     if (letter) {
-      ctx.fillStyle = tr.isBlack ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.25)';
-      ctx.font = 'bold 6px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(letter, 0, 0);
+      var labelEl = document.createElement('div');
+      labelEl.className = 's-label';
+      labelEl.textContent = letter;
+      labelEl.style.transform = 'translate(-50%,-50%)';
+      torso.appendChild(labelEl);
     }
 
-    // Bowtie (on torso, under head)
-    if (tr.accessory === 'bowtie' && tr.accColor) {
-      var btx = -tw / 2 - 1;
-      var bty = -1;
-      ctx.fillStyle = tr.accColor;
-      ctx.beginPath();
-      ctx.moveTo(btx, bty);
-      ctx.lineTo(btx - 3.5, bty - 2.5);
-      ctx.lineTo(btx - 3.5, bty + 2.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(btx, bty);
-      ctx.lineTo(btx + 3.5, bty - 2.5);
-      ctx.lineTo(btx + 3.5, bty + 2.5);
-      ctx.closePath();
-      ctx.fill();
+    // Kopf
+    var head = mk('s-head');
+    head.style.cssText += 'width:' + hw + 'px;height:' + hh + 'px;background:' + woolColor + ';border-color:' + borderColor + ';left:' + (hx - hw/2) + 'px;top:' + (hy - hh/2) + 'px;';
+    head.style.setProperty('--wool', woolColor);
+    head.style.setProperty('--bdr', borderColor);
+
+    // Ohren
+    var fc = sheepCfg.face || {};
+    var earL = document.createElement('div'); earL.className = 's-ear l'; earL.style.background = earColor; earL.style.border = '.8px solid ' + borderColor;
+    if (fc.earY != null) earL.style.top = fc.earY + 'px';
+    if (fc.earLeftX != null) earL.style.left = fc.earLeftX + 'px';
+    head.appendChild(earL);
+    var earR = document.createElement('div'); earR.className = 's-ear r'; earR.style.background = earColor; earR.style.border = '.8px solid ' + borderColor;
+    if (fc.earY != null) earR.style.top = fc.earY + 'px';
+    if (fc.earRightX != null) earR.style.right = fc.earRightX + 'px';
+    head.appendChild(earR);
+
+    // Augen + Mund
+    var eyeL = document.createElement('div'); eyeL.className = 's-eye l'; head.appendChild(eyeL);
+    var eyeR = document.createElement('div'); eyeR.className = 's-eye r'; head.appendChild(eyeR);
+    if (fc.eyeY != null) { eyeL.style.top = fc.eyeY + 'px'; eyeR.style.top = fc.eyeY + 'px'; }
+    if (fc.eyeLeftX != null) eyeL.style.left = fc.eyeLeftX + 'px';
+    if (fc.eyeRightX != null) eyeR.style.right = fc.eyeRightX + 'px';
+    var mouth = document.createElement('div'); mouth.className = 's-mouth'; head.appendChild(mouth);
+    if (fc.mouthY != null) mouth.style.bottom = fc.mouthY + 'px';
+    if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = borderColor; }
+
+    // Propeller
+    var topPX = hx, topPY = hy - hr - 1;
+    var hubPY = topPY - POLE_H;
+    var pole = mk('p s-pole');
+    pole.style.cssText += 'height:' + POLE_H + 'px;left:' + (topPX - 0.75) + 'px;top:' + topPY + 'px;';
+    var hub = mk('p s-hub');
+    hub.style.cssText += 'left:' + (topPX - HUB_SZ/2) + 'px;top:' + (hubPY - HUB_SZ/2) + 'px;';
+    var bwrap = mk('p s-bwrap');
+    bwrap.style.cssText += 'left:' + (topPX - 14) + 'px;top:' + (hubPY - 14) + 'px;';
+    var blades = document.createElement('div'); blades.className = 's-blades';
+    blades.style.transform = 'rotateX(60deg) rotate(25deg)';
+    bwrap.appendChild(blades);
+    blades.innerHTML = '<div class="s-bl"></div><div class="s-bl" style="transform:rotate(90deg)"></div>';
+
+    // CSS Accessoires
+    var cssAccCfg = sheepCfg.cssAccessories || {};
+    var cssAccDefY = {tophat:-9,partyhat:-12,crown:-7,beanie:-5,glasses:2.5,bowtie:-3,bell:0,flower:-1,scarf:-2.5,shoes:0};
+    function applyCssAccOff(el, type) {
+      var c = cssAccCfg[type]; if (!c) return;
+      if (c.offsetY) { var defY = cssAccDefY[type] || 0; el.style.top = (defY + c.offsetY) + 'px'; }
+      if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
+      if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
     }
 
-    // Head
-    var headX = -tw / 2 - hw * 0.6;
-    var headY = -th / 2 - hh * 0.2;
-    ctx.fillStyle = woolColor;
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 0.8;
-    roundRect(ctx, headX, headY, hw, hh, 3);
-    ctx.fill();
-    ctx.stroke();
-
-    // Ears
-    ctx.fillStyle = earColor;
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 0.5;
-    // Left ear
-    ctx.beginPath();
-    ctx.ellipse(headX + 1, headY + 2, 2, 3, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Right ear
-    ctx.beginPath();
-    ctx.ellipse(headX + hw - 1, headY + 2, 2, 3, 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Eyes
-    ctx.fillStyle = eyeColor;
-    var eyeY = headY + hh * 0.42;
-    ctx.beginPath();
-    ctx.arc(headX + hw * 0.3, eyeY, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(headX + hw * 0.7, eyeY, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Mouth
-    ctx.strokeStyle = tr.isBlack ? '#1a1a1a' : '#666';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    var mouthY = headY + hh * 0.68;
-    ctx.arc(headX + hw / 2, mouthY, 1.5, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-
-    // Accessories
     if (tr.accessory === 'tophat') {
-      var hatColor = tr.isBlack ? '#555' : '#222';
-      ctx.fillStyle = hatColor;
-      ctx.fillRect(headX + hw * 0.15, headY - 7, hw * 0.7, 7);
-      ctx.fillRect(headX + hw * 0.05, headY - 1, hw * 0.9, 2);
-    } else if (tr.accessory === 'partyhat' && tr.accColor) {
-      ctx.fillStyle = tr.accColor;
-      ctx.beginPath();
-      ctx.moveTo(headX + hw / 2, headY - 8);
-      ctx.lineTo(headX + hw * 0.2, headY);
-      ctx.lineTo(headX + hw * 0.8, headY);
-      ctx.closePath();
-      ctx.fill();
+      var h = document.createElement('div'); h.className = 's-acc s-tophat'; h.style.background = tr.isBlack ? '#555' : '#222';
+      head.appendChild(h); applyCssAccOff(h, 'tophat');
+    } else if (tr.accessory === 'partyhat') {
+      var h = document.createElement('div'); h.className = 's-acc s-partyhat'; h.style.borderBottomColor = tr.accColor; h.style.borderBottomWidth = '10px';
+      head.appendChild(h); applyCssAccOff(h, 'partyhat');
     } else if (tr.accessory === 'crown') {
-      ctx.fillStyle = '#ffd700';
-      ctx.strokeStyle = '#b8860b';
-      ctx.lineWidth = 0.5;
-      var cy = headY - 1;
-      ctx.beginPath();
-      ctx.moveTo(headX + hw * 0.15, cy);
-      ctx.lineTo(headX + hw * 0.2, cy - 5);
-      ctx.lineTo(headX + hw * 0.35, cy - 2);
-      ctx.lineTo(headX + hw * 0.5, cy - 6);
-      ctx.lineTo(headX + hw * 0.65, cy - 2);
-      ctx.lineTo(headX + hw * 0.8, cy - 5);
-      ctx.lineTo(headX + hw * 0.85, cy);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (tr.accessory === 'beanie' && tr.accColor) {
-      ctx.fillStyle = tr.accColor;
-      ctx.beginPath();
-      ctx.arc(headX + hw / 2, headY + 1, hw * 0.45, Math.PI, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = tr.accColor;
-      ctx.beginPath();
-      ctx.arc(headX + hw / 2, headY - hw * 0.35, 1.5, 0, Math.PI * 2);
-      ctx.fill();
+      var h = document.createElement('div'); h.className = 's-acc s-crown';
+      head.appendChild(h); applyCssAccOff(h, 'crown');
+    } else if (tr.accessory === 'beanie') {
+      var h = document.createElement('div'); h.className = 's-acc s-beanie'; h.style.background = tr.accColor;
+      head.appendChild(h); applyCssAccOff(h, 'beanie');
     } else if (tr.accessory === 'glasses') {
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 0.6;
-      var gy = headY + hh * 0.42;
-      ctx.beginPath();
-      ctx.arc(headX + hw * 0.3, gy, 2.2, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(headX + hw * 0.7, gy, 2.2, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(headX + hw * 0.3 + 2.2, gy);
-      ctx.lineTo(headX + hw * 0.7 - 2.2, gy);
-      ctx.stroke();
+      var g = document.createElement('div'); g.className = 's-acc s-glasses';
+      g.innerHTML = '<span class="s-lens"></span><span class="s-lens"></span><span class="s-bridge"></span>';
+      head.appendChild(g); applyCssAccOff(g, 'glasses');
+    } else if (tr.accessory === 'bowtie') {
+      var bt = document.createElement('div'); bt.className = 's-acc s-bowtie'; bt.style.borderLeftColor = bt.style.borderRightColor = tr.accColor; bt.style.borderLeftWidth = bt.style.borderRightWidth = '3.5px';
+      torso.appendChild(bt); applyCssAccOff(bt, 'bowtie');
     } else if (tr.accessory === 'bell') {
-      ctx.fillStyle = '#d4a017';
-      ctx.beginPath();
-      ctx.arc(headX + hw / 2, headY + hh + 2, 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#222';
-      ctx.beginPath();
-      ctx.arc(headX + hw / 2, headY + hh + 3, 0.7, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (tr.accessory === 'flower' && tr.accColor) {
-      ctx.fillStyle = tr.accColor;
-      for (var pi = 0; pi < 5; pi++) {
-        var pa = (pi / 5) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.arc(headX + hw * 0.75 + Math.cos(pa) * 2, headY + 1 + Math.sin(pa) * 2, 1.3, 0, Math.PI * 2);
-        ctx.fill();
+      var b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b); applyCssAccOff(b, 'bell');
+    } else if (tr.accessory === 'flower') {
+      var f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f); applyCssAccOff(f, 'flower');
+    } else if (tr.accessory === 'scarf') {
+      var sc = document.createElement('div'); sc.className = 's-acc s-scarf'; sc.style.background = tr.accColor;
+      head.appendChild(sc); applyCssAccOff(sc, 'scarf');
+    } else if (tr.accessory === 'shoes') {
+      for (var si = 0; si < legEls.length; si++) {
+        var sh = document.createElement('div'); sh.className = 's-shoe'; sh.style.background = tr.accColor; legEls[si].appendChild(sh);
       }
-      ctx.fillStyle = '#ffe066';
-      ctx.beginPath();
-      ctx.arc(headX + hw * 0.75, headY + 1, 1, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (tr.accessory === 'scarf' && tr.accColor) {
-      ctx.fillStyle = tr.accColor;
-      ctx.fillRect(headX + 1, headY + hh - 2, hw - 2, 3);
-      ctx.fillRect(headX + hw * 0.3, headY + hh + 1, 2, 4);
     }
 
-    // Sprite Hat
-    if (tr.spriteHat >= 0 && hatsImg.complete) {
+    // Sprite-Overlays (mit Config)
+    var hCfg = sheepCfg.spriteHat || {};
+    var gCfg = sheepCfg.spriteGlasses || {};
+    var sCfg = sheepCfg.spriteStache || {};
+
+    if (tr.spriteHat >= 0) {
+      var hatEl = document.createElement('div'); hatEl.className = 's-sprite-hat';
       var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-      var sx = hatCol * 98.5, sy = hatRow * 88.5, sw = 98, sh = 88;
-      var dw = 12, dh = dw * (sh / sw);
-      ctx.drawImage(hatsImg, sx, sy, sw, sh, headX + hw / 2 - dw / 2, headY - dh * 0.7, dw, dh);
+      var hItem = (hCfg.items && hCfg.items[tr.spriteHat]) || {};
+      hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
+      hatEl.style.top = ((hCfg.offsetY != null ? hCfg.offsetY : -8) + (hItem.dY || 0)) + 'px';
+      var hTotalX = (hCfg.offsetX || 0) + (hItem.dX || 0);
+      if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
+      if (hCfg.scale && hCfg.scale !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hCfg.scale + ')';
+      head.appendChild(hatEl);
     }
-
-    // Sprite Glasses
-    if (tr.spriteGlasses >= 0 && glassesImg.complete) {
+    if (tr.spriteGlasses >= 0) {
+      var glEl = document.createElement('div'); glEl.className = 's-sprite-glasses';
       var glCol = tr.spriteGlasses % 7, glRow = (tr.spriteGlasses / 7) | 0;
-      var sx = glCol * 55.14, sy = glRow * 75.2, sw = 55, sh = 75;
-      var dw = 8, dh = dw * (sh / sw);
-      ctx.drawImage(glassesImg, sx, sy, sw, sh, headX + hw / 2 - dw / 2, headY + hh * 0.15, dw, dh);
+      var gItem = (gCfg.items && gCfg.items[tr.spriteGlasses]) || {};
+      glEl.style.backgroundPosition = -(glCol * (gCfg.slotW || 5.514)) + 'px ' + -(glRow * (gCfg.slotH || 7.52)) + 'px';
+      glEl.style.top = ((gCfg.offsetY != null ? gCfg.offsetY : 1.5) + (gItem.dY || 0)) + 'px';
+      var gTotalX = (gCfg.offsetX || 0) + (gItem.dX || 0);
+      if (gTotalX) glEl.style.left = 'calc(50% + ' + gTotalX + 'px)';
+      if (gCfg.scale && gCfg.scale !== 1) glEl.style.transform = 'translateX(-50%) scale(' + gCfg.scale + ')';
+      head.appendChild(glEl);
     }
-
-    // Sprite Stache
-    if (tr.spriteStache >= 0 && stacheImg.complete) {
-      var stacheRegions = [
+    if (tr.spriteStache >= 0) {
+      var stEl = document.createElement('div'); stEl.className = 's-sprite-stache';
+      var sItem = (sCfg.items && sCfg.items[tr.spriteStache]) || {};
+      var stacheRegions = sCfg.regions || [
         {x:5,y:18,w:100,h:55},{x:110,y:5,w:100,h:65},{x:5,y:108,w:90,h:65},{x:105,y:108,w:105,h:65},
         {x:5,y:210,w:95,h:60},{x:105,y:200,w:105,h:55},{x:5,y:290,w:95,h:70},{x:105,y:275,w:105,h:65}
       ];
       var sr = stacheRegions[tr.spriteStache];
-      var dw = 7, dh = dw * (sr.h / sr.w);
-      ctx.drawImage(stacheImg, sr.x, sr.y, sr.w, sr.h, headX + hw / 2 - dw / 2, headY + hh * 0.65, dw, dh);
+      stEl.style.backgroundPosition = -(sr.x / 10) + 'px ' + -(sr.y / 10) + 'px';
+      stEl.style.width = (sr.w / 10) + 'px';
+      stEl.style.height = (sr.h / 10) + 'px';
+      stEl.style.bottom = ((sCfg.offsetY != null ? sCfg.offsetY : -1) + (sItem.dY || 0)) + 'px';
+      var sTotalX = (sCfg.offsetX || 0) + (sItem.dX || 0);
+      if (sTotalX) stEl.style.left = 'calc(50% + ' + sTotalX + 'px)';
+      if (sCfg.scale && sCfg.scale !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sCfg.scale + ')';
+      head.appendChild(stEl);
     }
-
-    ctx.restore();
   }
 
-  canvases.forEach(drawSheepOnCanvas);
+  containers.forEach(renderGraveyardSheep);
 })();

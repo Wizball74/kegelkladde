@@ -1,4 +1,5 @@
 <%- include("partials/top") %>
+<% if (!sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css" /><% } %>
 <%
   const formatEuro = (value) => Number(value || 0).toFixed(2).replace(".", ",");
   const formatDateDE = (d) => {
@@ -40,7 +41,7 @@
             <div class="hbar-row">
               <div class="hbar-label">
                 <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
-                <span class="hbar-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+                <span class="hbar-name"><%= item.display_name || item.first_name %></span>
               </div>
               <div class="hbar-track">
                 <div class="hbar-fill" style="width: <%= pct %>%;">
@@ -74,7 +75,7 @@
             <div class="hbar-row">
               <div class="hbar-label">
                 <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
-                <span class="hbar-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+                <span class="hbar-name"><%= item.display_name || item.first_name %></span>
               </div>
               <div class="hbar-track">
                 <div class="hbar-fill" style="width: <%= pct %>%;">
@@ -123,7 +124,7 @@
               <div class="hbar-row">
                 <div class="hbar-label">
                   <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
-                  <span class="hbar-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+                  <span class="hbar-name"><%= item.display_name || item.first_name %></span>
                 </div>
                 <div class="hbar-track">
                   <div class="hbar-fill" style="width: <%= pct %>%;">
@@ -150,7 +151,7 @@
             %>
               <div class="pin-dist-card">
                 <div class="pin-dist-header">
-                  <span class="pin-dist-name"><%= player.first_name %> <%= player.last_name || '' %></span>
+                  <span class="pin-dist-name"><%= player.display_name || player.first_name %></span>
                   <span class="pin-dist-total"><%= player.totalThrows %> Würfe</span>
                 </div>
                 <div class="pin-dist-bars">
@@ -188,7 +189,7 @@
                 <div class="hbar-row">
                   <div class="hbar-label">
                     <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
-                    <span class="hbar-name"><%= p.first_name %> <%= p.last_name || '' %></span>
+                    <span class="hbar-name"><%= p.display_name || p.first_name %></span>
                   </div>
                   <div class="hbar-track">
                     <div class="hbar-fill" style="width: <%= pct %>%;">
@@ -212,14 +213,14 @@
     <!-- Dickstes Schaf -->
     <% if (dickstesSchaf) { %>
       <%
-        const sheepScale = Math.min(2.5, 1 + dickstesSchaf.combined / 500);
+        const sheepScale = Math.min(1.6, 1 + dickstesSchaf.combined / 800);
       %>
       <div class="dickstes-schaf-card" style="--sheep-scale: <%= sheepScale.toFixed(2) %>;">
         <div class="dickstes-schaf-title">Dickstes Schaf</div>
         <div class="dickstes-schaf-img">
-          <img src="/sheep.png" alt="Schaf">
+          <img src="/img/sheep.png" alt="Schaf">
         </div>
-        <div class="dickstes-schaf-name"><%= dickstesSchaf.first_name %> <%= dickstesSchaf.last_name || '' %></div>
+        <div class="dickstes-schaf-name"><%= dickstesSchaf.display_name || dickstesSchaf.first_name %></div>
         <div class="dickstes-schaf-counts">
           <strong><%= dickstesSchaf.total_neuner %></strong> Neuner +
           <strong><%= dickstesSchaf.total_kraenze %></strong> Kränze =
@@ -264,7 +265,7 @@
           <% topAttendance.forEach((item, i) => { %>
             <div class="leaderboard-item">
               <span class="leaderboard-rank"><%= i + 1 %></span>
-              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-name"><%= item.display_name || item.first_name %></span>
               <span class="leaderboard-value"><%= item.games %> Spiele</span>
             </div>
           <% }) %>
@@ -277,7 +278,7 @@
           <% topPayers.forEach((item, i) => { %>
             <div class="leaderboard-item">
               <span class="leaderboard-rank"><%= i + 1 %></span>
-              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-name"><%= item.display_name || item.first_name %></span>
               <span class="leaderboard-value"><%= formatEuro(item.total) %> €</span>
             </div>
           <% }) %>
@@ -290,7 +291,7 @@
           <% mostPudel.forEach((item, i) => { %>
             <div class="leaderboard-item">
               <span class="leaderboard-rank"><%= i + 1 %></span>
-              <span class="leaderboard-name"><%= item.first_name %> <%= item.last_name || '' %></span>
+              <span class="leaderboard-name"><%= item.display_name || item.first_name %></span>
               <span class="leaderboard-value"><%= item.total %>×</span>
             </div>
           <% }) %>
@@ -385,12 +386,11 @@
           const diedDate = sheep.died_at ? sheep.died_at.substring(0, 10).split('-').reverse().join('.') : '';
         %>\
           <div class="gy-card">
-            <canvas class="gy-sheep-canvas"
-              width="120" height="100"
+            <div class="gy-sheep-dom"
               data-traits="<%= encodeURIComponent(JSON.stringify(traits)) %>"
               data-size="<%= sheep.size_multiplier %>"
               data-letter="<%= sheep.letter %>">
-            </canvas>
+            </div>
             <div class="gy-info">
               <div class="gy-letter"><%= sheep.letter || '?' %></div>
               <% if (sheep.owner_name) { %><div class="gy-owner"><%= sheep.owner_name %></div><% } %>

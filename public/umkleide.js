@@ -11,7 +11,7 @@
       crown:{offsetY:0,offsetX:0,scale:1},beanie:{offsetY:0,offsetX:0,scale:1},
       glasses:{offsetY:0,offsetX:0,scale:1},bowtie:{offsetY:0,offsetX:0,scale:1},
       bell:{offsetY:0,offsetX:0,scale:1},flower:{offsetY:0,offsetX:0,scale:1},
-      scarf:{offsetY:0,offsetX:0,scale:1},shoes:{offsetY:0,offsetX:0,scale:1}
+      scarf:{offsetY:0,offsetX:0,scale:1}
     },
     face: {
       eyeY: 3.5,       // CSS default: top 3.5px
@@ -26,7 +26,7 @@
 
   var CSS_ACC_NAMES = {
     tophat:'Zylinder',partyhat:'Partyhut',crown:'Krone',beanie:'M\u00fctze',
-    glasses:'Brille',bowtie:'Fliege',bell:'Glocke',flower:'Blume',scarf:'Schal',shoes:'Schuhe'
+    glasses:'Brille',bowtie:'Fliege',bell:'Glocke',flower:'Blume',scarf:'Schal'
   };
   var CSS_ACC_KEYS = Object.keys(CSS_ACC_NAMES);
 
@@ -261,17 +261,25 @@
 
     /* Sprite-Overlays */
     if (tr.spriteHat >= 0) {
-      var hatEl = document.createElement('div'); hatEl.className = 's-sprite-hat';
-      var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-      var hC = cfg.spriteHat;
-      var hItem = (hC.items && hC.items[tr.spriteHat]) || { dY: 0, dX: 0 };
-      if (hC.customSheet) hatEl.style.backgroundImage = 'url(' + hC.customSheet + ')';
-      hatEl.style.backgroundPosition = -(hatCol * hC.slotW) + 'px ' + -(hatRow * hC.slotH) + 'px';
-      hatEl.style.top = ((hC.offsetY || 0) + (hItem.dY || 0)) + 'px';
-      var hTotalX = (hC.offsetX || 0) + (hItem.dX || 0);
-      if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
-      var hTotalS = (hC.scale || 1) * (hItem.dS || 1);
-      if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
+      var hatEl = document.createElement('div');
+      if (tr.spriteHat >= 16) {
+        hatEl.className = 's-sprite-wig';
+        var wigIdx = tr.spriteHat - 16;
+        var wc = wigIdx % 3, wr = (wigIdx / 3) | 0;
+        hatEl.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
+      } else {
+        hatEl.className = 's-sprite-hat';
+        var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
+        var hC = cfg.spriteHat;
+        var hItem = (hC.items && hC.items[tr.spriteHat]) || { dY: 0, dX: 0 };
+        if (hC.customSheet) hatEl.style.backgroundImage = 'url(' + hC.customSheet + ')';
+        hatEl.style.backgroundPosition = -(hatCol * hC.slotW) + 'px ' + -(hatRow * hC.slotH) + 'px';
+        hatEl.style.top = ((hC.offsetY || 0) + (hItem.dY || 0)) + 'px';
+        var hTotalX = (hC.offsetX || 0) + (hItem.dX || 0);
+        if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
+        var hTotalS = (hC.scale || 1) * (hItem.dS || 1);
+        if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
+      }
       head.appendChild(hatEl);
     }
     if (tr.spriteGlasses >= 0) {
@@ -329,11 +337,21 @@
       spr.style.cssText = 'position:relative;top:auto;left:auto;bottom:auto;right:auto;transform:scale(3);transform-origin:center center;pointer-events:none;z-index:11;background-repeat:no-repeat;image-rendering:auto;';
 
       if (spriteClass === 's-sprite-hat') {
-        var c = i % 4, r = (i / 4) | 0;
-        spr.style.width = '10px'; spr.style.height = '9px';
-        spr.style.backgroundImage = 'url(' + (cfg.spriteHat.customSheet || '/img/spritesheet_hats.png') + ')';
-        spr.style.backgroundSize = '40px 36px';
-        spr.style.backgroundPosition = -(c * cfg.spriteHat.slotW) + 'px ' + -(r * cfg.spriteHat.slotH) + 'px';
+        if (i >= 16) {
+          /* Perücke (Index 16-24 → Wig-Sheet 3×3, Prozent-Positionierung) */
+          var wc = (i - 16) % 3, wr = ((i - 16) / 3) | 0;
+          spr.style.width = '11px'; spr.style.height = '15px';
+          spr.style.backgroundImage = 'url(/img/spritesheet_peruecken.png)';
+          spr.style.backgroundSize = '300% 300%';
+          spr.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
+          spr.style.transform = 'scale(2.5)';
+        } else {
+          var c = i % 4, r = (i / 4) | 0;
+          spr.style.width = '10px'; spr.style.height = '9px';
+          spr.style.backgroundImage = 'url(' + (cfg.spriteHat.customSheet || '/img/spritesheet_hats.png') + ')';
+          spr.style.backgroundSize = '40px 36px';
+          spr.style.backgroundPosition = -(c * cfg.spriteHat.slotW) + 'px ' + -(r * cfg.spriteHat.slotH) + 'px';
+        }
       } else if (spriteClass === 's-sprite-glasses') {
         var gc = i % (cfg.spriteGlasses.cols || 4), gr = (i / (cfg.spriteGlasses.cols || 4)) | 0;
         spr.style.width = (cfg.spriteGlasses.slotW || 16.975) + 'px';

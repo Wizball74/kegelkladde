@@ -142,7 +142,8 @@
     var energy = 0.4 + Math.random() * 1.2;       // 0.4–1.6: faul bis hyperaktiv
     var curiosity = 0.3 + Math.random() * 1.0;    // 0.3–1.3: ängstlich bis neugierig
     var sociability = Math.random();               // 0–1: Einzelgänger bis Herdentier
-    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability };
+    var hasKnees = Math.random() < 0.4;
+    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees };
   }
 
   /* ═══ DOM-Factory ═══ */
@@ -173,7 +174,21 @@
     head.style.setProperty('--wool', tr.woolColor);
     head.style.setProperty('--bdr', tr.borderColor);
     var legEls = [lfl, lfr, lbl, lbr];
-    for (var li = 0; li < legEls.length; li++) legEls[li].style.cssText += 'height:' + lh + 'px;background:' + tr.skinColor + ';';
+    var shinEls = [null, null, null, null];
+    if (tr.hasKnees) {
+      var thighH = Math.round(lh * 0.5);
+      var shinH = lh - thighH;
+      for (var li = 0; li < legEls.length; li++) {
+        legEls[li].style.cssText += 'height:' + thighH + 'px;background:' + tr.skinColor + ';';
+        var shin = document.createElement('div');
+        shin.className = 's-shin';
+        shin.style.cssText = 'position:absolute;left:0;top:' + (thighH - 2) + 'px;width:' + LEG_W + 'px;height:' + (shinH + 2) + 'px;background:' + tr.skinColor + ';border-radius:1px;transform-origin:1px 0;';
+        legEls[li].appendChild(shin);
+        shinEls[li] = shin;
+      }
+    } else {
+      for (var li = 0; li < legEls.length; li++) legEls[li].style.cssText += 'height:' + lh + 'px;background:' + tr.skinColor + ';';
+    }
 
     var fc = cfg.face || {};
     var earL = document.createElement('div'); earL.className = 's-ear l'; head.appendChild(earL);
@@ -248,17 +263,26 @@
     /* Sprite-Overlays (mit Config-Overrides) */
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
-      hatEl.className = 's-sprite-hat';
-      var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-      var hCfg = cfg.spriteHat || {};
-      var hItem = (hCfg.items && hCfg.items[tr.spriteHat]) || {};
-      if (hCfg.customSheet) hatEl.style.backgroundImage = 'url(' + hCfg.customSheet + ')';
-      hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
-      hatEl.style.top = ((hCfg.offsetY != null ? hCfg.offsetY : -8) + (hItem.dY || 0)) + 'px';
-      var hTotalX = (hCfg.offsetX || 0) + (hItem.dX || 0);
-      if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
-      var hTotalS = (hCfg.scale || 1) * (hItem.dS || 1);
-      if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
+      if (tr.spriteHat >= 16) {
+        /* Perücke (Index 16-24 → Wig-Sheet 3×3) */
+        hatEl.className = 's-sprite-wig';
+        var wigIdx = tr.spriteHat - 16;
+        var wigCol = wigIdx % 3, wigRow = (wigIdx / 3) | 0;
+        hatEl.style.backgroundPosition = (wigCol * 50) + '% ' + (wigRow * 50) + '%';
+      } else {
+        /* Hut (Index 0-15 → Hat-Sheet 4×4) */
+        hatEl.className = 's-sprite-hat';
+        var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
+        var hCfg = cfg.spriteHat || {};
+        var hItem = (hCfg.items && hCfg.items[tr.spriteHat]) || {};
+        if (hCfg.customSheet) hatEl.style.backgroundImage = 'url(' + hCfg.customSheet + ')';
+        hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
+        hatEl.style.top = ((hCfg.offsetY != null ? hCfg.offsetY : -8) + (hItem.dY || 0)) + 'px';
+        var hTotalX = (hCfg.offsetX || 0) + (hItem.dX || 0);
+        if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
+        var hTotalS = (hCfg.scale || 1) * (hItem.dS || 1);
+        if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
+      }
       head.appendChild(hatEl);
     }
     if (tr.spriteGlasses >= 0) {
@@ -298,7 +322,7 @@
       head.appendChild(stEl);
     }
 
-    return { wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl, lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, pole: pole, hub: hub, bwrap: bwrap, blades: blades, eyeL: eyeL, eyeR: eyeR };
+    return { wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl, lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls, pole: pole, hub: hub, bwrap: bwrap, blades: blades, eyeL: eyeL, eyeR: eyeR };
   }
 
   /* ═══ Schaf erzeugen ═══ */
@@ -697,6 +721,7 @@
           sh.propSpeed = Math.min(sh.propSpeed + 3, PROP_MAX);
           sh.scareCorner = nearestCorner(sh.x + (sh.x - cursorX), sh.y + (sh.y - cursorY));
         } else {
+          if (!sh.scareCorner) sh.scareCorner = nearestCorner(sh.x, sh.y);
           var dcx = sh.scareCorner.x - sh.x, dcy = sh.scareCorner.y - sh.y, dc = Math.hypot(dcx, dcy);
           if (dc > 20) {
             sh.vx += (dcx / dc) * S * .8; sh.vy += (dcy / dc) * S * .8;
@@ -980,9 +1005,22 @@
           var rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
           if (rv > 0) { a.vx -= nx * rv * .4; a.vy -= ny * rv * .4; b.vx += nx * rv * .4; b.vy += ny * rv * .4; }
           /* Abstoßung auch bei gleicher Geschwindigkeit (Anti-Kleben) */
-          var push = 0.15 + overlap * 0.02;
+          var push = 0.3 + overlap * 0.05;
           a.vx -= nx * push; a.vy -= ny * push;
           b.vx += nx * push; b.vy += ny * push;
+          /* Parallel-Lock brechen: wenn beide in ähnliche Richtung → senkrechter Kick + neue Ziele */
+          var spdA = Math.hypot(a.vx, a.vy), spdB = Math.hypot(b.vx, b.vy);
+          if (spdA > 0.3 && spdB > 0.3) {
+            var dotNorm = (a.vx * b.vx + a.vy * b.vy) / (spdA * spdB);
+            if (dotNorm > 0.4) {
+              var perpX = -ny, perpY = nx;
+              a.vx += perpX * 1.2; a.vy += perpY * 1.2;
+              b.vx -= perpX * 1.2; b.vy -= perpY * 1.2;
+              a.target = newTarget(); b.target = newTarget();
+              if (a.state !== 'scared' && a.state !== 'departing' && !isGroupState(a.state)) { a.state = 'dart'; a.stTimer = 0; a.stDur = 600 + Math.random() * 400; }
+              if (b.state !== 'scared' && b.state !== 'departing' && !isGroupState(b.state)) { b.state = 'dart'; b.stTimer = 0; b.stDur = 600 + Math.random() * 400; }
+            }
+          }
           if (rv > 1.5 && a.collisionCD <= 0 && b.collisionCD <= 0) {
             spawnStars((a.x + b.x) / 2, (a.y + b.y) / 2, 2 + (Math.random() * 2 | 0));
             a.wobbleV += (Math.random() - .5) * 8; b.wobbleV += (Math.random() - .5) * 8;
@@ -1080,6 +1118,11 @@
       if (i === sh.kickLeg && sh.kickTimer > 0) kick = Math.sin((1 - sh.kickTimer / 250) * Math.PI) * 35;
       var angle = tr.legRestAngles[i] + idle + sway + inertia + lift + kick;
       legEls[i].style.transform = 'translate(' + (hpX - LEG_W / 2) + 'px,' + hpY + 'px) rotate(' + (angle * Math.PI / 180 + bankRad) + 'rad)';
+      if (d.shinEls[i]) {
+        var hipSwing = angle - tr.legRestAngles[i];
+        var kneeAngle = Math.max(-75, Math.min(75, -hipSwing * 2.5));
+        d.shinEls[i].style.transform = 'rotate(' + (kneeAngle * Math.PI / 180) + 'rad)';
+      }
     }
   }
 
@@ -1167,15 +1210,16 @@
       while (velBuf.length && now - velBuf[0].t > 80) velBuf.shift();
     }
     dragSheep.x = e.clientX + dragOX; dragSheep.y = e.clientY + dragOY;
-    /* Shake-Erkennung: Richtungswechsel akkumulieren (vor dragLX-Update!) */
+    /* Shake-Erkennung: nur echte Richtungsumkehr zählen (vor dragLX-Update!) */
     if (dtt > 1) {
       var curVX = (e.clientX - dragLX) / dtt * 12, curVY = (e.clientY - dragLY) / dtt * 12;
-      dragShakeScore = Math.min(dragShakeScore + Math.hypot(curVX - dragPrevVX, curVY - dragPrevVY) * 0.12, 40);
+      var dot = curVX * dragPrevVX + curVY * dragPrevVY;
+      if (dot < 0 && Math.hypot(dragPrevVX, dragPrevVY) > 1.5) dragShakeScore = Math.min(dragShakeScore + Math.hypot(curVX - dragPrevVX, curVY - dragPrevVY) * 0.2, 40);
       dragPrevVX = curVX; dragPrevVY = curVY;
       dragSheep.vx += (curVX - dragSheep.vx) * .3;
       dragSheep.vy += (curVY - dragSheep.vy) * .3;
     }
-    dragShakeScore *= 0.97;
+    dragShakeScore *= 0.993;
     dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
     dragSheep.propSpeed = Math.min(dragSheep.propSpeed + .5, PROP_MAX);
     moveDragBubble(dragSheep.x, dragSheep.y, dragSheep.sizeMultiplier);
@@ -1209,7 +1253,7 @@
         traits: sh.traits,
         ownerId: sh.ownerId, ownerName: sh.ownerName, letter: sh.letter,
         sizeMultiplier: sh.sizeMultiplier, age: sh.age,
-        state: (isGroupState(sh.state) || sh.state === 'dizzy') ? 'explore' : sh.state, tailSide: sh.tailSide,
+        state: (isGroupState(sh.state) || sh.state === 'dizzy' || sh.state === 'scared') ? 'explore' : sh.state, tailSide: sh.tailSide,
         solo: sh.solo, bank: sh.bank, propSpeed: sh.propSpeed,
       });
     }
@@ -1264,7 +1308,8 @@
     lastT = t;
     for (var fi = 0; fi < flock.length; fi++) {
       var sh = flock[fi];
-      behave(sh, dt, t); flockForces(sh); physics(sh, dt); render(sh);
+      try { behave(sh, dt, t); } catch (e) { pickNext(sh); }
+      flockForces(sh); physics(sh, dt); render(sh);
       /* Solo-Timer */
       if (sh.state !== 'scared' && sh.state !== 'departing') {
         sh.soloTimer -= dt;

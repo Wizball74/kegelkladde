@@ -253,9 +253,26 @@ router.get("/statistik", requireAuth, (req, res) => {
     throwAvgByGameday = Array.from(gdMap.values());
   }
 
-  // Sheep Graveyard
+  // Sheep Graveyard — nach Besitzer gruppiert
   const deadSheep = getDeadSheep(200);
   const graveyardStats = getGraveyardStats();
+  const sheepByOwner = {};
+  for (const sheep of deadSheep) {
+    if (!sheep.owner_name) continue;
+    const key = sheep.owner_name;
+    if (!sheepByOwner[key]) sheepByOwner[key] = {
+      name: key, sheep: [],
+      stats: { total: 0, evicted: 0, thrown: 0, dismissed: 0, departed: 0, stuck: 0 }
+    };
+    sheepByOwner[key].sheep.push(sheep);
+    sheepByOwner[key].stats.total++;
+    if (sheep.death_cause === 'eviction') sheepByOwner[key].stats.evicted++;
+    else if (sheep.death_cause === 'thrown') sheepByOwner[key].stats.thrown++;
+    else if (sheep.death_cause === 'dismissed') sheepByOwner[key].stats.dismissed++;
+    else if (sheep.death_cause === 'departed') sheepByOwner[key].stats.departed++;
+    else if (sheep.death_cause === 'stuck') sheepByOwner[key].stats.stuck++;
+  }
+  const stalls = Object.values(sheepByOwner).sort((a, b) => b.stats.total - a.stats.total);
 
   // Display-Namen: Vorname, bei Doppel-Vornamen + Nachname-Initial
   function addDisplayNames(...lists) {
@@ -310,7 +327,8 @@ router.get("/statistik", requireAuth, (req, res) => {
     pinDistribution,
     throwAvgByGameday,
     deadSheep,
-    graveyardStats
+    graveyardStats,
+    stalls
   });
 });
 

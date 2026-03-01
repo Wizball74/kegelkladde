@@ -3043,41 +3043,101 @@ tr.row-locked td.name-col {
   margin-bottom: 0.5rem;
 }
 
-/* ═══ Ahnengalerie (Sheep Graveyard) ═══ */
-.gy-stats {
-  display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem;
-  padding: 0.75rem 1rem; background: var(--card-bg); border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+/* ═══ Ahnengalerie — Spieler-Ställe ═══ */
+.stall-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
 }
-.gy-stat { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
-.gy-stat strong { color: var(--accent); }
-.gy-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;
-}
-.gy-card {
-  background: var(--card-bg); border: 1px solid var(--line);
-  border-radius: var(--radius-md); overflow: hidden;
-  text-align: center; padding: 0.75rem 0.5rem;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.gy-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-.gy-sheep-dom {
+.stall {
   position: relative;
-  width: 120px; height: 100px;
-  display: block; margin: 0 auto 0.5rem;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(60,40,0,.15);
+}
+/* Holzzaun-Rahmen */
+.stall-fence-wrap {
+  position: absolute; inset: 0;
+  border: 5px solid #8B6914;
+  border-radius: 6px;
+  pointer-events: none; z-index: 2;
+  background:
+    repeating-linear-gradient(0deg, transparent 0px, transparent 13px, rgba(122,92,18,.25) 13px, rgba(122,92,18,.25) 15px);
+  background-clip: padding-box;
+}
+/* Zaunpfosten oben */
+.stall::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 26px;
+  background:
+    repeating-linear-gradient(90deg,
+      #8B6914 0px, #8B6914 5px,
+      transparent 5px, transparent 28px
+    );
+  border-radius: 6px 6px 0 0;
+  pointer-events: none; z-index: 3;
+}
+.stall-header {
+  position: relative; z-index: 4;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 14px;
+  background: linear-gradient(180deg, #6B4F12, #5a4210);
+  color: #f5e6c8;
+  min-height: 26px;
+}
+.stall-name {
+  font-family: var(--font-heading);
+  font-size: 1rem; font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+.stall-count {
+  font-weight: 400; opacity: 0.75; font-size: 0.75rem;
+}
+/* Stall-Boden (Wiese) */
+.stall-ground {
+  position: relative;
+  min-height: 90px;
+  padding: 14px 12px 10px;
+  background: linear-gradient(180deg, #b0d9a4 0%, #8cc484 40%, #6aaa60 100%);
+  display: flex; flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px 2px;
+}
+/* Grashalme als Textur */
+.stall-ground::before {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 18px;
+  background:
+    repeating-linear-gradient(80deg,
+      transparent 0px, transparent 6px,
+      rgba(50,120,40,.2) 6px, rgba(50,120,40,.2) 7px
+    ),
+    repeating-linear-gradient(100deg,
+      transparent 0px, transparent 9px,
+      rgba(60,130,45,.15) 9px, rgba(60,130,45,.15) 10px
+    );
+  pointer-events: none;
+}
+/* Einzelnes Schaf im Stall */
+.stall-sheep {
+  position: relative;
+  width: 50px; height: 45px;
   overflow: visible;
 }
-.gy-info { font-size: 0.8rem; }
-.gy-letter {
-  font-family: var(--font-heading); font-size: 1.4rem; font-weight: 700;
-  color: var(--accent); line-height: 1.2;
+/* Mini-Stats Footer */
+.stall-stats {
+  position: relative; z-index: 4;
+  display: flex; gap: 0.6rem; flex-wrap: wrap;
+  padding: 3px 14px 5px;
+  background: linear-gradient(180deg, #5a4210, #6B4F12);
+  color: rgba(255,255,255,.8);
+  font-size: 0.72rem;
+  min-height: 18px;
 }
-.gy-owner { font-weight: 600; font-size: 0.85rem; margin-top: 0.15rem; }
-.gy-meta {
-  display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;
-  margin-top: 0.25rem; font-size: 0.75rem; color: var(--muted);
-}
-.gy-date { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; opacity: 0.7; }
+.stall-stats:empty { display: none; }
 
 /* Ranglisten mode toggle (Gesamt / Spieltage) */
 .ranglisten-mode-toggle {
@@ -4361,6 +4421,66 @@ tr.row-locked td.name-col {
   width: 100%;
 }
 
+.profil-avatar-upload {
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: #f8f5eb;
+  border-radius: var(--radius-md);
+}
+
+/* Avatar-Modus-Karten */
+.avatar-mode-cards {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+  flex-wrap: wrap;
+}
+
+.avatar-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  min-width: 100px;
+  text-align: center;
+  flex: 1;
+}
+
+.avatar-mode-card:hover {
+  border-color: var(--accent);
+}
+
+.avatar-mode-card.active {
+  border-color: var(--accent);
+  background: rgba(47,143,109,0.08);
+}
+
+.avatar-mode-card input[type="radio"] {
+  display: none;
+}
+
+.avatar-mode-card .profil-avatar-img {
+  width: 60px;
+  height: 60px;
+}
+
+.avatar-mode-card .profil-avatar-initials {
+  width: 60px;
+  height: 60px;
+  font-size: 1.2rem;
+}
+
+.avatar-mode-card span:last-child {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
 /* ========== Members list redesign ========== */
 
 .member-summary {
@@ -4468,7 +4588,8 @@ tr.row-locked td.name-col {
   border: 2px solid var(--accent-light);
 }
 
-.mcard-avatar-initials {
+.mcard-avatar-initials,
+.mcard-avatar-inner-initials {
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -4482,13 +4603,22 @@ tr.row-locked td.name-col {
   letter-spacing: 0.03em;
 }
 
+.mcard-avatar-inner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent-light);
+}
+
 .mcard-avatar-sm {
   width: 40px;
   height: 40px;
 }
 
 .mcard-avatar-sm img,
-.mcard-avatar-sm .mcard-avatar-initials {
+.mcard-avatar-sm .mcard-avatar-initials,
+.mcard-avatar-sm .mcard-avatar-inner-initials {
   width: 40px;
   height: 40px;
   font-size: 0.8rem;
@@ -5646,8 +5776,8 @@ tr.row-locked td.name-col {
   inset: -2px;
   border: 2px solid #e8920d;
   border-radius: 6px;
-  filter: url(#electricDisplace);
   pointer-events: none;
+  animation: electricShimmer 2.5s ease-in-out infinite;
 }
 .mst-row.monte-active-player .mst-player-cell::after {
   content: "";
@@ -5856,10 +5986,10 @@ tr.row-locked td.name-col {
 /* When score table is in main area (V+A), add spacing */
 .live-game-content .shuffle-sidebar-table-wrap {
   margin-top: 0.75rem;
-  max-height: calc(100vh - 260px);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 4px;
+  overflow-y: visible;
 }
 
 /* Sidebar player table */
@@ -5996,15 +6126,7 @@ tr.row-locked td.name-col {
   box-shadow: 0 0 0 2px rgba(47, 143, 109, 0.25);
 }
 
-/* SVG filter (hidden) */
-.electric-svg-defs {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-}
-
-/* Active player row highlight with electric border */
+/* Active player row highlight */
 .sst-row.shuffle-active-player {
   background: var(--accent-light) !important;
   position: relative;
@@ -6017,8 +6139,8 @@ tr.row-locked td.name-col {
   inset: -1px -1px -2px;
   border: 2px solid rgba(180, 120, 20, 0.2);
   border-radius: 6px;
-  filter: url(#electricDisplace);
   pointer-events: none;
+  animation: electricShimmer 2.5s ease-in-out infinite;
 }
 .sst-row.shuffle-active-player::after {
   content: "";
@@ -6061,8 +6183,8 @@ tr.row-locked td.name-col {
   inset: 0 -1px;
   border-left: 2px solid rgba(180, 120, 20, 0.2);
   border-right: 2px solid rgba(180, 120, 20, 0.2);
-  filter: url(#electricDisplace);
   pointer-events: none;
+  animation: electricShimmer 2.5s ease-in-out infinite;
 }
 .sst-game-cell.sst-col-active::after {
   content: "";
@@ -6121,6 +6243,16 @@ tr.row-locked td.name-col {
   0% { background-position: 0 0; }
   50% { background-position: 400% 0; }
   100% { background-position: 0 0; }
+}
+@keyframes electricShimmer {
+  0%, 100% { opacity: 0.5; }
+  30% { opacity: 1; }
+  60% { opacity: 0.3; }
+  80% { opacity: 0.9; }
+}
+@keyframes electricPulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.6; }
 }
 
 /* Pinkler badge */
@@ -6270,6 +6402,34 @@ tr.row-locked td.name-col {
   padding-left: 0.3rem;
 }
 
+/* Turn-Pause (Ergebnis-Anzeige vor Spielerwechsel) */
+.va-turn-pause {
+  text-align: center; margin-top: 1rem;
+  font-size: 0.85rem; color: var(--muted);
+  font-style: italic;
+  animation: vaPulsePause 1.2s ease-in-out infinite;
+}
+@keyframes vaPulsePause {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.va-turn-summary-table {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  margin-top: 0.75rem; font-size: 1rem;
+}
+.va-turn-summary-row {
+  display: flex; justify-content: space-between;
+  padding: 0.25rem 1.5rem;
+  min-width: 200px;
+  gap: 2rem;
+}
+.va-turn-summary-row strong { color: var(--accent-strong); }
+.va-turn-summary-total {
+  border-top: 2px solid var(--line);
+  padding-top: 0.4rem; margin-top: 0.15rem;
+  font-size: 1.15rem; font-weight: 700;
+}
+
 .va-throw-slot {
   display: flex;
   flex-direction: column;
@@ -6368,7 +6528,7 @@ tr.row-locked td.name-col {
   border-color: #dc3545;
 }
 
-/* Triclops button with 3-pin icon */
+/* Triclops button with icon */
 .va-picker-tri {
   background: rgba(111, 66, 193, 0.08);
   border-color: rgba(111, 66, 193, 0.3);
@@ -6378,23 +6538,26 @@ tr.row-locked td.name-col {
   background: rgba(111, 66, 193, 0.2);
   border-color: #6f42c1;
 }
+.va-picker-tri-icon {
+  width: 28px;
+  height: auto;
+  display: block;
+}
 
-/* 3 pins in triangle: ⚬⚬ / ⚬ */
-.tri-pins {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3px;
-  width: 20px;
+/* Triclops icon in table headers */
+.triclops-th-icon {
+  display: block;
+  width: 40px;
+  height: auto;
+  margin: 0 auto 2px;
+  opacity: 0.75;
 }
-.tri-pins span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.tri-pins span:last-child {
-  grid-column: 1 / -1;
-  justify-self: center;
+
+/* Triclops icon inline (penalty-detail etc.) */
+.triclops-inline-icon {
+  width: 18px;
+  height: auto;
+  vertical-align: middle;
 }
 
 /* 9er (Alle 9) button */
@@ -6982,8 +7145,8 @@ td.ast-col-active::before {
   inset: 0 -1px;
   border-left: 2px solid rgba(180, 120, 20, 0.2);
   border-right: 2px solid rgba(180, 120, 20, 0.2);
-  filter: url(#electricDisplace);
   pointer-events: none;
+  animation: electricShimmer 2.5s ease-in-out infinite;
 }
 td.ast-col-active::after {
   content: "";
@@ -7593,8 +7756,8 @@ td.ast-col-active::after {
   .hbar-name { font-size: 0.8rem; }
   .pin-dist-bars { height: 60px; }
   .dickstes-schaf-name { font-size: 1.2rem; }
-  .gy-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
-  .gy-sheep-dom { width: 90px; height: 75px; }
+  .stall-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
+  .stall-sheep { width: 40px; height: 36px; }
 }
 
 /* ═══ Schaf-Umkleide ═══ */
@@ -7651,7 +7814,7 @@ td.ast-col-active::after {
 }
 .umkleide-css-btns button {
   padding: .35rem .7rem; font-size: .82rem; border: 2px solid var(--line);
-  border-radius: var(--radius-sm); background: var(--panel); cursor: pointer;
+  border-radius: var(--radius-sm); background: var(--panel); color: var(--text); cursor: pointer;
   transition: border-color .15s, background .15s, color .15s;
 }
 .umkleide-css-btns button:hover { border-color: var(--accent); }
@@ -7677,3 +7840,55 @@ td.ast-col-active::after {
   .umkleide-preview-panel { position: static; }
   .umkleide-preview { width: 100%; max-width: 340px; margin: 0 auto; }
 }
+
+/* ===== 25, 50 Game (Live-Integration) ===== */
+.game-2550-zone-display {
+  text-align: center; margin-bottom: 0.5rem; font-size: 0.85rem;
+}
+.zone-active {
+  color: var(--error); font-weight: 700;
+  animation: zone-pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes zone-pulse { from { opacity: 0.7; } to { opacity: 1; } }
+.zone-next { color: var(--muted); }
+.game-2550-cumulative {
+  text-align: center; font-size: 2.5rem; font-weight: 800;
+  font-variant-numeric: tabular-nums; margin: 0.25rem 0;
+}
+.cum-label { font-size: 1rem; font-weight: 400; color: var(--muted); }
+.game-2550-progress {
+  height: 6px; background: var(--line); border-radius: 3px;
+  overflow: hidden; margin-bottom: 0.75rem;
+}
+.game-2550-progress-bar {
+  height: 100%; background: var(--accent, #4a7); border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.game-2550-finished {
+  text-align: center; padding: 1rem 0;
+  font-size: 1.1rem; font-weight: 600;
+}
+.game-2550-actions {
+  display: flex; gap: 0.75rem; justify-content: center; margin-top: 0.75rem;
+}
+.game-2550-summary { margin-top: 1rem; }
+.game-2550-summary h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.game-2550-summary table {
+  width: 100%; border-collapse: collapse; font-size: 0.85rem;
+}
+.game-2550-summary th, .game-2550-summary td {
+  padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--line);
+}
+.game-2550-summary tr.row-current { background: var(--accent-bg, #e8f5e9); font-weight: 600; }
+.game-2550-log {
+  margin-top: 1rem; max-height: 200px; overflow-y: auto;
+}
+.game-2550-log h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.game-2550-log table {
+  width: 100%; border-collapse: collapse; font-size: 0.8rem;
+}
+.game-2550-log th, .game-2550-log td {
+  padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line);
+}
+.game-2550-log .penalty-row { background: var(--error-bg, #fde8e8); }
+.game-2550-log .pudel-row { background: #f8d0d0; font-weight: 700; }

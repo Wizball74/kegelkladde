@@ -12,17 +12,45 @@
 
   <!-- Tab: Profil -->
   <div class="tab-panel active" id="tab-profil">
-    <!-- Avatar -->
-    <div class="profil-avatar-section">
-      <div class="profil-avatar-wrap">
-        <% if (profile.avatar) { %>
-          <img src="/uploads/avatars/<%= profile.avatar %>" alt="Avatar" class="profil-avatar-img" id="avatarPreview" />
-        <% } else { %>
-          <div class="profil-avatar-initials" id="avatarPreview">
-            <%= profile.first_name ? profile.first_name[0].toUpperCase() : '' %><%= profile.last_name ? profile.last_name[0].toUpperCase() : '' %>
+    <!-- Avatar-Modus -->
+    <% const avatarMode = profile.avatar_mode || 'sheep'; %>
+    <form method="post" action="/profil/avatar-mode" id="avatarModeForm">
+      <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
+      <div class="avatar-mode-cards">
+        <label class="avatar-mode-card<%= avatarMode === 'upload' ? ' active' : '' %>">
+          <input type="radio" name="avatarMode" value="upload" <%= avatarMode === 'upload' ? 'checked' : '' %> />
+          <div class="profil-avatar-wrap">
+            <% if (profile.avatar) { %>
+              <img src="/uploads/avatars/<%= profile.avatar %>" alt="" class="profil-avatar-img" id="avatarPreview" />
+            <% } else { %>
+              <div class="profil-avatar-initials" id="avatarPreview" style="opacity:0.5;">
+                <%= profile.first_name ? profile.first_name[0].toUpperCase() : '' %><%= profile.last_name ? profile.last_name[0].toUpperCase() : '' %>
+              </div>
+            <% } %>
           </div>
-        <% } %>
+          <span>Eigenes Bild</span>
+        </label>
+        <label class="avatar-mode-card<%= avatarMode === 'sheep' ? ' active' : '' %>">
+          <input type="radio" name="avatarMode" value="sheep" <%= avatarMode === 'sheep' ? 'checked' : '' %> />
+          <div class="profil-avatar-wrap">
+            <img src="/img/sheep.png" alt="" class="profil-avatar-img" />
+          </div>
+          <span>Schaf</span>
+        </label>
+        <label class="avatar-mode-card<%= avatarMode === 'plain' ? ' active' : '' %>">
+          <input type="radio" name="avatarMode" value="plain" <%= avatarMode === 'plain' ? 'checked' : '' %> />
+          <div class="profil-avatar-wrap">
+            <div class="profil-avatar-initials">
+              <%= profile.first_name ? profile.first_name[0].toUpperCase() : '' %><%= profile.last_name ? profile.last_name[0].toUpperCase() : '' %>
+            </div>
+          </div>
+          <span>Schlicht</span>
+        </label>
       </div>
+    </form>
+
+    <!-- Upload-Formular (nur bei "Eigenes Bild" sichtbar) -->
+    <div class="profil-avatar-upload" id="avatarUploadSection" style="<%= avatarMode === 'upload' ? '' : 'display:none;' %>">
       <form method="post" action="/profil/avatar" enctype="multipart/form-data" class="profil-avatar-form">
         <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
         <label class="btn btn-secondary btn-sm profil-avatar-btn">

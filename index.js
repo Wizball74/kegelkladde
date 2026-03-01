@@ -12,6 +12,7 @@ const recordsRoutes = require("./routes/records");
 const statisticsRoutes = require("./routes/statistics");
 const adminRoutes = require("./routes/admin");
 const pinnwandRoutes = require("./routes/pinnwand");
+const game2550Routes = require("./routes/game2550");
 
 // Import middleware
 const { requireInitialized, flashMiddleware, setLocals } = require("./middleware/auth");
@@ -67,6 +68,7 @@ app.use(recordsRoutes);
 app.use(statisticsRoutes);
 app.use(adminRoutes);
 app.use(pinnwandRoutes);
+app.use(game2550Routes);
 
 // Global error handler
 app.use((err, req, res, next) => {

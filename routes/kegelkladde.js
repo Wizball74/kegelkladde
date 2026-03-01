@@ -5,8 +5,44 @@ const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKa
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
+const fs = require("fs");
+const path = require("path");
+
 const router = express.Router();
 const DEFAULT_CONTRIBUTION_EUR = 4.0;
+
+// Schaf-Avatare dynamisch aus dem Verzeichnis lesen (beim Start)
+const sheepDir = path.join(__dirname, "..", "public", "img", "avatarsheeps");
+const SHEEP_AVATARS = fs.readdirSync(sheepDir).filter(f => /\.png$/i.test(f)).sort();
+
+// Pool-basierte Vergabe: jedes Bild wird erst genutzt, wenn alle durch sind
+function pickSheep(count) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'sheep_used'").get();
+  let used = new Set();
+  try { used = new Set(JSON.parse(row?.value || '[]')); } catch { /* leer */ }
+
+  const picks = [];
+  for (let i = 0; i < count; i++) {
+    let avail = [];
+    for (let j = 0; j < SHEEP_AVATARS.length; j++) {
+      if (!used.has(j) && !picks.includes(j)) avail.push(j);
+    }
+    if (avail.length === 0) {
+      // Alle durch → Pool zurücksetzen (aktuelle Batch-Picks ausschließen)
+      used.clear();
+      for (let j = 0; j < SHEEP_AVATARS.length; j++) {
+        if (!picks.includes(j)) avail.push(j);
+      }
+      if (avail.length === 0) avail = Array.from({ length: SHEEP_AVATARS.length }, (_, k) => k);
+    }
+    const idx = avail[Math.floor(Math.random() * avail.length)];
+    picks.push(idx);
+    used.add(idx);
+  }
+
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('sheep_used', ?)").run(JSON.stringify([...used]));
+  return picks.map(i => SHEEP_AVATARS[i]);
+}
 
 // Hilfsfunktion: Strafen-Details für einen Spieltag berechnen
 function calculatePenaltyDetails(gamedayId) {
@@ -18,7 +54,7 @@ function calculatePenaltyDetails(gamedayId) {
   for (const u of allUsers) memberMap.set(u.id, u);
 
   const rows = db.prepare(
-    `SELECT user_id, present, pudel, alle9, kranz, triclops, penalties, va, monte, aussteigen, sechs_tage
+    `SELECT user_id, present, pudel, alle9, kranz, triclops, penalties, va, monte, aussteigen, sechs_tage, spiel_2550
      FROM attendance WHERE gameday_id = ?`
   ).all(gamedayId);
 
@@ -49,7 +85,7 @@ function calculatePenaltyDetails(gamedayId) {
       const alle9Cost = Math.round((totalAlle9 - r.alle9) * 10) / 100;
       const kranzCost = Math.round((totalKranz - r.kranz) * 10) / 100;
       const triclopsCost = Math.round((totalTriclops - r.triclops) * 10) / 100;
-      const gameCosts = Math.round(((r.va || 0) + (r.monte || 0) + (r.aussteigen || 0) + (r.sechs_tage || 0) + (customVals.get(r.user_id) || 0)) * 100) / 100;
+      const gameCosts = Math.round(((r.va || 0) + (r.monte || 0) + (r.aussteigen || 0) + (r.sechs_tage || 0) + (r.spiel_2550 || 0) + (customVals.get(r.user_id) || 0)) * 100) / 100;
       const total = Math.round((pudelCost + alle9Cost + kranzCost + triclopsCost + gameCosts) * 100) / 100;
 
       presentPlayers.push({ userId: r.user_id, name, pudelCost, alle9Cost, kranzCost, triclopsCost, gameCosts, total });
@@ -124,12 +160,29 @@ router.get("/kegelkladde", requireAuth, (req, res) => {
   const attendanceRows = selectedGameday
     ? db
       .prepare(
-        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, va, monte, aussteigen, sechs_tage, monte_extra, monte_tiebreak, aussteigen_tiebreak, struck_games
+        `SELECT gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, va, monte, aussteigen, sechs_tage, spiel_2550, monte_extra, monte_tiebreak, aussteigen_tiebreak, struck_games, random_avatar
          FROM attendance
          WHERE gameday_id = ?`
       )
       .all(selectedGameday.id)
     : [];
+
+  // Fehlende random_avatar nachträglich zuweisen (für Spieltage vor der Migration)
+  if (selectedGameday) {
+    const missingAvatar = attendanceRows.filter(r => !r.random_avatar);
+    if (missingAvatar.length > 0) {
+      const sheepModeIds = new Set(db.prepare("SELECT id FROM users WHERE avatar_mode = 'sheep'").all().map(u => u.id));
+      const needAvatar = missingAvatar.filter(r => sheepModeIds.has(r.user_id));
+      if (needAvatar.length > 0) {
+        const avatars = pickSheep(needAvatar.length);
+        const upd = db.prepare("UPDATE attendance SET random_avatar = ? WHERE gameday_id = ? AND user_id = ?");
+        for (let i = 0; i < needAvatar.length; i++) {
+          upd.run(avatars[i], selectedGameday.id, needAvatar[i].user_id);
+          needAvatar[i].random_avatar = avatars[i];
+        }
+      }
+    }
+  }
 
   const attendanceMap = new Map();
   for (const row of attendanceRows) {
@@ -219,7 +272,7 @@ router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
   const prevRestMap = new Map();
   if (prevDay) {
     const prevRows = db.prepare(
-      `SELECT user_id, present, contribution, penalties, pudel, alle9, kranz, triclops, carryover, paid, va, monte, aussteigen, sechs_tage
+      `SELECT user_id, present, contribution, penalties, pudel, alle9, kranz, triclops, carryover, paid, va, monte, aussteigen, sechs_tage, spiel_2550
        FROM attendance WHERE gameday_id = ?`
     ).all(prevDay.id);
 
@@ -250,7 +303,7 @@ router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
         const alle9Cost = (totalAlle9 - r.alle9) * 0.10;
         const kranzCost = (totalKranz - r.kranz) * 0.10;
         const triclopsCost = (totalTriclops - r.triclops) * 0.10;
-        const gameCosts = (r.va || 0) + (r.monte || 0) + (r.aussteigen || 0) + (r.sechs_tage || 0) + (prevCustomVals.get(r.user_id) || 0);
+        const gameCosts = (r.va || 0) + (r.monte || 0) + (r.aussteigen || 0) + (r.sechs_tage || 0) + (r.spiel_2550 || 0) + (prevCustomVals.get(r.user_id) || 0);
         toPay = r.contribution + r.penalties + pudelCost + alle9Cost + kranzCost + triclopsCost + gameCosts + (r.carryover || 0);
       } else {
         toPay = (r.contribution || 0) + (r.penalties || 0) + (r.carryover || 0);
@@ -285,6 +338,16 @@ router.post("/kegelkladde/gamedays", requireAuth, verifyCsrf, (req, res) => {
     }
   });
   trx();
+
+  // Random-Avatare für Schaf-Modus-User zuweisen (Pool-basiert, ohne Wiederholung)
+  const sheepUsers = db.prepare("SELECT id FROM users WHERE avatar_mode = 'sheep' AND is_guest = 0").all();
+  if (sheepUsers.length > 0) {
+    const avatars = pickSheep(sheepUsers.length);
+    const setRandomAvatar = db.prepare("UPDATE attendance SET random_avatar = ? WHERE gameday_id = ? AND user_id = ?");
+    for (let i = 0; i < sheepUsers.length; i++) {
+      setRandomAvatar.run(avatars[i], result.lastInsertRowid, sheepUsers[i].id);
+    }
+  }
 
   // "Kosten Bahn" automatisch anlegen
   db.prepare("INSERT INTO gameday_entries (gameday_id, type, name, amount, sort_order) VALUES (?, 'cost', 'Kosten Bahn', 0, 1)").run(result.lastInsertRowid);
@@ -377,13 +440,14 @@ router.post("/kegelkladde/attendance-auto", requireAuth, verifyCsrf, (req, res) 
     const monte = Math.max(0, Math.round((Number.parseFloat(req.body.monte) || 0) * 100) / 100);
     const aussteigen = Math.max(0, Math.round((Number.parseFloat(req.body.aussteigen) || 0) * 100) / 100);
     const sechs_tage = Math.max(0, Math.round((Number.parseFloat(req.body.sechs_tage) || 0) * 100) / 100);
+    const spiel_2550 = Math.max(0, Math.round((Number.parseFloat(req.body.spiel_2550) || 0) * 100) / 100);
     const monte_tiebreak = Math.max(0, Math.min(99, Number.parseInt(req.body.monte_tiebreak, 10) || 0));
     const aussteigen_tiebreak = Math.max(0, Math.min(99, Number.parseInt(req.body.aussteigen_tiebreak, 10) || 0));
 
     db.prepare(
-      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?, monte_tiebreak = ?, aussteigen_tiebreak = ?
+      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?, spiel_2550 = ?, monte_tiebreak = ?, aussteigen_tiebreak = ?
        WHERE gameday_id = ? AND user_id = ?`
-    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, monte_tiebreak, aussteigen_tiebreak, gamedayId, memberId);
+    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, spiel_2550, monte_tiebreak, aussteigen_tiebreak, gamedayId, memberId);
   } else if (dayExists.settled === 2) {
     const paid = Math.max(0, Math.round((Number.parseFloat(req.body.paid) || 0) * 100) / 100);
     const penalties = Math.max(0, Math.min(999, Math.round((Number.parseFloat(req.body.penalties) || 0) * 100) / 100));
@@ -840,6 +904,12 @@ router.post("/kegelkladde/add-guest", requireAuth, requireAdmin, verifyCsrf, (re
     "INSERT OR IGNORE INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid) VALUES (?, ?, 1, 0, 0, ?, 0, 0, 0, 0, 0)"
   ).run(gamedayId, guestId, DEFAULT_CONTRIBUTION_EUR);
 
+  // Random-Avatar für Schaf-Modus-Gast zuweisen
+  const guestAvatarMode = db.prepare("SELECT avatar_mode FROM users WHERE id = ?").get(guestId);
+  if (guestAvatarMode && guestAvatarMode.avatar_mode === 'sheep') {
+    db.prepare("UPDATE attendance SET random_avatar = ? WHERE gameday_id = ? AND user_id = ?").run(pickSheep(1)[0], gamedayId, guestId);
+  }
+
   // Custom-Game-Werte für den Gast anlegen
   const customGames = db.prepare("SELECT id FROM custom_games WHERE gameday_id = ?").all(gamedayId);
   const insertCgv = db.prepare("INSERT OR IGNORE INTO custom_game_values (gameday_id, user_id, custom_game_id, amount) VALUES (?, ?, ?, 0)");
@@ -880,10 +950,11 @@ router.post("/kegelkladde/create-and-add-guest", requireAuth, requireAdmin, veri
 
   const guestId = Number(result.lastInsertRowid);
 
-  // Attendance-Record anlegen
+  // Attendance-Record anlegen (neue Gäste sind Default 'sheep')
+  const rndGuest = pickSheep(1)[0];
   db.prepare(
-    "INSERT INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid) VALUES (?, ?, 1, 0, 0, ?, 0, 0, 0, 0, 0)"
-  ).run(gamedayId, guestId, DEFAULT_CONTRIBUTION_EUR);
+    "INSERT INTO attendance (gameday_id, user_id, present, triclops, penalties, contribution, alle9, kranz, pudel, carryover, paid, random_avatar) VALUES (?, ?, 1, 0, 0, ?, 0, 0, 0, 0, 0, ?)"
+  ).run(gamedayId, guestId, DEFAULT_CONTRIBUTION_EUR, rndGuest);
 
   // Custom-Game-Werte für den Gast anlegen
   const customGames = db.prepare("SELECT id FROM custom_games WHERE gameday_id = ?").all(gamedayId);

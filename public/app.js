@@ -263,7 +263,8 @@ function recalcCosts() {
     const monte = Number(row.querySelector('[name^="monte_"]')?.value || 0) / 10;
     const aussteigen = Number(row.querySelector('[name^="aussteigen_"]')?.value || 0) / 10;
     const sechs_tage = Number(row.querySelector('[name^="sechs_tage_"]')?.value || 0) / 10;
-    const gameCosts = isPresent ? va + monte + aussteigen + sechs_tage : 0;
+    const spiel_2550 = Number(row.querySelector('[name^="spiel_2550_"]')?.value || 0) / 10;
+    const gameCosts = isPresent ? va + monte + aussteigen + sechs_tage + spiel_2550 : 0;
 
     // Custom game fields
     let customGameTotal = 0;
@@ -1056,6 +1057,7 @@ function buildSavePayload(row) {
     payload.monte = (Number(row.querySelector(`[name="monte_${memberId}"]`)?.value) || 0) / 10;
     payload.aussteigen = (Number(row.querySelector(`[name="aussteigen_${memberId}"]`)?.value) || 0) / 10;
     payload.sechs_tage = (Number(row.querySelector(`[name="sechs_tage_${memberId}"]`)?.value) || 0) / 10;
+    payload.spiel_2550 = (Number(row.querySelector(`[name="spiel_2550_${memberId}"]`)?.value) || 0) / 10;
     payload.monte_tiebreak = row.querySelector(`[name="monte_tiebreak_${memberId}"]`)?.value || 0;
     payload.aussteigen_tiebreak = row.querySelector(`[name="aussteigen_tiebreak_${memberId}"]`)?.value || 0;
   } else if (kladdeStatus === 2) {
@@ -1654,6 +1656,7 @@ function initKladdeTabNav() {
     '[name^="monte_"]',
     '[name^="aussteigen_"]',
     '[name^="sechs_tage_"]',
+    '[name^="spiel_2550_"]',
   ];
 
   // Add custom game columns dynamically
@@ -1852,7 +1855,8 @@ function initMobileByGame() {
     { prefix: "va", label: "V+A", isGame: true },
     { prefix: "monte", label: "Monte", isGame: true },
     { prefix: "aussteigen", label: "Aussteigen", isGame: true },
-    { prefix: "sechs_tage", label: "6-Tage", isGame: true }
+    { prefix: "sechs_tage", label: "6-Tage", isGame: true },
+    { prefix: "spiel_2550", label: "25, 50", isGame: true }
   ].forEach(({ prefix, label, isGame }) => {
     const { card, body } = makeCard(label);
     let any = false;
@@ -1996,7 +2000,7 @@ function initMobileByGame() {
       });
 
       // Money inputs: sync value + disabled
-      ["penalties", "va", "monte", "aussteigen", "sechs_tage"].forEach(prefix => {
+      ["penalties", "va", "monte", "aussteigen", "sechs_tage", "spiel_2550"].forEach(prefix => {
         const ti = m.row.querySelector('[name="' + prefix + '_' + m.id + '"]');
         const mi = gc.querySelector('[data-mi="' + prefix + '_' + m.id + '"]');
         if (ti && mi) {
@@ -3044,6 +3048,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Avatar-Modus: Auto-Submit + Upload-Sektion toggle
+  const avatarModeForm = document.getElementById("avatarModeForm");
+  const avatarUploadSection = document.getElementById("avatarUploadSection");
+  if (avatarModeForm) {
+    avatarModeForm.querySelectorAll('input[name="avatarMode"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        // Active-Klasse setzen
+        avatarModeForm.querySelectorAll(".avatar-mode-card").forEach((c) => c.classList.remove("active"));
+        radio.closest(".avatar-mode-card").classList.add("active");
+        // Upload-Sektion ein-/ausblenden
+        if (avatarUploadSection) {
+          avatarUploadSection.style.display = radio.value === "upload" ? "" : "none";
+        }
+        avatarModeForm.submit();
+      });
+    });
+  }
+
   // Profile page: activate tab from hash
   if (window.location.hash) {
     const hash = window.location.hash.replace("#", "");
@@ -3782,7 +3804,7 @@ function initMemberDragDrop() {
 
   function saveLiveState() {
     var game = GAMES[currentGameIdx];
-    if (!game || (game.type !== "va" && game.type !== "aussteigen" && game.type !== "monte" && game.type !== "sechs_tage")) return;
+    if (!game || (game.type !== "va" && game.type !== "aussteigen" && game.type !== "monte" && game.type !== "sechs_tage" && game.type !== "spiel_2550")) return;
     if (game.type === "monte") { saveMonteState(); return; }
     if (!gameOrder.length || currentTurnIdx < 0) return;
 
@@ -3837,6 +3859,8 @@ function initMemberDragDrop() {
         currentTeamIdx: sechsTageState.currentTeamIdx,
         currentSlot: sechsTageState.currentSlot
       };
+    } else if (game.type === "spiel_2550") {
+      state.spiel2550State = { serverBased: true };
     }
 
     try { sessionStorage.setItem(liveStateKey, JSON.stringify(state)); } catch(e) {}
@@ -3937,6 +3961,8 @@ function initMemberDragDrop() {
       sechsTageState.currentDay = std.currentDay;
       sechsTageState.currentTeamIdx = std.currentTeamIdx;
       sechsTageState.currentSlot = std.currentSlot;
+    } else if (game.type === "spiel_2550" && state.spiel2550State) {
+      // State kommt vom Server — render2550Game() laedt per GET /2550/state
     } else {
       clearLiveState();
       return;
@@ -4003,6 +4029,10 @@ function initMemberDragDrop() {
         .catch(function() {
           gameContent.innerHTML = '<div class="live-loading">Fehler beim Laden.</div>';
         });
+    } else if (game.type === "spiel_2550") {
+      liveView.classList.add("live-shuffle-sidebar");
+      shuffleArea.style.display = "";
+      render2550Game(); // Laedt State vom Server
     } else {
       liveView.classList.add("live-shuffle-sidebar");
       shuffleArea.style.display = ""; // Clear inline style so CSS flex rule takes effect
@@ -4037,7 +4067,8 @@ function initMemberDragDrop() {
       { key: "va", label: "V+A", type: "va" },
       { key: "monte", label: "Monte", type: "monte" },
       { key: "aussteigen", label: "Aussteigen", type: "aussteigen" },
-      { key: "sechs_tage", label: "6-Tage-Rennen", type: "sechs_tage" }
+      { key: "sechs_tage", label: "6-Tage-Rennen", type: "sechs_tage" },
+      { key: "spiel_2550", label: "25, 50", type: "spiel_2550" }
     ];
     // Custom games
     const table = document.querySelector(".kladde-table:not(.kladde-preview)");
@@ -4427,6 +4458,8 @@ function initMemberDragDrop() {
       renderShufflePhase(game, function() { renderAussteigenGame(); });
     } else if (game.type === "sechs_tage") {
       renderShufflePhase(game, function() { renderSechsTageGame(); });
+    } else if (game.type === "spiel_2550") {
+      renderShufflePhase(game, function() { render2550Game(); });
     } else {
       renderSimpleGame(game);
     }
@@ -5354,13 +5387,28 @@ function initMemberDragDrop() {
     }
 
     if (vaState.currentThrow >= 5) {
-      // Volle done for this player -> next
+      // Volle done for this player -> show result briefly, then next
       var player = gameOrder[currentTurnIdx];
-      vaState.results[player.id].volle = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
+      var volleSum = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
+      vaState.results[player.id].volle = volleSum;
       vaState.throwHistory[player.id] = vaState.throwHistory[player.id] || {};
       vaState.throwHistory[player.id].volleThrows = vaState.volleThrows.slice();
-      currentTurnIdx++;
-      renderVATurn();
+      // Summary in controls area (replaces picker)
+      var sumHtml = '<div class="va-phase-container"><div class="va-phase-title">Volle fertig!</div>';
+      sumHtml += '<div class="va-throw-slots">';
+      for (var si = 0; si < 5; si++) {
+        var se = vaState.volleThrows[si];
+        var sv = se.marker === "kranz" ? 'K(12)' : se.marker === "pudel" ? 'P' : se.marker === "triclops" ? 'T(3)' : se.marker === "alle9" ? '9' : String(se.val);
+        sumHtml += '<div class="va-throw-slot filled"><div class="va-throw-val">' + sv + '</div></div>';
+      }
+      sumHtml += '<div class="va-throw-sum">= ' + volleSum + '</div></div>';
+      sumHtml += '<div class="va-turn-pause">Weiter in K\u00fcrze\u2026</div></div>';
+      liveControls._removeKeyHandler();
+      liveControls.mode = null;
+      liveControls.opts = null;
+      shuffleArea.innerHTML = sumHtml;
+      saveLiveState();
+      setTimeout(function() { currentTurnIdx++; renderVATurn(); }, 3500);
       return;
     }
     renderVAPlayerUI();
@@ -5519,7 +5567,7 @@ function initMemberDragDrop() {
     html += '<button type="button" class="va-picker-btn" data-va-pick="6">6</button>';
     html += '<button type="button" class="va-picker-btn" data-va-pick="7">7</button>';
     html += '<button type="button" class="va-picker-btn" data-va-pick="8">8</button>';
-    html += '<button type="button" class="va-picker-btn va-picker-tri" data-va-pick="triclops"><span class="tri-pins"><span></span><span></span><span></span></span></button>';
+    html += '<button type="button" class="va-picker-btn va-picker-tri" data-va-pick="triclops"><img src="/img/triclops_icon.png" alt="Triclops" class="va-picker-tri-icon" /></button>';
     html += '<button type="button" class="va-picker-btn va-picker-kranz" data-va-pick="kranz">12</button>';
     html += '</div>';
     return html;
@@ -5610,8 +5658,23 @@ function initMemberDragDrop() {
     // Write to Kladde
     syncVAPlayerToKladde(player, vaState.results[player.id].total);
 
-    currentTurnIdx++;
-    renderVATurn();
+    // Show result summary before advancing
+    var sumHtml = '<div class="va-phase-container">';
+    sumHtml += '<div class="va-phase-title">Abr\u00e4umen fertig!</div>';
+    sumHtml += '<div class="va-turn-summary-table">';
+    sumHtml += '<div class="va-turn-summary-row va-turn-summary-total"><span>Abr\u00e4umen</span><strong>' + abraeumenSum + '</strong></div>';
+    sumHtml += '</div>';
+    sumHtml += '<div class="va-turn-pause">Weiter in K\u00fcrze\u2026</div></div>';
+    liveControls._removeKeyHandler();
+    liveControls.mode = null;
+    liveControls.opts = null;
+    shuffleArea.innerHTML = sumHtml;
+    saveLiveState();
+
+    setTimeout(function() {
+      currentTurnIdx++;
+      renderVATurn();
+    }, 3500);
   }
 
   function syncVAPlayerToKladde(player, total) {
@@ -5747,7 +5810,8 @@ function initMemberDragDrop() {
     html += '</div>';
 
     gameContent.innerHTML = html;
-    liveControls.clear(); // Clear controls panel for results view
+    liveControls.clear();
+    removeSidebarPinkelpause();
 
     // Store costs for later
     vaState.costs = costs;
@@ -6174,6 +6238,7 @@ function initMemberDragDrop() {
 
     gameContent.innerHTML = mainHtml;
     liveControls.clear();
+    removeSidebarPinkelpause();
 
     document.getElementById("aussteigenAcceptBtn").addEventListener("click", function() {
       syncAussteigenToKladde();
@@ -6590,7 +6655,8 @@ function initMemberDragDrop() {
     html += '</div>';
 
     gameContent.innerHTML = html;
-    liveControls.clear(); // Clear picker from right side
+    liveControls.clear();
+    removeSidebarPinkelpause();
 
     sechsTageState.costs = costs;
 
@@ -7442,6 +7508,269 @@ function initMemberDragDrop() {
     });
   });
 
+  // =============================================
+  // --- 25, 50 (Live-Integration, Server-State) ---
+  // =============================================
+  function render2550Game() {
+    var state2550 = null;
+
+    function formatEuro2550(val) {
+      return Number(val || 0).toFixed(2).replace(".", ",");
+    }
+
+    function getZoneInfo(cumulative) {
+      var zoneStart = Math.floor(cumulative / 25) * 25;
+      var nextZone = (Math.floor(cumulative / 25) + 1) * 25;
+      var inZone = zoneStart > 0 && cumulative <= zoneStart + 5;
+      return { zoneStart: zoneStart, nextZone: nextZone, inZone: inZone };
+    }
+
+    function findServerPlayer(playerId) {
+      if (!state2550 || !state2550.players) return null;
+      for (var i = 0; i < state2550.players.length; i++) {
+        if (String(state2550.players[i].id) === String(playerId)) return state2550.players[i];
+      }
+      return null;
+    }
+
+    function findLivePlayer(playerId) {
+      for (var i = 0; i < players.length; i++) {
+        if (String(players[i].id) === String(playerId)) return players[i];
+      }
+      return null;
+    }
+
+    function renderUI() {
+      if (!state2550 || !state2550.started) return;
+
+      var html = '';
+
+      // Turn-Header (Server-basiert)
+      if (!state2550.finished && state2550.currentPlayerId) {
+        var cp = findServerPlayer(state2550.currentPlayerId);
+        var lp = findLivePlayer(state2550.currentPlayerId);
+        html += '<div class="turn-header">';
+        html += '<div class="turn-current">';
+        html += '<span class="turn-label">Am Zug:</span>';
+        if (lp) html += playerAvatarHtml(lp, "turn-avatar");
+        html += '<span class="turn-name">' + escHtml(cp ? cp.name : "?") + '</span>';
+        html += '</div>';
+        // Naechster Spieler
+        var nextIdx = (state2550.currentPlayerIndex + 1) % state2550.players.length;
+        var nextP = state2550.players[nextIdx];
+        var nextLp = findLivePlayer(nextP.id);
+        html += '<div class="turn-next">';
+        if (nextLp) html += playerAvatarHtml(nextLp, "turn-avatar-sm");
+        html += '<span class="turn-next-label">' + escHtml(nextP.name) + '</span>';
+        html += '</div>';
+        html += '</div>';
+      }
+
+      // Zone-Display
+      var zi = getZoneInfo(state2550.cumulative);
+      html += '<div class="game-2550-zone-display">';
+      if (zi.inZone) {
+        html += '<span class="zone-active">Zone ' + zi.zoneStart + '\u2013' + (zi.zoneStart + 5) + ' (' + formatEuro2550(zi.zoneStart / 100) + ' \u20ac)</span>';
+      } else {
+        html += '<span class="zone-next">N\u00e4chste Zone: ' + zi.nextZone + '\u2013' + (zi.nextZone + 5) + ' (' + formatEuro2550(zi.nextZone / 100) + ' \u20ac)</span>';
+      }
+      html += '</div>';
+
+      // Cumulative
+      html += '<div class="game-2550-cumulative">' + state2550.cumulative + ' <span class="cum-label">/ 206</span></div>';
+
+      // Fortschrittsbalken
+      var pct = Math.min(100, Math.round(state2550.cumulative / 206 * 100));
+      html += '<div class="game-2550-progress"><div class="game-2550-progress-bar" style="width:' + pct + '%"></div></div>';
+
+      // Spielende
+      if (state2550.finished) {
+        html += '<div class="game-2550-finished">';
+        html += '<p>Spiel beendet!</p>';
+        html += '<div class="game-2550-actions">';
+        html += '<button type="button" class="btn-primary" id="btn2550Save">Betr\u00e4ge \u00fcbernehmen</button>';
+        html += '<button type="button" class="btn-secondary" id="btn2550Reset">Zur\u00fccksetzen</button>';
+        html += '</div></div>';
+      }
+
+      // Spieler-Zusammenfassung
+      html += '<div class="game-2550-summary"><h4>Strafen</h4><table>';
+      html += '<thead><tr><th>Spieler</th><th>Betrag</th></tr></thead><tbody>';
+      if (state2550.players && state2550.penalties) {
+        for (var p = 0; p < state2550.players.length; p++) {
+          var pl = state2550.players[p];
+          var pen = state2550.penalties[pl.id] || 0;
+          var isCurrent = String(pl.id) === String(state2550.currentPlayerId);
+          html += '<tr' + (isCurrent ? ' class="row-current"' : '') + '>';
+          html += '<td>' + escHtml(pl.name) + '</td>';
+          html += '<td>' + formatEuro2550(pen) + ' \u20ac</td>';
+          html += '</tr>';
+        }
+      }
+      html += '</tbody></table></div>';
+
+      // Wurf-Protokoll
+      if (state2550.throws && state2550.throws.length > 0) {
+        html += '<div class="game-2550-log"><h4>Wurf-Protokoll</h4><table>';
+        html += '<thead><tr><th>#</th><th>Spieler</th><th>Wurf</th><th>Summe</th><th>Strafe</th></tr></thead><tbody>';
+        for (var t = state2550.throws.length - 1; t >= 0; t--) {
+          var tw = state2550.throws[t];
+          var sp = findServerPlayer(tw.playerId);
+          var throwName = sp ? sp.name : "?";
+          var rowClass = tw.isPudel ? "pudel-row" : (tw.penalty > 0 ? "penalty-row" : "");
+          var valLabel = tw.isPudel ? "Pudel" : (tw.value === 12 ? "Kranz (12)" : String(tw.value));
+          html += '<tr class="' + rowClass + '">';
+          html += '<td>' + (t + 1) + '</td>';
+          html += '<td>' + escHtml(throwName) + '</td>';
+          html += '<td>' + valLabel + '</td>';
+          html += '<td>' + tw.cumulative + '</td>';
+          html += '<td>' + (tw.penalty > 0 ? formatEuro2550(tw.penalty) + ' \u20ac' : '\u2013') + '</td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+      }
+
+      gameContent.innerHTML = html;
+
+      // Event-Listener
+      var saveBtn = document.getElementById("btn2550Save");
+      if (saveBtn) saveBtn.addEventListener("click", doSave2550);
+      var resetBtn = document.getElementById("btn2550Reset");
+      if (resetBtn) resetBtn.addEventListener("click", doReset2550);
+
+      // Volle-Picker in Sidebar
+      if (!state2550.finished) {
+        liveControls.renderVolle({
+          onPick: function(throwVal, marker) {
+            var val = marker === "pudel" ? "pudel" : throwVal;
+            fetch("/kegelkladde/2550/throw", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+              body: JSON.stringify({ csrfToken: csrfToken, gamedayId: Number(gamedayId), value: val })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) { showToast(data.error, "error"); return; }
+              state2550 = data;
+              renderUI();
+              saveLiveState();
+            })
+            .catch(function() { showToast("Fehler beim Eintragen.", "error"); });
+          },
+          onUndo: function() {
+            fetch("/kegelkladde/2550/undo", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+              body: JSON.stringify({ csrfToken: csrfToken, gamedayId: Number(gamedayId) })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.error) { showToast(data.error, "error"); return; }
+              state2550 = data;
+              renderUI();
+              saveLiveState();
+            })
+            .catch(function() { showToast("Fehler.", "error"); });
+          },
+          canUndo: state2550.throws && state2550.throws.length > 0
+        });
+      } else {
+        liveControls.clear();
+      }
+    }
+
+    function doSave2550() {
+      fetch("/kegelkladde/2550/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ csrfToken: csrfToken, gamedayId: Number(gamedayId) })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) { showToast(data.error, "error"); return; }
+        // Kladde-Inputs updaten
+        if (data.penalties) {
+          var rows = document.querySelectorAll(".kladde-table tbody tr");
+          rows.forEach(function(row) {
+            var mid = row.dataset.memberId;
+            var input = row.querySelector('[name="spiel_2550_' + mid + '"]');
+            if (input && data.penalties[mid] !== undefined) {
+              input.value = Math.round(data.penalties[mid] * 10);
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+              input.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+          });
+        }
+        if (typeof recalcCosts === "function") recalcCosts();
+        showToast("Betr\u00e4ge \u00fcbernommen!", "success");
+      })
+      .catch(function() { showToast("Fehler beim Speichern.", "error"); });
+    }
+
+    function doReset2550() {
+      if (!confirm("Spiel wirklich zur\u00fccksetzen? Alle W\u00fcrfe gehen verloren.")) return;
+      fetch("/kegelkladde/2550/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ csrfToken: csrfToken, gamedayId: Number(gamedayId) })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) { showToast(data.error, "error"); return; }
+        // Kladde-Inputs auf 0
+        var rows = document.querySelectorAll(".kladde-table tbody tr");
+        rows.forEach(function(row) {
+          var mid = row.dataset.memberId;
+          var input = row.querySelector('[name="spiel_2550_' + mid + '"]');
+          if (input) {
+            input.value = 0;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        });
+        if (typeof recalcCosts === "function") recalcCosts();
+        loadState2550();
+      })
+      .catch(function() { showToast("Fehler beim Zur\u00fccksetzen.", "error"); });
+    }
+
+    function loadState2550() {
+      gameContent.innerHTML = '<div class="live-loading">Lade 25, 50\u2026</div>';
+      fetch("/kegelkladde/2550/state?gamedayId=" + gamedayId)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.started) {
+          startGame2550();
+        } else {
+          state2550 = data;
+          renderUI();
+          saveLiveState();
+        }
+      })
+      .catch(function() {
+        gameContent.innerHTML = '<p style="color:var(--error)">Fehler beim Laden.</p>';
+      });
+    }
+
+    function startGame2550() {
+      gameContent.innerHTML = '<div class="live-loading">Starte 25, 50\u2026</div>';
+      fetch("/kegelkladde/2550/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ csrfToken: csrfToken, gamedayId: Number(gamedayId) })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) { showToast(data.error, "error"); gameContent.innerHTML = ''; return; }
+        loadState2550();
+      })
+      .catch(function() { showToast("Fehler beim Starten.", "error"); });
+    }
+
+    // Start: State vom Server laden
+    loadState2550();
+  }
+
   // Restore live state after all declarations — but NOT after a fresh login
   var flashEl = document.getElementById("flashData");
   var isLogin = false;
@@ -7455,9 +7784,9 @@ function initMemberDragDrop() {
   }
 })();
 
-/* ═══ Sheep Graveyard DOM Renderer ═══ */
+/* ═══ Sheep Graveyard DOM Renderer (Stall-View) ═══ */
 (function() {
-  var containers = document.querySelectorAll('.gy-sheep-dom');
+  var containers = document.querySelectorAll('.stall-sheep');
   if (!containers.length) return;
 
   var TORSO_W = 17, TORSO_H = 14;
@@ -7474,7 +7803,7 @@ function initMemberDragDrop() {
     var sizeMul = parseFloat(container.dataset.size) || 1;
     var letter = container.dataset.letter || '';
 
-    var s = 2.5 * Math.min(sizeMul, 1.6);
+    var s = 1.5 * Math.min(sizeMul, 1.6);
 
     var tw = TORSO_W * (tr.chub || 1), th = TORSO_H;
     var hw = HEAD_W * (tr.headMul || 1), hh = HEAD_H * (tr.headMul || 1);
@@ -7667,3 +7996,4 @@ function initMemberDragDrop() {
 
   containers.forEach(renderGraveyardSheep);
 })();
+

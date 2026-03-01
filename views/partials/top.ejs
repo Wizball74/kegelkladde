@@ -50,11 +50,7 @@
       <!-- Desktop profile + logout -->
       <div class="topbar-actions">
         <a href="/profil" class="profile-link" title="Mein Profil">
-          <% if (currentUser.avatar) { %>
-            <img src="/uploads/avatars/<%= currentUser.avatar %>" alt="Profil" class="topbar-avatar" />
-          <% } else { %>
-            <span class="topbar-avatar topbar-avatar-initials"><%= currentUser.firstName ? currentUser.firstName[0].toUpperCase() : '' %><%= currentUser.lastName ? currentUser.lastName[0].toUpperCase() : '' %></span>
-          <% } %>
+          <%- renderAvatar(currentUser, 'topbar-avatar') %>
         </a>
         <form method="post" action="/logout" class="logout-form">
           <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
@@ -84,11 +80,7 @@
       <% if (isAdmin) { %><a href="/admin" class="<%= currentPath === '/admin' ? 'active' : '' %>">Einstellungen</a><% } %>
       <a href="/profil" class="<%= currentPath === '/profil' ? 'active' : '' %>">
         <span class="mobile-nav-profile">
-          <% if (currentUser.avatar) { %>
-            <img src="/uploads/avatars/<%= currentUser.avatar %>" alt="" class="mobile-nav-avatar" />
-          <% } else { %>
-            <span class="mobile-nav-avatar mobile-nav-avatar-initials"><%= currentUser.firstName ? currentUser.firstName[0].toUpperCase() : '' %><%= currentUser.lastName ? currentUser.lastName[0].toUpperCase() : '' %></span>
-          <% } %>
+          <%- renderAvatar(currentUser, 'mobile-nav-avatar') %>
           Mein Profil
         </span>
       </a>

@@ -26,11 +26,7 @@
           <span class="drag-handle" title="Reihenfolge aendern">&#9776;</span>
         <% } %>
         <div class="mcard-avatar">
-          <% if (m.avatar) { %>
-            <img src="/uploads/avatars/<%= m.avatar %>" alt="" />
-          <% } else { %>
-            <span class="mcard-avatar-initials"><%= m.first_name ? m.first_name[0].toUpperCase() : '' %><%= m.last_name ? m.last_name[0].toUpperCase() : '' %></span>
-          <% } %>
+          <%- renderAvatar(m, 'mcard-avatar-inner') %>
         </div>
         <div class="mcard-body">
           <div class="mcard-name-row">
@@ -76,11 +72,7 @@
             <span class="drag-handle" title="Reihenfolge aendern">&#9776;</span>
           <% } %>
           <div class="mcard-avatar mcard-avatar-sm">
-            <% if (m.avatar) { %>
-              <img src="/uploads/avatars/<%= m.avatar %>" alt="" />
-            <% } else { %>
-              <span class="mcard-avatar-initials"><%= m.first_name ? m.first_name[0].toUpperCase() : '' %><%= m.last_name ? m.last_name[0].toUpperCase() : '' %></span>
-            <% } %>
+            <%- renderAvatar(m, 'mcard-avatar-inner') %>
           </div>
           <div class="mcard-body">
             <div class="mcard-name-row">

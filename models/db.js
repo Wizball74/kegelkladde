@@ -300,6 +300,17 @@ db.exec(`
   );
 `);
 
+// Tabelle für "25, 50"-Spielstand
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_2550 (
+    gameday_id INTEGER PRIMARY KEY,
+    player_order TEXT NOT NULL,
+    throws TEXT NOT NULL DEFAULT '[]',
+    finished INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(gameday_id) REFERENCES gamedays(id) ON DELETE CASCADE
+  );
+`);
+
 // Migration: alte gameday_costs Tabelle entfernen falls vorhanden
 db.exec("DROP TABLE IF EXISTS gameday_costs");
 
@@ -341,6 +352,22 @@ if (!userColumns.includes("last_login_at")) {
 // Migration: avatar auf users
 if (!userColumns.includes("avatar")) {
   db.exec("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT NULL");
+}
+
+// Migration: avatar_mode auf users (upload / sheep / plain)
+if (!userColumns.includes("avatar_mode")) {
+  db.exec("ALTER TABLE users ADD COLUMN avatar_mode TEXT NOT NULL DEFAULT 'sheep'");
+  // Bestehende User mit Avatar → 'upload', Rest bleibt 'sheep'
+  db.exec("UPDATE users SET avatar_mode = 'upload' WHERE avatar IS NOT NULL");
+}
+
+// Migration: random_avatar auf attendance (zufälliges Schaf pro Spieltag)
+const attColumns = db.prepare("PRAGMA table_info(attendance)").all().map((c) => c.name);
+if (!attColumns.includes("random_avatar")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN random_avatar TEXT DEFAULT NULL");
+}
+if (!attColumns.includes("spiel_2550")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN spiel_2550 REAL DEFAULT 0");
 }
 
 // Migration: game-Spalte auf records
@@ -410,7 +437,7 @@ function decrypt(payload) {
 // Member helper functions
 function getOrderedMembers() {
   const members = db
-    .prepare("SELECT id, first_name, last_name, role, is_guest, avatar FROM users ORDER BY lower(first_name), lower(last_name)")
+    .prepare("SELECT id, first_name, last_name, role, is_guest, avatar, avatar_mode FROM users ORDER BY lower(first_name), lower(last_name)")
     .all();
 
   const orderRow = db.prepare("SELECT order_json FROM member_order WHERE id = 1").get();

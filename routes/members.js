@@ -41,7 +41,7 @@ const avatarUpload = multer({
 router.get("/members", requireAuth, (req, res) => {
   const orderedIds = getOrderedMembers().map((m) => m.id);
   const allMembers = db
-    .prepare("SELECT id, username, role, is_guest, first_name, last_name, avatar, address_enc, email_enc, phones_enc FROM users ORDER BY lower(first_name), lower(last_name)")
+    .prepare("SELECT id, username, role, is_guest, first_name, last_name, avatar, avatar_mode, address_enc, email_enc, phones_enc FROM users ORDER BY lower(first_name), lower(last_name)")
     .all()
     .map((m) => ({
       ...m,
@@ -68,7 +68,7 @@ router.get("/members", requireAuth, (req, res) => {
 
 router.get("/profil", requireAuth, (req, res) => {
   const user = db
-    .prepare("SELECT id, username, first_name, last_name, avatar, address_enc, email_enc, phones_enc FROM users WHERE id = ?")
+    .prepare("SELECT id, username, first_name, last_name, avatar, avatar_mode, address_enc, email_enc, phones_enc FROM users WHERE id = ?")
     .get(req.session.userId);
 
   res.render("profil", {
@@ -119,6 +119,22 @@ router.post("/profil/update", requireAuth, verifyCsrf, (req, res) => {
   res.redirect("/profil");
 });
 
+router.post("/profil/avatar-mode", requireAuth, verifyCsrf, (req, res) => {
+  const mode = req.body.avatarMode;
+  if (!['upload', 'sheep', 'plain'].includes(mode)) {
+    req.session.flash = { type: "error", message: "Ungültiger Avatar-Modus." };
+    return res.redirect("/profil");
+  }
+
+  db.prepare("UPDATE users SET avatar_mode = ? WHERE id = ?").run(mode, req.session.userId);
+  req.session.user.avatarMode = mode;
+
+  logAudit(req.session.userId, "AVATAR_MODE_UPDATE", "user", req.session.userId, { mode });
+  req.session.flash = { type: "success", message: "Avatar-Modus gespeichert." };
+
+  res.redirect("/profil");
+});
+
 // multer must run before verifyCsrf (multipart body not parsed until multer runs)
 router.post("/profil/avatar", requireAuth, (req, res, next) => {
   avatarUpload.single("avatar")(req, res, (err) => {
@@ -146,10 +162,11 @@ router.post("/profil/avatar", requireAuth, (req, res, next) => {
   }
 
   const filename = req.file.filename;
-  db.prepare("UPDATE users SET avatar = ? WHERE id = ?").run(filename, req.session.userId);
+  db.prepare("UPDATE users SET avatar = ?, avatar_mode = 'upload' WHERE id = ?").run(filename, req.session.userId);
 
   // Update session
   req.session.user.avatar = filename;
+  req.session.user.avatarMode = 'upload';
 
   logAudit(req.session.userId, "AVATAR_UPDATE", "user", req.session.userId);
   req.session.flash = { type: "success", message: "Avatar aktualisiert." };

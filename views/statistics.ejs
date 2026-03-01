@@ -358,47 +358,37 @@
 
   <!-- Tab 4: Ahnengalerie -->
   <div class="tab-panel" id="tab-ahnengalerie">
-    <% if (deadSheep.length === 0) { %>
+    <% if (!stalls || stalls.length === 0) { %>
       <div class="empty-state">
         <div class="empty-state-icon">&#129702;</div>
         <p>Die Ahnengalerie ist noch leer.</p>
         <p class="subtle">Hier erscheinen alle Schafe, die das Zeitliche gesegnet haben.</p>
       </div>
     <% } else { %>
-      <div class="gy-stats">
-        <span class="gy-stat"><strong><%= graveyardStats.total %></strong> Schafe</span>
-        <% if (graveyardStats.evicted > 0) { %><span class="gy-stat">&#128116; <%= graveyardStats.evicted %> verdrängt</span><% } %>
-        <% if (graveyardStats.thrown > 0) { %><span class="gy-stat">&#128640; <%= graveyardStats.thrown %> geworfen</span><% } %>
-        <% if (graveyardStats.dismissed > 0) { %><span class="gy-stat">&#128075; <%= graveyardStats.dismissed %> verscheucht</span><% } %>
-        <% if (graveyardStats.departed > 0) { %><span class="gy-stat">&#9992;&#65039; <%= graveyardStats.departed %> abgehauen</span><% } %>
-        <% if (graveyardStats.stuck > 0) { %><span class="gy-stat">&#128027; <%= graveyardStats.stuck %> stuck</span><% } %>
-      </div>
-
-      <div class="gy-grid">
-        <% deadSheep.forEach((sheep) => {
-          const traits = JSON.parse(sheep.traits_json);
-          const ageSec = Math.floor(sheep.age_ms / 1000);
-          const ageMin = Math.floor(ageSec / 60);
-          const ageH = Math.floor(ageMin / 60);
-          let ageStr = ageSec < 60 ? ageSec + 's' : ageMin < 60 ? ageMin + 'min' : ageH + 'h ' + (ageMin % 60) + 'min';
-          const causeLabels = { eviction: '&#128116; Verdrängt', stuck: '&#128027; Stuck', dismissed: '&#128075; Verscheucht', thrown: '&#128640; Geworfen', departed: '&#9992;&#65039; Abgehauen', unknown: '&#10067;' };
-          const causeLabel = causeLabels[sheep.death_cause] || sheep.death_cause;
-          const diedDate = sheep.died_at ? sheep.died_at.substring(0, 10).split('-').reverse().join('.') : '';
-        %>\
-          <div class="gy-card">
-            <div class="gy-sheep-dom"
-              data-traits="<%= encodeURIComponent(JSON.stringify(traits)) %>"
-              data-size="<%= sheep.size_multiplier %>"
-              data-letter="<%= sheep.letter %>">
+      <div class="stall-grid">
+        <% stalls.forEach((stall) => { %>
+          <div class="stall">
+            <div class="stall-header">
+              <span class="stall-name"><%= stall.name %></span>
+              <span class="stall-count"><%= stall.stats.total %> Schaf<%= stall.stats.total !== 1 ? 'e' : '' %></span>
             </div>
-            <div class="gy-info">
-              <div class="gy-letter"><%= sheep.letter || '?' %></div>
-              <% if (sheep.owner_name) { %><div class="gy-owner"><%= sheep.owner_name %></div><% } %>
-              <div class="gy-meta">
-                <span title="Lebensdauer">&#9201; <%= ageStr %></span>
-                <span title="Todesursache"><%- causeLabel %></span>
-              </div>
-              <div class="gy-date"><%= diedDate %></div>
+            <div class="stall-ground">
+              <% stall.sheep.forEach((sheep, idx) => {
+                const traits = JSON.parse(sheep.traits_json);
+              %>
+                <div class="stall-sheep"
+                  data-traits="<%= encodeURIComponent(JSON.stringify(traits)) %>"
+                  data-size="<%= sheep.size_multiplier %>"
+                  data-letter="<%= sheep.letter %>">
+                </div>
+              <% }) %>
+            </div>
+            <div class="stall-stats">
+              <% if (stall.stats.evicted > 0) { %><span>&#128116; <%= stall.stats.evicted %></span><% } %>
+              <% if (stall.stats.thrown > 0) { %><span>&#128640; <%= stall.stats.thrown %></span><% } %>
+              <% if (stall.stats.dismissed > 0) { %><span>&#128075; <%= stall.stats.dismissed %></span><% } %>
+              <% if (stall.stats.departed > 0) { %><span>&#9992;&#65039; <%= stall.stats.departed %></span><% } %>
+              <% if (stall.stats.stuck > 0) { %><span>&#128027; <%= stall.stats.stuck %></span><% } %>
             </div>
           </div>
         <% }) %>

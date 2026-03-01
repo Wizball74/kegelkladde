@@ -150,7 +150,7 @@
   width: 5px; height: 1.5px; border-radius: .5px; background: #b8860b; }
 
 /* Blume */
-.s-flower { top: -1px; right: -3px; width: 5px; height: 5px; border-radius: 50%; z-index: 10; }
+.s-flower { top: -1px; left: calc(100% - 2px); width: 5px; height: 5px; border-radius: 50%; z-index: 10; }
 .s-flower::before { content: ''; position: absolute;
   top: 50%; left: 50%; transform: translate(-50%,-50%);
   width: 2px; height: 2px; border-radius: 50%; background: #ffd740; }
@@ -175,6 +175,17 @@
   top: -8px; left: 50%; transform: translateX(-50%);
   background-image: url(/img/spritesheet_hats.png);
   background-size: 40px 36px;
+  background-repeat: no-repeat;
+  image-rendering: auto;
+}
+
+/* Sprite Perücke — Sheet 936×1267, 3×3 Grid, Prozent-Positionierung */
+.s-sprite-wig {
+  position: absolute; pointer-events: none; z-index: 12;
+  width: 11px; height: 15px;
+  top: -4px; left: 50%; transform: translateX(-50%);
+  background-image: url(/img/spritesheet_peruecken.png);
+  background-size: 300% 300%;
   background-repeat: no-repeat;
   image-rendering: auto;
 }

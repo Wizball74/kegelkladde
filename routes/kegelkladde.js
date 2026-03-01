@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog, deleteDeadSheepByDate } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
@@ -638,8 +638,16 @@ router.post("/kegelkladde/delete", requireAuth, requireAdmin, verifyCsrf, (req, 
   db.prepare("DELETE FROM attendance WHERE gameday_id = ?").run(gamedayId);
   db.prepare("DELETE FROM gamedays WHERE id = ?").run(gamedayId);
 
-  logAudit(req.session.userId, "GAMEDAY_DELETE", "gameday", gamedayId, { matchDate: gameday.match_date });
-  req.session.flash = { type: "success", message: `Spieltag ${gameday.match_date} gelöscht.` };
+  // Optional: Schafe des Spieltags aus der Ahnengalerie löschen
+  let sheepDeleted = 0;
+  if (req.body.deleteSheep === "1") {
+    const result = deleteDeadSheepByDate(gameday.match_date);
+    sheepDeleted = result.changes;
+  }
+
+  logAudit(req.session.userId, "GAMEDAY_DELETE", "gameday", gamedayId, { matchDate: gameday.match_date, sheepDeleted });
+  const sheepMsg = sheepDeleted > 0 ? ` (+ ${sheepDeleted} Schaf${sheepDeleted !== 1 ? 'e' : ''} aus Ahnengalerie)` : '';
+  req.session.flash = { type: "success", message: `Spieltag ${gameday.match_date} gelöscht.${sheepMsg}` };
 
   res.redirect("/kegelkladde");
 });

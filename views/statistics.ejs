@@ -375,11 +375,16 @@
             <div class="stall-ground">
               <% stall.sheep.forEach((sheep, idx) => {
                 const traits = JSON.parse(sheep.traits_json);
+                const canDelete = isAdmin || (currentUser && String(sheep.owner_id) === String(currentUser.id));
               %>
                 <div class="stall-sheep"
                   data-traits="<%= encodeURIComponent(JSON.stringify(traits)) %>"
                   data-size="<%= sheep.size_multiplier %>"
-                  data-letter="<%= sheep.letter %>">
+                  data-letter="<%= sheep.letter %>"
+                  data-sheep-id="<%= sheep.id %>">
+                  <% if (canDelete) { %>
+                    <button type="button" class="stall-sheep-delete" data-delete-sheep="<%= sheep.id %>" title="Schaf löschen">&times;</button>
+                  <% } %>
                 </div>
               <% }) %>
             </div>

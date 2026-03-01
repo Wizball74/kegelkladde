@@ -1,6 +1,6 @@
 const express = require("express");
-const { db, addDeadSheep, getDeadSheep, getGraveyardStats } = require("../models/db");
-const { requireAuth } = require("../middleware/auth");
+const { db, addDeadSheep, getDeadSheep, getDeadSheepById, deleteDeadSheep, getGraveyardStats } = require("../models/db");
+const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -14,6 +14,19 @@ router.post("/api/sheep-graveyard", requireAuth, (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'DB error' });
   }
+});
+
+// Einzelnes Schaf löschen (Owner: eigene, Admin: alle)
+router.delete("/api/sheep-graveyard/:id", requireAuth, verifyCsrf, (req, res) => {
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Ungültige ID" });
+  const sheep = getDeadSheepById(id);
+  if (!sheep) return res.status(404).json({ error: "Schaf nicht gefunden" });
+  const isAdmin = req.session.role === "admin";
+  const isOwner = sheep.owner_id && sheep.owner_id === String(req.session.userId);
+  if (!isAdmin && !isOwner) return res.status(403).json({ error: "Keine Berechtigung" });
+  deleteDeadSheep(id);
+  res.json({ ok: true });
 });
 
 router.get("/statistik", requireAuth, (req, res) => {

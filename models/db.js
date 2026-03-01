@@ -837,6 +837,18 @@ function getGraveyardStats() {
   `).get();
 }
 
+function getDeadSheepById(id) {
+  return db.prepare("SELECT * FROM sheep_graveyard WHERE id = ?").get(id);
+}
+
+function deleteDeadSheep(id) {
+  return db.prepare("DELETE FROM sheep_graveyard WHERE id = ?").run(id);
+}
+
+function deleteDeadSheepByDate(dateStr) {
+  return db.prepare("DELETE FROM sheep_graveyard WHERE date(died_at) = date(?)").run(dateStr);
+}
+
 module.exports = {
   db,
   encrypt,
@@ -860,5 +872,8 @@ module.exports = {
   getThrowLog,
   addDeadSheep,
   getDeadSheep,
+  getDeadSheepById,
+  deleteDeadSheep,
+  deleteDeadSheepByDate,
   getGraveyardStats
 };

@@ -97,6 +97,22 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// Avatar zoom on click
+document.addEventListener("click", (e) => {
+  const avatar = e.target.closest(".kladde-avatar");
+  if (!avatar) return;
+  const overlay = document.createElement("div");
+  overlay.className = "avatar-zoomed-overlay";
+  const clone = avatar.cloneNode(true);
+  clone.classList.remove("kladde-avatar");
+  overlay.appendChild(clone);
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", () => overlay.remove());
+  document.addEventListener("keydown", function handler(ev) {
+    if (ev.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", handler); }
+  });
+});
+
 // Confirmation dialogs
 function confirmAction(message, onConfirm) {
   const overlay = document.createElement("div");
@@ -5215,9 +5231,11 @@ function initMemberDragDrop() {
         renderVATurn();
         return;
       }
-      // Abräumen auch fertig → Ergebnis zeigen
+      // Abräumen auch fertig → Endstand zeigen, auf Klick warten
       updateShuffleHighlight(-1);
-      renderVAResults();
+      liveControls.clear();
+      shuffleArea.innerHTML = '<div class="live-end-pause"><p class="live-end-text">Alle Würfe abgeschlossen!</p><button type="button" class="btn-primary live-end-btn" id="btnShowResults">Ergebnis anzeigen</button></div>';
+      document.getElementById("btnShowResults").addEventListener("click", function() { renderVAResults(); });
       return;
     }
 
@@ -5567,7 +5585,7 @@ function initMemberDragDrop() {
     html += '<button type="button" class="va-picker-btn" data-va-pick="6">6</button>';
     html += '<button type="button" class="va-picker-btn" data-va-pick="7">7</button>';
     html += '<button type="button" class="va-picker-btn" data-va-pick="8">8</button>';
-    html += '<button type="button" class="va-picker-btn va-picker-tri" data-va-pick="triclops"><img src="/img/triclops_icon.png" alt="Triclops" class="va-picker-tri-icon" /></button>';
+    html += '<button type="button" class="va-picker-btn va-picker-tri" data-va-pick="triclops">T</button>';
     html += '<button type="button" class="va-picker-btn va-picker-kranz" data-va-pick="kranz">12</button>';
     html += '</div>';
     return html;
@@ -5928,10 +5946,10 @@ function initMemberDragDrop() {
     html += '<table class="aussteigen-table" id="aussteigenTable">';
     html += '<thead><tr>';
     html += '<th class="ast-player">Spieler</th>';
-    html += '<th class="ast-marker" data-ast-col="alle9">9</th>';
-    html += '<th class="ast-marker" data-ast-col="kranz">K</th>';
-    html += '<th class="ast-marker" data-ast-col="triclops">T</th>';
-    html += '<th class="ast-marker" data-ast-col="pudel">P</th>';
+    html += '<th class="ast-marker ast-bilder block-start" data-ast-col="alle9">9</th>';
+    html += '<th class="ast-marker ast-bilder" data-ast-col="kranz">K</th>';
+    html += '<th class="ast-marker ast-bilder" data-ast-col="triclops">T</th>';
+    html += '<th class="ast-marker ast-pudel" data-ast-col="pudel">P</th>';
     // Cost columns: position 0 (highest cost) → position n-1 (0,00)
     for (var pos = 0; pos < n; pos++) {
       var costZehntel = n - 1 - pos;
@@ -5963,7 +5981,10 @@ function initMemberDragDrop() {
       var markers = ["alle9", "kranz", "triclops", "pudel"];
       markers.forEach(function(m) {
         var val = getPlayerMarkerVal(p, m);
-        html += '<td class="ast-marker-cell">' + (val > 0 ? val : '') + '</td>';
+        var colClass = 'ast-marker-cell';
+        if (m === 'pudel') colClass += ' ast-pudel';
+        else { colClass += ' ast-bilder'; if (m === 'alle9') colClass += ' block-start'; }
+        html += '<td class="' + colClass + '">' + (val > 0 ? val : '') + '</td>';
       });
 
       // Cost columns
@@ -5988,25 +6009,14 @@ function initMemberDragDrop() {
                 prevCumVal = aussteigenState.roundSnapshots[si].cumulatives[p.id];
               }
             }
-            var singleThrow = cumVal - prevCumVal;
-            if (prevCumVal > 0) {
-              cellContent = '<span class="ast-throw-hint">(+' + singleThrow + ')</span>' + cumVal;
-            } else {
-              cellContent = String(cumVal);
-            }
+            cellContent = String(cumVal);
             if (snap.eliminatedIds.indexOf(p.id) !== -1) {
               cellClass += ' ast-cost-elim';
             }
           }
           // Current round: show partial cumulative for players who have thrown
           if (isCurrent && partialCum[p.id] !== undefined) {
-            var rt = aussteigenState.roundThrows[p.id];
-            var prevCum = aussteigenState.cumulativeTotals[p.id] || 0;
-            if (prevCum > 0 && rt) {
-              cellContent = '<span class="ast-throw-hint">(+' + rt.val + ') </span>' + partialCum[p.id];
-            } else {
-              cellContent = String(partialCum[p.id]);
-            }
+            cellContent = String(partialCum[p.id]);
             // Mark the current lowest (danger zone)
             if (partialKeys.length > 1 && partialCum[p.id] === minPartialCum) {
               cellClass += ' ast-danger';
@@ -6018,7 +6028,12 @@ function initMemberDragDrop() {
           }
         }
 
-        if (isCurrent && !isSkipped) cellClass += ' ast-col-active';
+        // Zellen nach Eliminierung durchstreichen
+        if (isEliminated && pos > elimMap[p.id].position && !isSkipped) {
+          cellClass += ' ast-after-elim';
+          cellContent += '<span class="ast-elim-line"></span>';
+        }
+        if (isCurrent && !isSkipped && !isEliminated) cellClass += ' ast-col-active';
         if (isCurrentPlayer && isCurrent && !isSkipped) cellClass += ' ast-cell-current';
         html += '<td class="' + cellClass + '">' + cellContent + '</td>';
       }
@@ -6180,7 +6195,10 @@ function initMemberDragDrop() {
 
     // Check if game over
     if (aussteigenState.remaining.length <= 1) {
-      renderAussteigenResults();
+      renderAussteigenUI();
+      liveControls.clear();
+      shuffleArea.innerHTML = '<div class="live-end-pause"><p class="live-end-text">Spiel beendet!</p><button type="button" class="btn-primary live-end-btn" id="btnShowResults">Ergebnis anzeigen</button></div>';
+      document.getElementById("btnShowResults").addEventListener("click", function() { renderAussteigenResults(); });
     } else {
       renderAussteigenUI();
     }
@@ -6378,7 +6396,7 @@ function initMemberDragDrop() {
   // Renders team cards into gameContent (LEFT) and picker into shuffleArea (RIGHT)
   function renderSechsTageUI() {
     if (sechsTageIsFinished()) {
-      renderSechsTageResults();
+      renderSechsTageEndPause();
       return;
     }
 
@@ -6432,15 +6450,20 @@ function initMemberDragDrop() {
       // Running sum row
       html += '<div class="st-label st-sum-label">Summe</div>';
       var runSum = 0;
+      var allComplete = true;
       for (var d = 1; d <= 6; d++) {
         var v1 = team.throws[d].p1;
         var v2 = team.throws[d].p2;
-        if (v1 !== null) runSum += v1 * d;
-        if (v2 !== null) runSum += v2 * d;
-        html += '<div class="st-cell st-sum">' + runSum + '</div>';
+        var dayComplete = v1 !== null && v2 !== null;
+        if (dayComplete) {
+          runSum += v1 * d + v2 * d;
+        } else {
+          allComplete = false;
+        }
+        html += '<div class="st-cell st-sum">' + (dayComplete ? '= ' + runSum : '') + '</div>';
       }
       var teamTotal = calcSechsTageTeamTotal(team);
-      html += '<div class="st-cell st-sum st-cell-total">' + teamTotal + '</div>';
+      html += '<div class="st-cell st-sum st-cell-total">' + (allComplete ? teamTotal : '') + '</div>';
 
       // P2 row
       var p2Player = solo ? team.p1 : team.p2;
@@ -6576,6 +6599,32 @@ function initMemberDragDrop() {
     }
 
     // Day 6 complete → finished (renderSechsTageUI will detect and show results)
+  }
+
+  function renderSechsTageEndPause() {
+    // Letzte Teamkarten-Ansicht nochmal zeigen
+    var teams = sechsTageState.teams;
+    var html = '<div class="st-container"><div class="va-phase-title">6-Tage-Rennen — Endstand</div><div class="st-cards">';
+    for (var t = 0; t < teams.length; t++) {
+      var team = teams[t];
+      var total = 0;
+      html += '<div class="st-card"><div class="st-card-header">' + escHtml(team.p1.name) + (team.p2 ? ' & ' + escHtml(team.p2.name) : ' (Solo)') + '</div>';
+      html += '<table class="st-day-table"><thead><tr><th>Tag</th><th>W1</th><th>W2</th><th>Ges.</th></tr></thead><tbody>';
+      for (var d = 1; d <= 6; d++) {
+        var p1v = team.throws[d].p1;
+        var p2v = team.throws[d].p2;
+        var dayComplete = p1v !== null && p2v !== null;
+        var dayTotal = dayComplete ? (p1v * d + p2v * d) : 0;
+        total += dayTotal;
+        html += '<tr><td>' + d + '</td><td>' + (p1v != null ? p1v : '') + '</td><td>' + (p2v != null ? p2v : '') + '</td><td class="st-sum-cell">' + (dayComplete ? '= ' + dayTotal : '') + '</td></tr>';
+      }
+      html += '</tbody></table><div class="st-card-total">Gesamt: ' + total + '</div></div>';
+    }
+    html += '</div></div>';
+    gameContent.innerHTML = html;
+    liveControls.clear();
+    shuffleArea.innerHTML = '<div class="live-end-pause"><p class="live-end-text">Alle Tage abgeschlossen!</p><button type="button" class="btn-primary live-end-btn" id="btnShowResults">Ergebnis anzeigen</button></div>';
+    document.getElementById("btnShowResults").addEventListener("click", function() { renderSechsTageResults(); });
   }
 
   function renderSechsTageResults() {
@@ -7995,5 +8044,41 @@ function initMemberDragDrop() {
   }
 
   containers.forEach(renderGraveyardSheep);
+
+  // Schaf-Löschung in der Ahnengalerie
+  document.addEventListener("click", function(e) {
+    var btn = e.target.closest("[data-delete-sheep]");
+    if (!btn) return;
+    e.stopPropagation();
+    var sheepId = btn.dataset.deleteSheep;
+    if (!confirm("Dieses Schaf wirklich aus der Ahnengalerie entfernen?")) return;
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    fetch("/api/sheep-graveyard/" + sheepId, {
+      method: "DELETE",
+      headers: { "X-CSRF-Token": csrfMeta ? csrfMeta.content : "" }
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || "Fehler"); });
+      var sheepEl = btn.closest(".stall-sheep");
+      if (sheepEl) {
+        sheepEl.style.transition = "opacity 0.3s, transform 0.3s";
+        sheepEl.style.opacity = "0";
+        sheepEl.style.transform = "translateY(-10px)";
+        setTimeout(function() {
+          var stall = sheepEl.closest(".stall");
+          sheepEl.remove();
+          // Stall-Counter aktualisieren
+          if (stall) {
+            var remaining = stall.querySelectorAll(".stall-sheep").length;
+            var countEl = stall.querySelector(".stall-count");
+            if (countEl) countEl.textContent = remaining + " Schaf" + (remaining !== 1 ? "e" : "");
+            if (remaining === 0) stall.remove();
+          }
+        }, 300);
+      }
+    }).catch(function(err) {
+      if (typeof showToast === "function") showToast(err.message, "error");
+      else alert(err.message);
+    });
+  });
 })();
 

@@ -29,6 +29,7 @@
   const SEPARATION_R = 55, ALIGNMENT_R = 90, COHESION_R = 120;
   const SEP_FORCE = 0.08, ALI_FORCE = 0.006, COH_FORCE = 0.0015;
   const COLLISION_R = 16;
+  const DESYNC_R = 65, DESYNC_FORCE = 0.12;
 
   const STORAGE_KEY = 'flyingSheepState';
   const SAVE_INTERVAL = 3000;
@@ -363,6 +364,7 @@
       groupData: null, headbuttPartner: null, headbuttPhase: 0,
       followTarget: null, bullyTarget: null, fenceJumpPhase: 'wait',
       dizzyPhase: 0,
+      stuckTimer: 0, lastCheckX: x, lastCheckY: y,
     };
     sheep.target = newTarget();
     /* Sofort positionieren damit kein Frame bei (0,0) sichtbar ist */
@@ -644,7 +646,11 @@
       sh.wideEyes = Math.max(sh.wideEyes, 100);
       return;
     }
-    if (sh.resumeDelay > 0) { sh.resumeDelay -= dt; return; }
+    if (sh.resumeDelay > 0) {
+      sh.resumeDelay -= dt;
+      if (sh.resumeDelay <= 0) { pickNext(sh); }
+      return;
+    }
     sh.stTimer += dt;
     var S = getSteer(sh);
 
@@ -907,6 +913,7 @@
     var sepX = 0, sepY = 0;
     var aliVX = 0, aliVY = 0, aliN = 0;
     var cohX = 0, cohY = 0, cohN = 0;
+    var desyncX = 0, desyncY = 0;
     for (var fi = 0; fi < flock.length; fi++) {
       var o = flock[fi];
       if (o === sh || o.state === 'departing') continue;
@@ -914,8 +921,22 @@
       if (d < SEPARATION_R && d > 0) { sepX += (dx / d) / d; sepY += (dy / d) / d; }
       if (d < ALIGNMENT_R) { aliVX += o.vx; aliVY += o.vy; aliN++; }
       if (d < COHESION_R) { cohX += o.x; cohY += o.y; cohN++; }
+      /* Desync: wenn nah + gleiche Richtung → senkrecht ausweichen */
+      if (d < DESYNC_R && d > 0) {
+        var spdA = Math.hypot(sh.vx, sh.vy), spdB = Math.hypot(o.vx, o.vy);
+        if (spdA > 0.3 && spdB > 0.3) {
+          var dot = (sh.vx * o.vx + sh.vy * o.vy) / (spdA * spdB);
+          if (dot > 0.7) {
+            var closeness = 1 - d / DESYNC_R;
+            var perpX = -dy / d, perpY = dx / d;
+            desyncX += perpX * closeness * (dot - 0.7) * 3;
+            desyncY += perpY * closeness * (dot - 0.7) * 3;
+          }
+        }
+      }
     }
     sh.vx += sepX * SEP_FORCE; sh.vy += sepY * SEP_FORCE;
+    sh.vx += desyncX * DESYNC_FORCE; sh.vy += desyncY * DESYNC_FORCE;
     if (aliN) { sh.vx += (aliVX / aliN - sh.vx) * ALI_FORCE; sh.vy += (aliVY / aliN - sh.vy) * ALI_FORCE; }
     if (cohN) { var cx = cohX / cohN - sh.x, cy = cohY / cohN - sh.y; sh.vx += cx * COH_FORCE; sh.vy += cy * COH_FORCE; }
   }
@@ -1310,6 +1331,22 @@
       var sh = flock[fi];
       try { behave(sh, dt, t); } catch (e) { pickNext(sh); }
       flockForces(sh); physics(sh, dt); render(sh);
+      /* Stuck-Detection: Schaf bewegt sich kaum */
+      if (sh !== dragSheep && sh.state !== 'departing' && sh.state !== 'hover') {
+        var moved = Math.hypot(sh.x - sh.lastCheckX, sh.y - sh.lastCheckY);
+        if (moved < 8) {
+          sh.stuckTimer += dt;
+          if (sh.stuckTimer > 2500) {
+            sh.state = 'dart'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 800 + Math.random() * 1200;
+            sh.propSpeed = Math.min(sh.propSpeed + 15, PROP_MAX);
+            sh.vx += (Math.random() - 0.5) * 2; sh.vy += (Math.random() - 0.5) * 2;
+            sh.stuckTimer = 0;
+          }
+        } else {
+          sh.stuckTimer = 0;
+        }
+        sh.lastCheckX = sh.x; sh.lastCheckY = sh.y;
+      }
       /* Solo-Timer */
       if (sh.state !== 'scared' && sh.state !== 'departing') {
         sh.soloTimer -= dt;

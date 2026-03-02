@@ -8,7 +8,7 @@
   overflow: hidden;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+#sheep-overlay *, #sheep-overlay *::before, #sheep-overlay *::after { box-sizing: border-box; }
 
 .s-wrap { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: auto; }
 

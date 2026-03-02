@@ -57,7 +57,7 @@ router.get("/pinnwand", requireAuth, (req, res) => {
   }
   for (const m of messages) {
     const needsLast = firstNameUsers.get(m.first_name).size > 1;
-    m.display_name = needsLast && m.last_name ? `${m.first_name} ${m.last_name[0]}` : m.first_name;
+    m.display_name = needsLast && m.last_name ? `${m.first_name} ${m.last_name[0]}.` : m.first_name;
   }
 
   res.render("pinnwand", { messages });

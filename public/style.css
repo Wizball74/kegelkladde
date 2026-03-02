@@ -1209,6 +1209,14 @@ td.col-active.cell-empty:not(.marker-cell) > * {
   pointer-events: none;
 }
 
+/* Abrechnung/Archiv: alle Cell-Hover-Effekte deaktivieren */
+.kladde-table.kladde-settled td.has-compact:hover input.mini-number { visibility: hidden; }
+.kladde-table.kladde-settled td.has-compact:hover .field-display { display: block; }
+.kladde-table.kladde-settled td:hover .marker-controls .mark-btn { opacity: 0; pointer-events: none; }
+.kladde-table.kladde-settled td.cell-empty:hover > * { opacity: 0; pointer-events: none; }
+.kladde-table.kladde-settled tbody tr:hover { background: transparent; }
+.kladde-table.kladde-settled tbody tr:nth-child(even):hover { background: #dddddd; }
+
 .custom-game-header-input:focus {
   border-color: var(--accent);
   background: #fff;
@@ -1698,8 +1706,16 @@ td.col-active.cell-empty:not(.marker-cell) > * {
   text-transform: uppercase;
 }
 
+.records-table tbody tr:nth-child(even) {
+  background: #dddddd;
+}
+
 .records-table tbody tr:hover {
   background: #fafaf5;
+}
+
+.records-table tbody tr:nth-child(even):hover {
+  background: #d3d3d3;
 }
 
 .records-table .actions {

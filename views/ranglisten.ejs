@@ -200,7 +200,7 @@
             <details class="round-history-item">
               <summary>
                 <span class="round-badge">Runde <%= rw.round_number %></span>
-                <span class="round-winner-name"><%= rw.first_name %></span>
+                <span class="round-winner-name"><%= rw.display_name %></span>
                 <span class="round-score"><%= rw.winning_score %> Pkt.</span>
                 <span class="round-date"><%= formatDateDE(rw.match_date) %></span>
               </summary>
@@ -227,7 +227,7 @@
             <details class="round-history-item">
               <summary>
                 <span class="round-badge">Runde <%= rw.round_number %></span>
-                <span class="round-winner-name"><%= rw.first_name %></span>
+                <span class="round-winner-name"><%= rw.display_name %></span>
                 <span class="round-score"><%= rw.winning_score %> Pkt.</span>
                 <span class="round-date"><%= formatDateDE(rw.match_date) %></span>
               </summary>

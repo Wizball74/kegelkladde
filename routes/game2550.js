@@ -1,8 +1,17 @@
 const express = require("express");
-const { db } = require("../models/db");
+const { db, withDisplayNames } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Spieler-IDs in benannte Spieler-Objekte umwandeln (mit display_name)
+function loadPlayers(ids) {
+  const users = ids.map(pid => {
+    const u = db.prepare("SELECT id, first_name, last_name FROM users WHERE id = ?").get(pid);
+    return u || { id: pid, first_name: `Spieler ${pid}`, last_name: "" };
+  });
+  return withDisplayNames(users).map(u => ({ id: u.id, name: u.display_name }));
+}
 
 // Zonenstrafe berechnen: Zone [N, N+5] kostet N/100 EUR
 function getZonePenalty(cumulative) {
@@ -31,12 +40,7 @@ router.get("/kegelkladde/2550/state", requireAuth, (req, res) => {
   const playerOrder = JSON.parse(row.player_order);
   const throws = JSON.parse(row.throws);
 
-  // Spieler-Namen laden
-  const players = [];
-  for (const pid of playerOrder) {
-    const u = db.prepare("SELECT id, first_name, last_name FROM users WHERE id = ?").get(pid);
-    players.push(u ? { id: u.id, name: u.first_name } : { id: pid, name: `Spieler ${pid}` });
-  }
+  const players = loadPlayers(playerOrder);
 
   // Aktuellen Stand berechnen
   const state = computeState(playerOrder, throws);
@@ -115,11 +119,7 @@ router.post("/kegelkladde/2550/start", requireAuth, requireAdmin, verifyCsrf, (r
     "INSERT INTO game_2550 (gameday_id, player_order, throws, finished) VALUES (?, ?, '[]', 0)"
   ).run(gamedayId, JSON.stringify(ids));
 
-  // Spieler-Namen laden
-  const players = ids.map(pid => {
-    const u = db.prepare("SELECT id, first_name FROM users WHERE id = ?").get(pid);
-    return u ? { id: u.id, name: u.first_name } : { id: pid, name: `Spieler ${pid}` };
-  });
+  const players = loadPlayers(ids);
 
   res.json({ ok: true, players, playerOrder: ids });
 });
@@ -178,10 +178,7 @@ router.post("/kegelkladde/2550/throw", requireAuth, requireAdmin, verifyCsrf, (r
     .run(JSON.stringify(throws), finished, gamedayId);
 
   // Spieler-Namen laden
-  const players = playerOrder.map(pid => {
-    const u = db.prepare("SELECT id, first_name FROM users WHERE id = ?").get(pid);
-    return u ? { id: u.id, name: u.first_name } : { id: pid, name: `Spieler ${pid}` };
-  });
+  const players = loadPlayers(playerOrder);
 
   res.json({
     ok: true,
@@ -212,10 +209,7 @@ router.post("/kegelkladde/2550/undo", requireAuth, requireAdmin, verifyCsrf, (re
   db.prepare("UPDATE game_2550 SET throws = ?, finished = 0 WHERE gameday_id = ?")
     .run(JSON.stringify(throws), gamedayId);
 
-  const players = playerOrder.map(pid => {
-    const u = db.prepare("SELECT id, first_name FROM users WHERE id = ?").get(pid);
-    return u ? { id: u.id, name: u.first_name } : { id: pid, name: `Spieler ${pid}` };
-  });
+  const players = loadPlayers(playerOrder);
 
   res.json({
     ok: true,

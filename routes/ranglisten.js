@@ -203,7 +203,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     .sort((a, b) => b.total - a.total || b.medals - a.medals || b.wins - a.wins);
 
   // Rundenverlauf laden
-  const monteHistory = db.prepare(`
+  const monteHistory = withDisplayNames(db.prepare(`
     SELECT rw.round_number, rw.winning_score, rw.standings_json, rw.detected_at,
            u.first_name, u.last_name, g.match_date
     FROM round_wins rw
@@ -211,9 +211,9 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     JOIN gamedays g ON g.id = rw.winning_gameday_id
     WHERE rw.type = 'monte'
     ORDER BY rw.round_number DESC
-  `).all();
+  `).all());
 
-  const medaillenHistory = db.prepare(`
+  const medaillenHistory = withDisplayNames(db.prepare(`
     SELECT rw.round_number, rw.winning_score, rw.standings_json, rw.detected_at,
            u.first_name, u.last_name, g.match_date
     FROM round_wins rw
@@ -221,7 +221,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
     JOIN gamedays g ON g.id = rw.winning_gameday_id
     WHERE rw.type = 'medaillen'
     ORDER BY rw.round_number DESC
-  `).all();
+  `).all());
 
   // Celebration: Session-basiert, nur neue Siege seit letztem Besuch
   if (!req.session.seenRoundWins) {
@@ -231,14 +231,14 @@ router.get("/ranglisten", requireAuth, (req, res) => {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const celebrateItems = [];
 
-  const recentWins = db.prepare(`
+  const recentWins = withDisplayNames(db.prepare(`
     SELECT rw.type, rw.round_number, rw.winning_score, rw.detected_at,
            u.first_name, u.last_name
     FROM round_wins rw
     JOIN users u ON u.id = rw.winner_user_id
     WHERE rw.detected_at >= ?
     ORDER BY rw.round_number ASC
-  `).all(sevenDaysAgo);
+  `).all(sevenDaysAgo));
 
   for (const win of recentWins) {
     const seenKey = win.type;
@@ -246,7 +246,7 @@ router.get("/ranglisten", requireAuth, (req, res) => {
       celebrateItems.push({
         type: win.type,
         round: win.round_number,
-        winner: win.first_name,
+        winner: win.display_name,
         score: win.winning_score
       });
       req.session.seenRoundWins[seenKey] = Math.max(

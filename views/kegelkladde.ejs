@@ -160,7 +160,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
 
     <div id="kladdeData" data-csrf="<%= csrfToken %>" data-gameday-id="<%= selectedGameday.id %>" data-status="<%= status %>" data-user-id="<%= currentUser.id %>" data-user-first-name="<%= currentUser.firstName %>" data-gags="<%= gagAnimations %>">
     <div class="table-shell">
-        <table class="kladde-table">
+        <table class="kladde-table<%= status >= 2 ? ' kladde-settled' : '' %>">
           <colgroup>
             <col style="width: 110px;" /><!-- Name -->
             <col style="width: 44px;" /><!-- Anwesenheit -->

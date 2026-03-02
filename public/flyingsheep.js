@@ -15,6 +15,13 @@
   let W = innerWidth, H = innerHeight;
 
   const PROP_BASE = 8, PROP_MAX = 90;
+  function darkenColor(hex) {
+    var r, g, b;
+    if (hex.length === 4) { r = parseInt(hex[1]+hex[1],16); g = parseInt(hex[2]+hex[2],16); b = parseInt(hex[3]+hex[3],16); }
+    else { r = parseInt(hex.substr(1,2),16); g = parseInt(hex.substr(3,2),16); b = parseInt(hex.substr(5,2),16); }
+    r = Math.round(r * 0.65); g = Math.round(g * 0.65); b = Math.round(b * 0.65);
+    return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  }
   const BASE_MAX_SPEED = 2.0;
   const BASE_STEER = 0.045;
   const FRICTION = 0.98;
@@ -144,7 +151,15 @@
     var curiosity = 0.3 + Math.random() * 1.0;    // 0.3–1.3: ängstlich bis neugierig
     var sociability = Math.random();               // 0–1: Einzelgänger bis Herdentier
     var hasKnees = Math.random() < 0.4;
-    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees };
+    // Propeller-Varianten
+    var propBladeCount = [2, 2, 2, 3, 3, 4][Math.random() * 6 | 0];
+    var propBladeColors = ['#ffd740', '#ffd740', '#ff6b6b', '#69db7c', '#74c0fc', '#da77f2', '#ffa94d', '#e8e8e8'];
+    var propBladeColor = propBladeColors[Math.random() * propBladeColors.length | 0];
+    var propHubColor = Math.random() < 0.7 ? '#666' : darkenColor(propBladeColor);
+    var propSize = +(0.7 + Math.random() * 0.6).toFixed(2);
+    var propShapes = ['standard', 'standard', 'standard', 'round', 'slim', 'teardrop'];
+    var propShape = propShapes[Math.random() * propShapes.length | 0];
+    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees, propBladeCount: propBladeCount, propBladeColor: propBladeColor, propHubColor: propHubColor, propSize: propSize, propShape: propShape };
   }
 
   /* ═══ DOM-Factory ═══ */
@@ -212,8 +227,24 @@
     var pole = mk('s-pole'); var hub = mk('s-hub');
     var bwrap = mk('s-bwrap');
     var blades = document.createElement('div'); blades.className = 's-blades'; bwrap.appendChild(blades);
-    blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
-    blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
+    // Propeller-Varianten aus Traits
+    var pBC = tr.propBladeCount || 2;
+    var pColor = tr.propBladeColor || '#ffd740';
+    var pHubC = tr.propHubColor || '#666';
+    var pSz = tr.propSize || 1.0;
+    var pShape = tr.propShape || 'standard';
+    blades.style.setProperty('--bl-dark', darkenColor(pColor));
+    blades.style.setProperty('--bl-light', pColor);
+    hub.style.setProperty('--hub-color', pHubC);
+    if (pSz !== 1) { bwrap.style.width = Math.round(28 * pSz) + 'px'; bwrap.style.height = Math.round(28 * pSz) + 'px'; }
+    var shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
+    for (var bi = 0; bi < pBC; bi++) {
+      var bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
+      if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
+      else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
+      else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
+      blades.appendChild(bl);
+    }
 
     /* Accessoire (mit Config-Overrides) */
     var cssAccCfg = cfg.cssAccessories || {};
@@ -323,7 +354,7 @@
       head.appendChild(stEl);
     }
 
-    return { wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl, lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls, pole: pole, hub: hub, bwrap: bwrap, blades: blades, eyeL: eyeL, eyeR: eyeR };
+    return { wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl, lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls, pole: pole, hub: hub, bwrap: bwrap, blades: blades, eyeL: eyeL, eyeR: eyeR, propSize: pSz };
   }
 
   /* ═══ Schaf erzeugen ═══ */
@@ -1110,15 +1141,18 @@
     d.eyeR.style.transform = 'translate(' + sh.eyeX + 'px,' + sh.eyeY + 'px)' + ee;
 
     /* Propeller (am Rücken/Torso fixiert) */
+    var pSz = d.propSize || 1.0;
+    var poleH = POLE_H * pSz, hubSz = HUB_SZ * pSz, halfBw = 14 * pSz;
     var backTop = rot(0, -sh.th / 2 - 1, bankRad);
     var topX = tx + backTop.x, topY = ty + backTop.y;
-    var backHub = rot(0, -sh.th / 2 - POLE_H - 2, bankRad);
+    var backHub = rot(0, -sh.th / 2 - poleH - 2, bankRad);
     var hubX = tx + backHub.x, hubY = ty + backHub.y;
     var pdx = hubX - topX, pdy = hubY - topY, pL = Math.hypot(pdx, pdy);
     d.pole.style.height = pL + 'px'; d.pole.style.left = topX + 'px'; d.pole.style.top = topY + 'px';
     d.pole.style.transform = 'translateX(-50%) rotate(' + Math.atan2(pdx, -pdy) + 'rad)';
-    d.hub.style.left = (hubX - HUB_SZ / 2) + 'px'; d.hub.style.top = (hubY - HUB_SZ / 2) + 'px';
-    d.bwrap.style.left = (hubX - 14) + 'px'; d.bwrap.style.top = (hubY - 14) + 'px';
+    d.hub.style.width = hubSz + 'px'; d.hub.style.height = hubSz + 'px';
+    d.hub.style.left = (hubX - hubSz / 2) + 'px'; d.hub.style.top = (hubY - hubSz / 2) + 'px';
+    d.bwrap.style.left = (hubX - halfBw) + 'px'; d.bwrap.style.top = (hubY - halfBw) + 'px';
     d.blades.style.transform = 'rotateX(55deg) rotate(' + sh.propAngle + 'deg)';
     d.blades.style.opacity = Math.max(.25, 1 - (sh.propSpeed - PROP_BASE) / (PROP_MAX - PROP_BASE) * .75);
 
@@ -1414,13 +1448,19 @@
         removeSheep(oldest, 'eviction');
       }
       var createOpts = { ownerName: ownerName || '' };
-      /* Vanilla-Modus: Schaf ohne jedes Accessoire */
+      /* Vanilla-Modus: Schaf ohne jedes Accessoire, Standard-Propeller */
       if (opts.vanilla) {
         var tr = generateTraits();
         tr.accessory = null;
         tr.spriteHat = -1;
         tr.spriteGlasses = -1;
         tr.spriteStache = -1;
+        tr.headMul = 1.0;
+        tr.propBladeCount = 2;
+        tr.propBladeColor = '#ffd740';
+        tr.propHubColor = '#666';
+        tr.propSize = 1.0;
+        tr.propShape = 'standard';
         createOpts.traits = tr;
       }
       var sh = createSheep(x, y, String(ownerId || ''), letter, createOpts);
@@ -1463,7 +1503,7 @@
   };
 
   /* ═══ Start ═══ */
-  restoreFlock();
+  try { restoreFlock(); } catch (e) { console.warn('restoreFlock failed, clearing stale data:', e); try { sessionStorage.removeItem(STORAGE_KEY); } catch (e2) {} }
   requestAnimationFrame(frame);
   window.addEventListener('resize', function () { W = innerWidth; H = innerHeight; });
 

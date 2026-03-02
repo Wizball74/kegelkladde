@@ -77,7 +77,7 @@
   }
   .s-hub {
     width: 4px; height: 4px;
-    background: #666; border-radius: 50%; z-index: 8;
+    background: var(--hub-color, #666); border-radius: 50%; z-index: 8;
   }
   .s-bwrap { width: 28px; height: 28px; perspective: 80px; z-index: 7; }
   .s-blades {
@@ -87,10 +87,28 @@
   .s-bl {
     position: absolute; width: 20px; height: 4px;
     top: 50%; left: 50%; margin-top: -2px; margin-left: -10px;
-    background: linear-gradient(90deg, #b8860b, #ffd740 45%, #ffd740 55%, #b8860b);
+    background: linear-gradient(90deg,
+      var(--bl-dark, #b8860b),
+      var(--bl-light, #ffd740) 45%,
+      var(--bl-light, #ffd740) 55%,
+      var(--bl-dark, #b8860b));
     border-radius: 2px;
   }
-  .s-bl:nth-child(2) { transform: rotate(90deg); }
+  .s-bl--round {
+    width: 16px; height: 6px;
+    margin-top: -3px; margin-left: -8px;
+    border-radius: 50%;
+  }
+  .s-bl--slim {
+    width: 22px; height: 2.5px;
+    margin-top: -1.25px; margin-left: -11px;
+    border-radius: 1.25px;
+  }
+  .s-bl--teardrop {
+    width: 18px; height: 4px;
+    margin-top: -2px; margin-left: -9px;
+    border-radius: 2px 8px 8px 2px;
+  }
 
   /* Accessoires */
   .s-acc { position: absolute; pointer-events: none; }
@@ -228,6 +246,14 @@
     };
   }
 
+  function darkenColor(hex) {
+    var r, g, b;
+    if (hex.length === 4) { r = parseInt(hex[1]+hex[1],16); g = parseInt(hex[2]+hex[2],16); b = parseInt(hex[3]+hex[3],16); }
+    else { r = parseInt(hex.substr(1,2),16); g = parseInt(hex.substr(3,2),16); b = parseInt(hex.substr(5,2),16); }
+    r = Math.round(r * 0.65); g = Math.round(g * 0.65); b = Math.round(b * 0.65);
+    return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  }
+
   function generateTraits() {
     const isBlack = Math.random() < 0.08;
     const scale = 0.75 + Math.random() * 0.5;
@@ -277,7 +303,15 @@
       (Math.random() - .5) * 12,
     ];
     const tailSize = 3 + Math.random() * 3;  /* 3-6px Schwanz-Puschel */
-    return { scale, chub, legMul, headMul, woolColor, borderColor, skinColor, isBlack, accessory, accColor, legs, legPhases, legRestAngles, tailSize };
+    // Propeller-Varianten
+    const propBladeCount = [2, 2, 2, 3, 3, 4][Math.random() * 6 | 0];
+    const propBladeColors = ['#ffd740', '#ffd740', '#ff6b6b', '#69db7c', '#74c0fc', '#da77f2', '#ffa94d', '#e8e8e8'];
+    const propBladeColor = propBladeColors[Math.random() * propBladeColors.length | 0];
+    const propHubColor = Math.random() < 0.7 ? '#666' : darkenColor(propBladeColor);
+    const propSize = +(0.7 + Math.random() * 0.6).toFixed(2);
+    const propShapes = ['standard', 'standard', 'standard', 'round', 'slim', 'teardrop'];
+    const propShape = propShapes[Math.random() * propShapes.length | 0];
+    return { scale, chub, legMul, headMul, woolColor, borderColor, skinColor, isBlack, accessory, accColor, legs, legPhases, legRestAngles, tailSize, propBladeCount, propBladeColor, propHubColor, propSize, propShape };
   }
 
   /* ═══ DOM-Factory ═══ */
@@ -322,8 +356,24 @@
     const pole = mk('s-pole'); const hub = mk('s-hub');
     const bwrap = mk('s-bwrap');
     const blades = document.createElement('div'); blades.className = 's-blades'; bwrap.appendChild(blades);
-    blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
-    blades.appendChild(Object.assign(document.createElement('div'), { className: 's-bl' }));
+    // Propeller-Varianten aus Traits
+    const pBC = tr.propBladeCount || 2;
+    const pColor = tr.propBladeColor || '#ffd740';
+    const pHubC = tr.propHubColor || '#666';
+    const pSz = tr.propSize || 1.0;
+    const pShape = tr.propShape || 'standard';
+    blades.style.setProperty('--bl-dark', darkenColor(pColor));
+    blades.style.setProperty('--bl-light', pColor);
+    hub.style.setProperty('--hub-color', pHubC);
+    if (pSz !== 1) { bwrap.style.width = Math.round(28 * pSz) + 'px'; bwrap.style.height = Math.round(28 * pSz) + 'px'; }
+    const shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
+    for (let bi = 0; bi < pBC; bi++) {
+      const bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
+      if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
+      else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
+      else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
+      blades.appendChild(bl);
+    }
 
     /* Accessoire */
     if (tr.accessory === 'tophat') {
@@ -363,7 +413,7 @@
       }
     }
 
-    return { wrap, torso, head, tail, label, lfl, lfr, lbl, lbr, pole, hub, bwrap, blades, eyeL, eyeR };
+    return { wrap, torso, head, tail, label, lfl, lfr, lbl, lbr, pole, hub, bwrap, blades, eyeL, eyeR, propSize: pSz };
   }
 
   /* ═══ Schaf erzeugen ═══ */
@@ -737,15 +787,18 @@
     d.eyeR.style.transform = `translate(${sh.eyeX}px,${sh.eyeY}px)${ee}`;
 
     /* Propeller */
+    const pSzR = d.propSize || 1.0;
+    const poleHR = POLE_H * pSzR, hubSzR = HUB_SZ * pSzR, halfBwR = 14 * pSzR;
     const topX = hx - Math.sin(headRad) * (sh.hr + 1);
     const topY = hy - Math.cos(headRad) * (sh.hr + 1);
-    const hd = sh.hr + POLE_H + 1;
+    const hd = sh.hr + poleHR + 1;
     const hubX = hx - Math.sin(headRad) * hd, hubY = hy - Math.cos(headRad) * hd;
     const pdx = hubX - topX, pdy = hubY - topY, pL = Math.hypot(pdx, pdy);
     d.pole.style.height = pL + 'px'; d.pole.style.left = topX + 'px'; d.pole.style.top = topY + 'px';
     d.pole.style.transform = `translateX(-50%) rotate(${Math.atan2(pdx, -pdy)}rad)`;
-    d.hub.style.left = (hubX - HUB_SZ / 2) + 'px'; d.hub.style.top = (hubY - HUB_SZ / 2) + 'px';
-    d.bwrap.style.left = (hubX - 14) + 'px'; d.bwrap.style.top = (hubY - 14) + 'px';
+    d.hub.style.width = hubSzR + 'px'; d.hub.style.height = hubSzR + 'px';
+    d.hub.style.left = (hubX - hubSzR / 2) + 'px'; d.hub.style.top = (hubY - hubSzR / 2) + 'px';
+    d.bwrap.style.left = (hubX - halfBwR) + 'px'; d.bwrap.style.top = (hubY - halfBwR) + 'px';
     d.blades.style.transform = `rotateX(55deg) rotate(${sh.propAngle}deg)`;
     d.blades.style.opacity = Math.max(.25, 1 - (sh.propSpeed - PROP_BASE) / (PROP_MAX - PROP_BASE) * .75);
 

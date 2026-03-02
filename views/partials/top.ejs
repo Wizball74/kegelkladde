@@ -7,11 +7,11 @@
   <meta name="csrf-token" content="<%= csrfToken %>" />
   <meta name="description" content="KC Schaf Zeilsheim - Vereinsportal für Kegelclub-Verwaltung" />
   <title>KC Schaf Zeilsheim</title>
-  <link rel="stylesheet" href="/style.css" />
-  <% if (sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css" />
+  <link rel="stylesheet" href="/style.css?v=<%= v %>" />
+  <% if (sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css?v=<%= v %>" />
   <% if (sheepConfig) { %><script>window.__sheepConfig=<%- typeof sheepConfig === 'string' ? sheepConfig : JSON.stringify(sheepConfig) %>;</script><% } %>
-  <script defer src="/flyingsheep.js"></script><% } %>
-  <script defer src="/app.js"></script>
+  <script defer src="/flyingsheep.js?v=<%= v %>"></script><% } %>
+  <script defer src="/app.js?v=<%= v %>"></script>
 </head>
 <body<% if (typeof bodyClass !== 'undefined' && bodyClass) { %> class="<%= bodyClass %>"<% } %>>
   <% if (sheepEnabled) { %><div id="sheep-overlay"></div><% } %>

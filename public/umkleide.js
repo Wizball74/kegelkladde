@@ -1,6 +1,14 @@
 (function () {
   'use strict';
 
+  function darkenColor(hex) {
+    var r, g, b;
+    if (hex.length === 4) { r = parseInt(hex[1]+hex[1],16); g = parseInt(hex[2]+hex[2],16); b = parseInt(hex[3]+hex[3],16); }
+    else { r = parseInt(hex.substr(1,2),16); g = parseInt(hex.substr(3,2),16); b = parseInt(hex.substr(5,2),16); }
+    r = Math.round(r * 0.65); g = Math.round(g * 0.65); b = Math.round(b * 0.65);
+    return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  }
+
   /* ═══ Defaults (Spiegel der Hardcodes aus flyingsheep.js/css) ═══ */
   var DEFAULTS = {
     spriteHat:     { offsetY: -8, offsetX: 0, scale: 1.0, slotW: 9.85, slotH: 8.85, items: {} },
@@ -76,7 +84,7 @@
   var selectedCssKey = 'tophat';
 
   /* Body-Traits (nur Vorschau) */
-  var body = { scale: 1.0, chub: 1.0, headMul: 1.0, legMul: 1.2, tailSize: 4, isBlack: false, woolColor: 'white', borderColor: '#444', skinColor: '#444', accColor: '#e44', showPropeller: true };
+  var body = { scale: 1.0, chub: 1.0, headMul: 1.0, legMul: 1.2, tailSize: 4, isBlack: false, woolColor: 'white', borderColor: '#444', skinColor: '#444', accColor: '#e44', showPropeller: true, propBladeCount: 2, propBladeColor: '#ffd740', propHubColor: '#666666', propSize: 1.0, propShape: 'standard' };
 
   /* ═══ DOM refs ═══ */
   var preview = document.getElementById('umkleidePreview');
@@ -206,16 +214,32 @@
 
     // Propeller (statisch, ausblendbar)
     if (body.showPropeller) {
+      var pSz = body.propSize, pColor = body.propBladeColor, pHubC = body.propHubColor;
+      var pBC = body.propBladeCount, pShape = body.propShape;
+      var scaledPoleH = POLE_H * pSz, scaledHubSz = HUB_SZ * pSz, halfBw = 14 * pSz;
       var topPX = hx, topPY = hy - hr - 1;
-      var hubPY = topPY - POLE_H;
+      var hubPY = topPY - scaledPoleH;
       var pole = mk('p s-pole');
-      pole.style.cssText += 'height:' + POLE_H + 'px;left:' + (topPX - 0.75) + 'px;top:' + topPY + 'px;';
+      pole.style.cssText += 'height:' + scaledPoleH + 'px;left:' + (topPX - 0.75) + 'px;top:' + topPY + 'px;';
       var hub = mk('p s-hub');
-      hub.style.cssText += 'left:' + (topPX - HUB_SZ/2) + 'px;top:' + (hubPY - HUB_SZ/2) + 'px;';
+      hub.style.cssText += 'width:' + scaledHubSz + 'px;height:' + scaledHubSz + 'px;left:' + (topPX - scaledHubSz/2) + 'px;top:' + (hubPY - scaledHubSz/2) + 'px;';
+      hub.style.setProperty('--hub-color', pHubC);
+      var bwrapSz = Math.round(28 * pSz);
       var bwrap = mk('p s-bwrap');
-      bwrap.style.cssText += 'left:' + (topPX - 14) + 'px;top:' + (hubPY - 14) + 'px;';
-      var blades = document.createElement('div'); blades.className = 's-blades'; blades.style.transform = 'rotateX(60deg) rotate(25deg)'; bwrap.appendChild(blades);
-      blades.innerHTML = '<div class="s-bl"></div><div class="s-bl" style="transform:rotate(90deg)"></div>';
+      bwrap.style.cssText += 'width:' + bwrapSz + 'px;height:' + bwrapSz + 'px;left:' + (topPX - halfBw) + 'px;top:' + (hubPY - halfBw) + 'px;';
+      var blades = document.createElement('div'); blades.className = 's-blades';
+      blades.style.transform = 'rotateX(60deg) rotate(25deg)';
+      blades.style.setProperty('--bl-dark', darkenColor(pColor));
+      blades.style.setProperty('--bl-light', pColor);
+      bwrap.appendChild(blades);
+      var shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
+      for (var bi = 0; bi < pBC; bi++) {
+        var bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
+        if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
+        else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
+        else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
+        blades.appendChild(bl);
+      }
     }
 
     /* CSS-Accessoire */
@@ -526,6 +550,17 @@
   var accColorEl = document.getElementById('pAccColor');
   if (accColorEl) accColorEl.addEventListener('input', function () { body.accColor = this.value; rebuildPreview(); });
 
+  // Propeller-Varianten Controls
+  bindSlider('pPropSize', 'pPropSizeV', function (v) { body.propSize = v; });
+  var propCountEl = document.getElementById('pPropBladeCount');
+  if (propCountEl) propCountEl.addEventListener('change', function () { body.propBladeCount = parseInt(this.value, 10); rebuildPreview(); });
+  var propShapeEl = document.getElementById('pPropShape');
+  if (propShapeEl) propShapeEl.addEventListener('change', function () { body.propShape = this.value; rebuildPreview(); });
+  var propColorEl = document.getElementById('pPropColor');
+  if (propColorEl) propColorEl.addEventListener('input', function () { body.propBladeColor = this.value; rebuildPreview(); });
+  var propHubColorEl = document.getElementById('pPropHubColor');
+  if (propHubColorEl) propHubColorEl.addEventListener('input', function () { body.propHubColor = this.value; rebuildPreview(); });
+
   /* Zufaelliges Schaf */
   var randomBtn = document.getElementById('btnRandomBody');
   if (randomBtn) randomBtn.addEventListener('click', function () {
@@ -539,13 +574,25 @@
     body.isBlack = Math.random() < 0.15;
     body.woolColor = body.isBlack ? '#3a3a3a' : woolColors[Math.random() * woolColors.length | 0];
     body.accColor = accColors[Math.random() * accColors.length | 0];
+    // Propeller randomisieren
+    body.propBladeCount = [2, 2, 2, 3, 3, 4][Math.random() * 6 | 0];
+    var propColors = ['#ffd740', '#ff6b6b', '#69db7c', '#74c0fc', '#da77f2', '#ffa94d', '#e8e8e8'];
+    body.propBladeColor = propColors[Math.random() * propColors.length | 0];
+    body.propHubColor = Math.random() < 0.7 ? '#666666' : darkenColor(body.propBladeColor);
+    body.propSize = +(0.7 + Math.random() * 0.6).toFixed(2);
+    body.propShape = ['standard', 'standard', 'round', 'slim', 'teardrop'][Math.random() * 5 | 0];
     setSlider('pScale', 'pScaleV', body.scale);
     setSlider('pChub', 'pChubV', body.chub);
     setSlider('pHead', 'pHeadV', body.headMul);
     setSlider('pLegs', 'pLegsV', body.legMul);
     setSlider('pTail', 'pTailV', body.tailSize);
+    setSlider('pPropSize', 'pPropSizeV', body.propSize);
     if (blackCb) blackCb.checked = body.isBlack;
     if (accColorEl) accColorEl.value = body.accColor.length === 4 ? body.accColor[0]+body.accColor[1]+body.accColor[1]+body.accColor[2]+body.accColor[2]+body.accColor[3]+body.accColor[3] : body.accColor;
+    if (propCountEl) propCountEl.value = body.propBladeCount;
+    if (propShapeEl) propShapeEl.value = body.propShape;
+    if (propColorEl) propColorEl.value = body.propBladeColor;
+    if (propHubColorEl) propHubColorEl.value = body.propHubColor;
     rebuildPreview();
   });
 

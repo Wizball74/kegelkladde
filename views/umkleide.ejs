@@ -24,6 +24,24 @@
           <label>Schwanz <input type="range" id="pTail" min="2" max="7" step="0.5" value="4"><span id="pTailV">4</span></label>
           <label>Schwarz <input type="checkbox" id="pBlack"></label>
           <label>Propeller <input type="checkbox" id="pPropeller" checked></label>
+          <label>Propeller-Gr&ouml;&szlig;e <input type="range" id="pPropSize" min="0.6" max="1.5" step="0.05" value="1.0"><span id="pPropSizeV">1.0</span></label>
+          <label>Fl&uuml;gel-Farbe <input type="color" id="pPropColor" value="#ffd740"></label>
+          <label>Naben-Farbe <input type="color" id="pPropHubColor" value="#666666"></label>
+          <label>Fl&uuml;gel-Anzahl
+            <select id="pPropBladeCount">
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <label>Fl&uuml;gel-Form
+            <select id="pPropShape">
+              <option value="standard" selected>Standard</option>
+              <option value="round">Rund</option>
+              <option value="slim">Schmal</option>
+              <option value="teardrop">Tropfen</option>
+            </select>
+          </label>
           <label>Farbe <input type="color" id="pAccColor" value="#e44444"></label>
           <div style="margin-top:.5rem;">
             <button type="button" class="btn-sm" id="btnRandomBody">Zuf&auml;lliges Schaf</button>
@@ -160,6 +178,6 @@
 </section>
 
 <script>window.__umkleideConfig = <%- JSON.stringify(sheepConfig) %>;</script>
-<link rel="stylesheet" href="/flyingsheep.css" />
-<script src="/umkleide.js"></script>
+<link rel="stylesheet" href="/flyingsheep.css?v=<%= v %>" />
+<script src="/umkleide.js?v=<%= v %>"></script>
 <%- include("partials/bottom") %>

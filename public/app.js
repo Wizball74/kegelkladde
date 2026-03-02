@@ -7842,6 +7842,13 @@ function initMemberDragDrop() {
   var HEAD_W = 12, HEAD_H = 12;
   var LEG_W = 2, LEG_H = 8;
   var POLE_H = 3, HUB_SZ = 4;
+  function darkenColor(hex) {
+    var r, g, b;
+    if (hex.length === 4) { r = parseInt(hex[1]+hex[1],16); g = parseInt(hex[2]+hex[2],16); b = parseInt(hex[3]+hex[3],16); }
+    else { r = parseInt(hex.substr(1,2),16); g = parseInt(hex.substr(3,2),16); b = parseInt(hex.substr(5,2),16); }
+    r = Math.round(r * 0.65); g = Math.round(g * 0.65); b = Math.round(b * 0.65);
+    return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  }
   var sheepCfg = window.__sheepConfig || {};
 
   function renderGraveyardSheep(container) {
@@ -7941,19 +7948,34 @@ function initMemberDragDrop() {
     if (fc.mouthY != null) mouth.style.bottom = fc.mouthY + 'px';
     if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = borderColor; }
 
-    // Propeller
+    // Propeller (trait-gesteuert)
+    var pSz = tr.propSize || 1.0, pColor = tr.propBladeColor || '#ffd740';
+    var pHubC = tr.propHubColor || '#666', pBC = tr.propBladeCount || 2;
+    var pShape = tr.propShape || 'standard';
+    var scaledPoleH = POLE_H * pSz, scaledHubSz = HUB_SZ * pSz, halfBw = 14 * pSz;
     var topPX = hx, topPY = hy - hr - 1;
-    var hubPY = topPY - POLE_H;
+    var hubPY = topPY - scaledPoleH;
     var pole = mk('p s-pole');
-    pole.style.cssText += 'height:' + POLE_H + 'px;left:' + (topPX - 0.75) + 'px;top:' + topPY + 'px;';
+    pole.style.cssText += 'height:' + scaledPoleH + 'px;left:' + (topPX - 0.75) + 'px;top:' + topPY + 'px;';
     var hub = mk('p s-hub');
-    hub.style.cssText += 'left:' + (topPX - HUB_SZ/2) + 'px;top:' + (hubPY - HUB_SZ/2) + 'px;';
+    hub.style.cssText += 'width:' + scaledHubSz + 'px;height:' + scaledHubSz + 'px;left:' + (topPX - scaledHubSz/2) + 'px;top:' + (hubPY - scaledHubSz/2) + 'px;';
+    hub.style.setProperty('--hub-color', pHubC);
+    var bwrapSz = Math.round(28 * pSz);
     var bwrap = mk('p s-bwrap');
-    bwrap.style.cssText += 'left:' + (topPX - 14) + 'px;top:' + (hubPY - 14) + 'px;';
+    bwrap.style.cssText += 'width:' + bwrapSz + 'px;height:' + bwrapSz + 'px;left:' + (topPX - halfBw) + 'px;top:' + (hubPY - halfBw) + 'px;';
     var blades = document.createElement('div'); blades.className = 's-blades';
     blades.style.transform = 'rotateX(60deg) rotate(25deg)';
+    blades.style.setProperty('--bl-dark', darkenColor(pColor));
+    blades.style.setProperty('--bl-light', pColor);
     bwrap.appendChild(blades);
-    blades.innerHTML = '<div class="s-bl"></div><div class="s-bl" style="transform:rotate(90deg)"></div>';
+    var shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
+    for (var bi = 0; bi < pBC; bi++) {
+      var bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
+      if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
+      else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
+      else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
+      blades.appendChild(bl);
+    }
 
     // CSS Accessoires
     var cssAccCfg = sheepCfg.cssAccessories || {};

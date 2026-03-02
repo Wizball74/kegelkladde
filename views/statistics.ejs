@@ -1,5 +1,4 @@
 <%- include("partials/top") %>
-<% if (!sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css?v=<%= v %>" /><% } %>
 <%
   const formatEuro = (value) => Number(value || 0).toFixed(2).replace(".", ",");
   const formatDateDE = (d) => {

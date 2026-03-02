@@ -67,7 +67,7 @@ router.get("/pinnwand", requireAuth, (req, res) => {
 router.post("/pinnwand/add", requireAuth, upload.single("image"), verifyCsrf, (req, res) => {
   const message = sanitize(req.body.message, 1000);
   if (!message) {
-    if (req.file) fs.unlink(req.file.path, () => {});
+    if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.warn("unlink failed:", req.file.path, err.message); });
     req.session.flash = { type: "error", message: "Nachricht darf nicht leer sein." };
     return res.redirect("/pinnwand");
   }
@@ -108,7 +108,7 @@ router.post("/pinnwand/delete", requireAuth, verifyCsrf, (req, res) => {
   // Delete image file if exists
   if (pin.image_path) {
     const filePath = path.join(uploadDir, pin.image_path);
-    fs.unlink(filePath, () => {});
+    fs.unlink(filePath, (err) => { if (err) console.warn("unlink failed:", filePath, err.message); });
   }
 
   db.prepare("DELETE FROM pin_messages WHERE id = ?").run(pinId);

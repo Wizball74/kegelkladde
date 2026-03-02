@@ -321,7 +321,7 @@ router.post("/admin/umkleide/reset", requireAuth, requireAdmin, verifyCsrf, (req
         if (cfg[cat] && cfg[cat].customSheet) {
           const filename = path.basename(cfg[cat].customSheet);
           const filepath = path.join(spriteUploadDir, filename);
-          fs.unlink(filepath, () => {});
+          fs.unlink(filepath, (err) => { if (err) console.warn("unlink failed:", filepath, err.message); });
         }
       }
     } catch (e) { /* ignore */ }
@@ -361,7 +361,7 @@ router.post("/admin/umkleide/upload-sprite", requireAuth, requireAdmin, spriteUp
   const validCats = ["spriteHat", "spriteGlasses", "spriteStache"];
   const category = req.body.category;
   if (!validCats.includes(category)) {
-    if (req.file) fs.unlink(req.file.path, () => {});
+    if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.warn("unlink failed:", req.file.path, err.message); });
     return res.status(400).json({ error: "Ungültige Kategorie." });
   }
   if (!req.file) {
@@ -381,7 +381,7 @@ router.post("/admin/umkleide/upload-sprite", requireAuth, requireAdmin, spriteUp
   if (cfg[category].customSheet) {
     const oldFile = path.basename(cfg[category].customSheet);
     const oldPath = path.join(spriteUploadDir, oldFile);
-    fs.unlink(oldPath, () => {});
+    fs.unlink(oldPath, (err) => { if (err) console.warn("unlink failed:", oldPath, err.message); });
   }
 
   cfg[category].customSheet = url;
@@ -408,7 +408,7 @@ router.post("/admin/umkleide/remove-sprite", requireAuth, requireAdmin, verifyCs
   if (cfg[category] && cfg[category].customSheet) {
     const oldFile = path.basename(cfg[category].customSheet);
     const oldPath = path.join(spriteUploadDir, oldFile);
-    fs.unlink(oldPath, () => {});
+    fs.unlink(oldPath, (err) => { if (err) console.warn("unlink failed:", oldPath, err.message); });
     delete cfg[category].customSheet;
 
     const jsonStr = JSON.stringify(cfg);

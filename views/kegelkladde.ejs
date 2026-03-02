@@ -207,7 +207,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <th class="bilder-col" title="Triclops"><img src="/icons/pins_t.png" alt="" class="triclops-th-icon" /></th>
               <th class="pudel-col"><span class="head-label">Pudel</span></th>
               <th class="game-col block-start"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="va" title="Live: V+A"><img src="/img/notlive.png" alt="Live" /></button><% } %><span class="head-label">V+A</span></th>
-              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="monte" title="Live: Monte"><img src="/img/notlive.png" alt="Live" /></button><% } %><span class="head-label head-label-multiline">Monte<br/><br/><span class="head-sub"<br/>(+ Extrapunkt)</span></span></th>
+              <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="monte" title="Live: Monte"><img src="/img/notlive.png" alt="Live" /></button><% } %><span class="head-label head-label-multiline">Monte<br/><span class="head-sub">(+ Extrapunkt)</span></span></th>
               <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="aussteigen" title="Live: Aussteigen"><img src="/img/notlive.png" alt="Live" /></button><% } %><span class="head-label">Aussteigen</span></th>
               <th class="game-col"><% if (isAdmin && status === 1) { %><button type="button" class="live-game-btn" data-live-start="sechs_tage" title="Live: 6-Tage-Rennen"><img src="/img/notlive.png" alt="Live" /></button><% } %><span class="head-label">6-Tage-Rennen</span></th>
               <th class="game-col">
@@ -617,7 +617,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
       // Anwesende Spieler mit Kostenaufschlüsselung
       html += '<h4 style="margin: 0 0 0.5rem; font-size: 0.95rem;">Spielkosten der Anwesenden</h4>';
       html += '<table class="penalty-detail-table">';
-      html += '<thead><tr><th>Spieler</th><th>9er</th><th>Kränze</th><th><img src="/img/triclops_icon.png" alt="Tricl." class="triclops-inline-icon" /></th><th>Pudel</th><th>Spiele</th><th>Gesamt</th></tr></thead>';
+      html += '<thead><tr><th>Spieler</th><th>9er</th><th>Kränze</th><th><img src="/icons/pins_t.png" alt="Tricl." class="triclops-inline-icon" /></th><th>Pudel</th><th>Spiele</th><th>Gesamt</th></tr></thead>';
       html += '<tbody>';
       data.presentPlayers.forEach(function(p) {
         var isMin = p.total === data.minGameCost && data.minGameCost > 0;

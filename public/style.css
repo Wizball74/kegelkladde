@@ -645,6 +645,11 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--accent-light);
 }
 
+input.invalid {
+  border-color: var(--danger, #c0392b);
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, .15);
+}
+
 .inline-form {
   display: grid;
   gap: 0.75rem;

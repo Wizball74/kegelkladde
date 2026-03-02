@@ -1819,7 +1819,7 @@ function initMobileByGame() {
       r.innerHTML = '<span class="gcn">' + m.avatarHtml + m.name + '</span>' +
         '<label class="present-toggle"><input type="checkbox" data-mp="' + m.id + '"' +
         (tcb.checked ? " checked" : "") + (tcb.disabled ? " disabled" : "") +
-        ' /><img src="/img/spritesheet_sheep.png" alt="" class="present-icon" /></label>';
+        ' /><img src="/img/sheep.png" alt="" class="present-icon" /></label>';
       r.querySelector("input").addEventListener("change", function() {
         tcb.checked = this.checked;
         tcb.dispatchEvent(new Event("change", { bubbles: true }));
@@ -2205,7 +2205,7 @@ function initEditLocks() {
   }
 
   // Poll every 5 seconds
-  setInterval(() => {
+  const lockPollId = setInterval(() => {
     fetch(`/kegelkladde/locks?gamedayId=${encodeURIComponent(gamedayId)}`)
       .then((r) => r.json())
       .then((data) => { if (data.locks) applyLocks(data.locks); })
@@ -2219,6 +2219,7 @@ function initEditLocks() {
 
   // Cleanup on page unload
   window.addEventListener("beforeunload", () => {
+    clearInterval(lockPollId);
     if (currentLockedRow !== null) {
       const payload = JSON.stringify({ csrfToken, gamedayId, memberId: currentLockedRow });
       navigator.sendBeacon("/kegelkladde/unlock-row", new Blob([payload], { type: "application/json" }));
@@ -5918,7 +5919,18 @@ function initMemberDragDrop() {
 
     // Build eliminated map: playerId → {position, cumTotal}
     var elimMap = {};
+    // Build previous-cumulative lookup: prevCumByPos[position][playerId] = cumulative before that position
+    var prevCumByPos = {};
+    var runningCum = {}; // playerId → last known cumulative
     aussteigenState.roundSnapshots.forEach(function(snap) {
+      prevCumByPos[snap.position] = {};
+      gameOrder.forEach(function(p) {
+        prevCumByPos[snap.position][p.id] = runningCum[p.id] || 0;
+      });
+      // Update running cumulatives from this snapshot
+      for (var pid in snap.cumulatives) {
+        runningCum[pid] = snap.cumulatives[pid];
+      }
       snap.eliminatedIds.forEach(function(id) {
         elimMap[id] = { position: snap.position, cumTotal: snap.cumulatives[id] };
       });
@@ -6001,14 +6013,7 @@ function initMemberDragDrop() {
           var snap = snapByPos[pos];
           if (snap && snap.cumulatives[p.id] !== undefined) {
             var cumVal = snap.cumulatives[p.id];
-            // Find previous snapshot's cumulative for this player to derive single throw
-            var prevCumVal = 0;
-            for (var si = 0; si < aussteigenState.roundSnapshots.length; si++) {
-              if (aussteigenState.roundSnapshots[si].position === pos) break;
-              if (aussteigenState.roundSnapshots[si].cumulatives[p.id] !== undefined) {
-                prevCumVal = aussteigenState.roundSnapshots[si].cumulatives[p.id];
-              }
-            }
+            var prevCumVal = prevCumByPos[pos] ? (prevCumByPos[pos][p.id] || 0) : 0;
             cellContent = String(cumVal);
             if (snap.eliminatedIds.indexOf(p.id) !== -1) {
               cellClass += ' ast-cost-elim';

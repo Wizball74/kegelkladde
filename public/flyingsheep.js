@@ -41,6 +41,17 @@
   const STORAGE_KEY = 'flyingSheepState';
   const SAVE_INTERVAL = 3000;
 
+  /* Physics tuning */
+  const DT_SCALE = 0.06;          // Position-Integrationsfaktor (sh.x += sh.vx * dt * DT_SCALE)
+  const HOVER_DAMP = 0.94;        // Geschwindigkeits-Dämpfung beim Hovern/Idle
+  const BANK_LERP = 0.12;         // Bank-Winkel Interpolation
+  const HEAD_LERP = 0.09;         // Kopfwinkel Interpolation
+  const WOBBLE_SPRING = 0.3;      // Wobble-Federkonstante
+  const WOBBLE_DAMP = 0.85;       // Wobble-Dämpfung
+  const EYE_LERP = 0.15;          // Augen-Blickrichtung Interpolation
+  const LEG_DRAG_LERP = 0.04;     // Bein-Trägheit Interpolation
+  const STAR_DURATION = 450;      // Star-Animations-Dauer (ms)
+
   /* ═══ Cursor ═══ */
   let cursorX = W / 2, cursorY = H / 2, cursorLastMove = 0;
   document.addEventListener('mousemove', function (e) {
@@ -50,6 +61,8 @@
   /* ═══ Flock ═══ */
   var flock = [];
   var dismissed = false;
+  var flockDirty = false;
+  function markDirty() { flockDirty = true; }
 
   /* ═══ Aging helpers ═══ */
   function getAgeFactor(sh) {
@@ -84,46 +97,12 @@
     var spriteHat = Math.random() < 0.55 ? (Math.random() * 16 | 0) : -1;
     var spriteGlasses = Math.random() < 0.40 ? (Math.random() * 32 | 0) : -1;
     var spriteStache = Math.random() < 0.35 ? (Math.random() * 12 | 0) : -1;
-    var accessory = null;
-    var r = Math.random();
-    if (spriteHat < 0 && spriteGlasses < 0) {
-      // Kein Sprite-Hut/Brille → alte CSS-Accessoires möglich
-      if (r < .10) accessory = 'tophat';
-      else if (r < .18) accessory = 'partyhat';
-      else if (r < .22) accessory = 'crown';
-      else if (r < .32) accessory = 'beanie';
-      else if (r < .42) accessory = 'glasses';
-      else if (r < .50) accessory = 'bowtie';
-      else if (r < .57) accessory = 'bell';
-      else if (r < .64) accessory = 'flower';
-      else if (r < .72) accessory = 'scarf';
-      else if (r < .80) accessory = 'shoes';
-    } else if (spriteHat >= 0 && spriteGlasses < 0) {
-      // Hat Sprite-Hut → keine CSS-Hüte, aber Nicht-Hut-Accessoires erlaubt
-      if (r < .15) accessory = 'bowtie';
-      else if (r < .25) accessory = 'bell';
-      else if (r < .35) accessory = 'flower';
-      else if (r < .45) accessory = 'scarf';
-      else if (r < .55) accessory = 'shoes';
-    } else if (spriteHat < 0 && spriteGlasses >= 0) {
-      // Hat Sprite-Brille → keine CSS-Brille, aber Hüte erlaubt
-      if (r < .10) accessory = 'tophat';
-      else if (r < .18) accessory = 'partyhat';
-      else if (r < .22) accessory = 'crown';
-      else if (r < .32) accessory = 'beanie';
-      else if (r < .40) accessory = 'bowtie';
-      else if (r < .47) accessory = 'bell';
-      else if (r < .54) accessory = 'flower';
-      else if (r < .62) accessory = 'scarf';
-      else if (r < .70) accessory = 'shoes';
-    } else {
-      // Beides Sprite → nur Nicht-Hut/Brille-Accessoires
-      if (r < .15) accessory = 'bowtie';
-      else if (r < .25) accessory = 'bell';
-      else if (r < .35) accessory = 'flower';
-      else if (r < .45) accessory = 'scarf';
-      else if (r < .55) accessory = 'shoes';
-    }
+    /* Accessoire-Pool: nur kompatible Typen einfügen */
+    var accPool = ['bowtie', 'bell', 'flower', 'scarf', 'shoes'];
+    if (spriteHat < 0) accPool.push('tophat', 'partyhat', 'crown', 'beanie');
+    if (spriteGlasses < 0) accPool.push('glasses');
+    var accChance = 0.50 + accPool.length * 0.03;
+    var accessory = Math.random() < accChance ? accPool[Math.random() * accPool.length | 0] : null;
     var legSpread = 3 + Math.random() * 5;
     var legYBase = 4.5 + Math.random() * 3;
     var legBackOff = 0.5 + Math.random() * 1.5;
@@ -162,9 +141,149 @@
     return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees, propBladeCount: propBladeCount, propBladeColor: propBladeColor, propHubColor: propHubColor, propSize: propSize, propShape: propShape };
   }
 
+  /* ═══ DOM-Factory: Sub-Funktionen ═══ */
+
+  function createFace(head, tr, fc) {
+    var earL = document.createElement('div'); earL.className = 's-ear l'; head.appendChild(earL);
+    var earR = document.createElement('div'); earR.className = 's-ear r'; head.appendChild(earR);
+    var earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
+    earL.style.background = earR.style.background = earColor;
+    earL.style.border = earR.style.border = '.8px solid ' + tr.borderColor;
+    if (fc.earY != null) { earL.style.top = fc.earY + 'px'; earR.style.top = fc.earY + 'px'; }
+    if (fc.earLeftX != null) earL.style.left = fc.earLeftX + 'px';
+    if (fc.earRightX != null) earR.style.right = fc.earRightX + 'px';
+    var eyeL = document.createElement('div'); eyeL.className = 's-eye l'; head.appendChild(eyeL);
+    var eyeR = document.createElement('div'); eyeR.className = 's-eye r'; head.appendChild(eyeR);
+    /* Augen höher setzen wenn Schnurrbart vorhanden, damit nichts überlagert */
+    var eyeYBase = (fc.eyeY != null) ? fc.eyeY : (tr.spriteStache >= 0 ? 2 : null);
+    if (eyeYBase != null) { eyeL.style.top = eyeYBase + 'px'; eyeR.style.top = eyeYBase + 'px'; }
+    if (fc.eyeLeftX != null) eyeL.style.left = fc.eyeLeftX + 'px';
+    if (fc.eyeRightX != null) eyeR.style.right = fc.eyeRightX + 'px';
+    var mouth = document.createElement('div'); mouth.className = 's-mouth'; head.appendChild(mouth);
+    if (fc.mouthY != null) mouth.style.bottom = fc.mouthY + 'px';
+    if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = tr.borderColor; }
+    return { eyeL: eyeL, eyeR: eyeR };
+  }
+
+  function createPropeller(wrap, mk, tr) {
+    var pole = mk('s-pole'); var hub = mk('s-hub');
+    var bwrap = mk('s-bwrap');
+    var blades = document.createElement('div'); blades.className = 's-blades'; bwrap.appendChild(blades);
+    var pBC = tr.propBladeCount || 2;
+    var pColor = tr.propBladeColor || '#ffd740';
+    var pHubC = tr.propHubColor || '#666';
+    var pSz = tr.propSize || 1.0;
+    var pShape = tr.propShape || 'standard';
+    blades.style.setProperty('--bl-dark', darkenColor(pColor));
+    blades.style.setProperty('--bl-light', pColor);
+    hub.style.setProperty('--hub-color', pHubC);
+    var hubSzInit = HUB_SZ * pSz;
+    hub.style.width = hubSzInit + 'px'; hub.style.height = hubSzInit + 'px';
+    var bwSz = Math.round(28 * pSz);
+    bwrap.style.width = bwSz + 'px'; bwrap.style.height = bwSz + 'px';
+    var shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
+    for (var bi = 0; bi < pBC; bi++) {
+      var bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
+      if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
+      else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
+      else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
+      blades.appendChild(bl);
+    }
+    return { pole: pole, hub: hub, bwrap: bwrap, blades: blades, propSize: pSz };
+  }
+
+  var cssAccDefY = {tophat:-9,partyhat:-12,crown:-7,beanie:-5,glasses:2.5,bowtie:-3,bell:-2,flower:-1,scarf:-2.5,shoes:-2};
+
+  function applyCssAccOff(el, type, cssAccCfg) {
+    var c = cssAccCfg[type]; if (!c) return;
+    if (c.offsetY) el.style.top = ((cssAccDefY[type] || 0) + c.offsetY) + 'px';
+    if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
+    if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
+  }
+
+  function attachCssAccessory(head, torso, legEls, shinEls, tr, cfg) {
+    var cssAccCfg = cfg.cssAccessories || {};
+    var acc = tr.accessory;
+    if (!acc) return;
+    if (acc === 'shoes') {
+      for (var si = 0; si < legEls.length; si++) {
+        var shoe = document.createElement('div'); shoe.className = 's-shoe'; shoe.style.background = tr.accColor;
+        /* Bei Kniegelenken: Schuh ans Schienbein, nicht an den Oberschenkel */
+        var target = (shinEls && shinEls[si]) ? shinEls[si] : legEls[si];
+        target.appendChild(shoe);
+      }
+      return;
+    }
+    var el = document.createElement('div');
+    var parent = head;
+    if (acc === 'tophat') { el.className = 's-acc s-tophat'; el.style.background = tr.isBlack ? '#555' : '#222'; }
+    else if (acc === 'partyhat') { el.className = 's-acc s-partyhat'; el.style.borderBottomColor = tr.accColor; el.style.borderBottomWidth = '10px'; }
+    else if (acc === 'crown') { el.className = 's-acc s-crown'; }
+    else if (acc === 'beanie') { el.className = 's-acc s-beanie'; el.style.background = tr.accColor; }
+    else if (acc === 'glasses') {
+      el.className = 's-acc s-glasses';
+      var lens1 = document.createElement('span'); lens1.className = 's-lens';
+      var lens2 = document.createElement('span'); lens2.className = 's-lens';
+      var bridge = document.createElement('span'); bridge.className = 's-bridge';
+      el.appendChild(lens1); el.appendChild(lens2); el.appendChild(bridge);
+    }
+    else if (acc === 'bowtie') { el.className = 's-acc s-bowtie'; el.style.borderLeftColor = el.style.borderRightColor = tr.accColor; el.style.borderLeftWidth = el.style.borderRightWidth = '3.5px'; parent = torso; }
+    else if (acc === 'bell') { el.className = 's-acc s-bell'; }
+    else if (acc === 'flower') { el.className = 's-acc s-flower'; el.style.background = tr.accColor; }
+    else if (acc === 'scarf') { el.className = 's-acc s-scarf'; el.style.background = tr.accColor; }
+    parent.appendChild(el);
+    applyCssAccOff(el, acc, cssAccCfg);
+  }
+
+  function applySpriteOverlay(head, el, idx, spriteCfg, defaults) {
+    var item = (spriteCfg.items && spriteCfg.items[idx]) || {};
+    if (spriteCfg.customSheet) el.style.backgroundImage = 'url(' + spriteCfg.customSheet + ')';
+    var cols = spriteCfg.cols || defaults.cols;
+    var slotW = spriteCfg.slotW || defaults.slotW;
+    var slotH = spriteCfg.slotH || defaults.slotH;
+    var col = idx % cols, row = (idx / cols) | 0;
+    el.style.backgroundPosition = -(col * slotW) + 'px ' + -(row * slotH) + 'px';
+    var posY = (spriteCfg.offsetY != null ? spriteCfg.offsetY : defaults.offsetY) + (item.dY || 0);
+    el.style[defaults.posYProp || 'top'] = posY + 'px';
+    var totalX = (spriteCfg.offsetX || 0) + (item.dX || 0);
+    if (totalX) el.style.left = 'calc(50% + ' + totalX + 'px)';
+    var totalS = (spriteCfg.scale != null ? spriteCfg.scale : defaults.scale) * (item.dS || 1);
+    if (totalS !== 1) el.style.transform = 'translateX(-50%) scale(' + totalS + ')';
+    head.appendChild(el);
+  }
+
+  function attachSpriteOverlays(head, tr, cfg) {
+    if (tr.spriteHat >= 0) {
+      var hatEl = document.createElement('div');
+      if (tr.spriteHat >= 16) {
+        hatEl.className = 's-sprite-wig';
+        var wigIdx = tr.spriteHat - 16;
+        var wigCol = wigIdx % 3, wigRow = (wigIdx / 3) | 0;
+        hatEl.style.backgroundPosition = (wigCol * 50) + '% ' + (wigRow * 50) + '%';
+        head.appendChild(hatEl);
+      } else {
+        hatEl.className = 's-sprite-hat';
+        applySpriteOverlay(head, hatEl, tr.spriteHat, cfg.spriteHat || {},
+          { cols: 4, slotW: 9.85, slotH: 8.85, offsetY: -8, scale: 1 });
+      }
+    }
+    if (tr.spriteGlasses >= 0) {
+      var glEl = document.createElement('div');
+      glEl.className = 's-sprite-glasses';
+      applySpriteOverlay(head, glEl, tr.spriteGlasses, cfg.spriteGlasses || {},
+        { cols: 4, slotW: 16.975, slotH: 8.3375, offsetY: 1.5, scale: 0.65 });
+    }
+    if (tr.spriteStache >= 0) {
+      var stEl = document.createElement('div');
+      stEl.className = 's-sprite-stache';
+      applySpriteOverlay(head, stEl, tr.spriteStache, cfg.spriteStache || {},
+        { cols: 3, slotW: 40, slotH: 30, offsetY: -1, scale: 0.25, posYProp: 'bottom' });
+    }
+  }
+
   /* ═══ DOM-Factory ═══ */
   function createSheepDOM(tr, letter) {
-    var cfg = sheepCfg(); // jedes Mal frisch lesen
+    var cfg = sheepCfg();
     var wrap = document.createElement('div');
     wrap.className = 's-wrap';
     overlay.appendChild(wrap);
@@ -174,6 +293,7 @@
     var hw = HEAD_W * tr.headMul, hh = HEAD_H * tr.headMul;
     var lh = LEG_H * tr.legMul;
 
+    /* Körper-Elemente (Reihenfolge = z-order) */
     var lbl = mk('s-leg bk'); var lbr = mk('s-leg bk');
     var tail = mk('s-tail');
     var torso = mk('s-torso');
@@ -189,6 +309,8 @@
     head.style.cssText += 'width:' + hw + 'px;height:' + hh + 'px;background:' + tr.woolColor + ';border-color:' + tr.borderColor + ';';
     head.style.setProperty('--wool', tr.woolColor);
     head.style.setProperty('--bdr', tr.borderColor);
+
+    /* Beine + Kniegelenke */
     var legEls = [lfl, lfr, lbl, lbr];
     var shinEls = [null, null, null, null];
     if (tr.hasKnees) {
@@ -198,7 +320,7 @@
         legEls[li].style.cssText += 'height:' + thighH + 'px;background:' + tr.skinColor + ';';
         var shin = document.createElement('div');
         shin.className = 's-shin';
-        shin.style.cssText = 'position:absolute;left:0;top:' + (thighH - 2) + 'px;width:' + LEG_W + 'px;height:' + (shinH + 2) + 'px;background:' + tr.skinColor + ';border-radius:1px;transform-origin:1px 0;';
+        shin.style.cssText = 'position:absolute;left:0;top:' + (thighH - 2) + 'px;width:' + LEG_W + 'px;height:' + shinH + 'px;background:' + tr.skinColor + ';border-radius:1px;transform-origin:1px 0;';
         legEls[li].appendChild(shin);
         shinEls[li] = shin;
       }
@@ -206,155 +328,22 @@
       for (var li = 0; li < legEls.length; li++) legEls[li].style.cssText += 'height:' + lh + 'px;background:' + tr.skinColor + ';';
     }
 
-    var fc = cfg.face || {};
-    var earL = document.createElement('div'); earL.className = 's-ear l'; head.appendChild(earL);
-    var earR = document.createElement('div'); earR.className = 's-ear r'; head.appendChild(earR);
-    var earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
-    earL.style.background = earR.style.background = earColor;
-    earL.style.border = earR.style.border = '.8px solid ' + tr.borderColor;
-    if (fc.earY != null) { earL.style.top = fc.earY + 'px'; earR.style.top = fc.earY + 'px'; }
-    if (fc.earLeftX != null) earL.style.left = fc.earLeftX + 'px';
-    if (fc.earRightX != null) earR.style.right = fc.earRightX + 'px';
-    var eyeL = document.createElement('div'); eyeL.className = 's-eye l'; head.appendChild(eyeL);
-    var eyeR = document.createElement('div'); eyeR.className = 's-eye r'; head.appendChild(eyeR);
-    if (fc.eyeY != null) { eyeL.style.top = fc.eyeY + 'px'; eyeR.style.top = fc.eyeY + 'px'; }
-    if (fc.eyeLeftX != null) eyeL.style.left = fc.eyeLeftX + 'px';
-    if (fc.eyeRightX != null) eyeR.style.right = fc.eyeRightX + 'px';
-    var mouth = document.createElement('div'); mouth.className = 's-mouth'; head.appendChild(mouth);
-    if (fc.mouthY != null) mouth.style.bottom = fc.mouthY + 'px';
-    if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = tr.borderColor; }
+    /* Gesicht */
+    var face = createFace(head, tr, cfg.face || {});
 
-    var pole = mk('s-pole'); var hub = mk('s-hub');
-    var bwrap = mk('s-bwrap');
-    var blades = document.createElement('div'); blades.className = 's-blades'; bwrap.appendChild(blades);
-    // Propeller-Varianten aus Traits
-    var pBC = tr.propBladeCount || 2;
-    var pColor = tr.propBladeColor || '#ffd740';
-    var pHubC = tr.propHubColor || '#666';
-    var pSz = tr.propSize || 1.0;
-    var pShape = tr.propShape || 'standard';
-    blades.style.setProperty('--bl-dark', darkenColor(pColor));
-    blades.style.setProperty('--bl-light', pColor);
-    hub.style.setProperty('--hub-color', pHubC);
-    if (pSz !== 1) { bwrap.style.width = Math.round(28 * pSz) + 'px'; bwrap.style.height = Math.round(28 * pSz) + 'px'; }
-    var shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
-    for (var bi = 0; bi < pBC; bi++) {
-      var bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
-      if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
-      else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
-      else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
-      blades.appendChild(bl);
-    }
+    /* Propeller */
+    var prop = createPropeller(wrap, mk, tr);
 
-    /* Accessoire (mit Config-Overrides) */
-    var cssAccCfg = cfg.cssAccessories || {};
-    var cssAccDefY = {tophat:-9,partyhat:-12,crown:-7,beanie:-5,glasses:2.5,bowtie:-3,bell:-2,flower:-1,scarf:-2.5,shoes:-2};
-    function applyCssAccOff(el, type) {
-      var c = cssAccCfg[type]; if (!c) return;
-      if (c.offsetY) el.style.top = ((cssAccDefY[type] || 0) + c.offsetY) + 'px';
-      if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
-      if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
-    }
-    if (tr.accessory === 'tophat') {
-      var h = document.createElement('div'); h.className = 's-acc s-tophat';
-      h.style.background = tr.isBlack ? '#555' : '#222';
-      head.appendChild(h); applyCssAccOff(h, 'tophat');
-    } else if (tr.accessory === 'partyhat') {
-      var h = document.createElement('div'); h.className = 's-acc s-partyhat';
-      h.style.borderBottomColor = tr.accColor; h.style.borderBottomWidth = '10px';
-      head.appendChild(h); applyCssAccOff(h, 'partyhat');
-    } else if (tr.accessory === 'crown') {
-      var h = document.createElement('div'); h.className = 's-acc s-crown';
-      head.appendChild(h); applyCssAccOff(h, 'crown');
-    } else if (tr.accessory === 'beanie') {
-      var h = document.createElement('div'); h.className = 's-acc s-beanie';
-      h.style.background = tr.accColor;
-      head.appendChild(h); applyCssAccOff(h, 'beanie');
-    } else if (tr.accessory === 'glasses') {
-      var g = document.createElement('div'); g.className = 's-acc s-glasses';
-      g.innerHTML = '<span class="s-lens"></span><span class="s-lens"></span><span class="s-bridge"></span>';
-      head.appendChild(g); applyCssAccOff(g, 'glasses');
-    } else if (tr.accessory === 'bowtie') {
-      var bt = document.createElement('div'); bt.className = 's-acc s-bowtie';
-      bt.style.borderLeftColor = bt.style.borderRightColor = tr.accColor;
-      bt.style.borderLeftWidth = bt.style.borderRightWidth = '3.5px';
-      torso.appendChild(bt); applyCssAccOff(bt, 'bowtie');
-    } else if (tr.accessory === 'bell') {
-      var b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b); applyCssAccOff(b, 'bell');
-    } else if (tr.accessory === 'flower') {
-      var f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f); applyCssAccOff(f, 'flower');
-    } else if (tr.accessory === 'scarf') {
-      var s = document.createElement('div'); s.className = 's-acc s-scarf'; s.style.background = tr.accColor;
-      head.appendChild(s); applyCssAccOff(s, 'scarf');
-    } else if (tr.accessory === 'shoes') {
-      for (var si = 0; si < legEls.length; si++) {
-        var sh = document.createElement('div'); sh.className = 's-shoe'; sh.style.background = tr.accColor; legEls[si].appendChild(sh);
-      }
-    }
+    /* Accessoire + Sprite-Overlays */
+    attachCssAccessory(head, torso, legEls, shinEls, tr, cfg);
+    attachSpriteOverlays(head, tr, cfg);
 
-    /* Sprite-Overlays (mit Config-Overrides) */
-    if (tr.spriteHat >= 0) {
-      var hatEl = document.createElement('div');
-      if (tr.spriteHat >= 16) {
-        /* Perücke (Index 16-24 → Wig-Sheet 3×3) */
-        hatEl.className = 's-sprite-wig';
-        var wigIdx = tr.spriteHat - 16;
-        var wigCol = wigIdx % 3, wigRow = (wigIdx / 3) | 0;
-        hatEl.style.backgroundPosition = (wigCol * 50) + '% ' + (wigRow * 50) + '%';
-      } else {
-        /* Hut (Index 0-15 → Hat-Sheet 4×4) */
-        hatEl.className = 's-sprite-hat';
-        var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-        var hCfg = cfg.spriteHat || {};
-        var hItem = (hCfg.items && hCfg.items[tr.spriteHat]) || {};
-        if (hCfg.customSheet) hatEl.style.backgroundImage = 'url(' + hCfg.customSheet + ')';
-        hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
-        hatEl.style.top = ((hCfg.offsetY != null ? hCfg.offsetY : -8) + (hItem.dY || 0)) + 'px';
-        var hTotalX = (hCfg.offsetX || 0) + (hItem.dX || 0);
-        if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
-        var hTotalS = (hCfg.scale || 1) * (hItem.dS || 1);
-        if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
-      }
-      head.appendChild(hatEl);
-    }
-    if (tr.spriteGlasses >= 0) {
-      var glEl = document.createElement('div');
-      glEl.className = 's-sprite-glasses';
-      var gCfg = cfg.spriteGlasses || {};
-      var gItem = (gCfg.items && gCfg.items[tr.spriteGlasses]) || {};
-      if (gCfg.customSheet) glEl.style.backgroundImage = 'url(' + gCfg.customSheet + ')';
-      var glCols = gCfg.cols || 4;
-      var glSlotW = gCfg.slotW || 16.975;
-      var glSlotH = gCfg.slotH || 8.3375;
-      var glCol = tr.spriteGlasses % glCols, glRow = (tr.spriteGlasses / glCols) | 0;
-      glEl.style.backgroundPosition = -(glCol * glSlotW) + 'px ' + -(glRow * glSlotH) + 'px';
-      glEl.style.top = ((gCfg.offsetY != null ? gCfg.offsetY : 1.5) + (gItem.dY || 0)) + 'px';
-      var gTotalX = (gCfg.offsetX || 0) + (gItem.dX || 0);
-      if (gTotalX) glEl.style.left = 'calc(50% + ' + gTotalX + 'px)';
-      var gTotalS = (gCfg.scale != null ? gCfg.scale : 0.65) * (gItem.dS || 1);
-      if (gTotalS !== 1) glEl.style.transform = 'translateX(-50%) scale(' + gTotalS + ')';
-      head.appendChild(glEl);
-    }
-    if (tr.spriteStache >= 0) {
-      var stEl = document.createElement('div');
-      stEl.className = 's-sprite-stache';
-      var sCfg = cfg.spriteStache || {};
-      var sItem = (sCfg.items && sCfg.items[tr.spriteStache]) || {};
-      if (sCfg.customSheet) stEl.style.backgroundImage = 'url(' + sCfg.customSheet + ')';
-      var stCols = sCfg.cols || 3;
-      var stSlotW = sCfg.slotW || 40;
-      var stSlotH = sCfg.slotH || 30;
-      var stCol = tr.spriteStache % stCols, stRow = (tr.spriteStache / stCols) | 0;
-      stEl.style.backgroundPosition = -(stCol * stSlotW) + 'px ' + -(stRow * stSlotH) + 'px';
-      stEl.style.bottom = ((sCfg.offsetY != null ? sCfg.offsetY : -1) + (sItem.dY || 0)) + 'px';
-      var sTotalX = (sCfg.offsetX || 0) + (sItem.dX || 0);
-      if (sTotalX) stEl.style.left = 'calc(50% + ' + sTotalX + 'px)';
-      var sTotalS = (sCfg.scale != null ? sCfg.scale : 0.25) * (sItem.dS || 1);
-      if (sTotalS !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sTotalS + ')';
-      head.appendChild(stEl);
-    }
-
-    return { wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl, lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls, pole: pole, hub: hub, bwrap: bwrap, blades: blades, eyeL: eyeL, eyeR: eyeR, propSize: pSz };
+    return {
+      wrap: wrap, torso: torso, head: head, tail: tail, label: labelEl,
+      lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls,
+      pole: prop.pole, hub: prop.hub, bwrap: prop.bwrap, blades: prop.blades,
+      eyeL: face.eyeL, eyeR: face.eyeR, propSize: prop.propSize
+    };
   }
 
   /* ═══ Schaf erzeugen ═══ */
@@ -429,7 +418,7 @@
     flock.splice(i, 1);
     sheep.dom.wrap.remove();
     if (deathCause) logSheepDeath(sheep, deathCause);
-    saveFlock();
+    saveFlock(true);
   }
 
   /* ═══ Targets ═══ */
@@ -454,7 +443,10 @@
   }
 
   function makeSheepScared(sh, canSpread) {
-    sh.state = 'scared'; sh.stTimer = 0; sh.stDur = 3000 + Math.random() * 3000;
+    var cur = sh.traits.curiosity != null ? sh.traits.curiosity : 0.8;
+    // Neugierige Schafe: kürzere Schreckdauer (1.3→×0.6, 0.3→×0.95)
+    var scareMul = 1.05 - cur * 0.35;
+    sh.state = 'scared'; sh.stTimer = 0; sh.stDur = (3000 + Math.random() * 3000) * scareMul;
     sh.scareCorner = nearestCorner(sh.x, sh.y);
     sh.wideEyes = sh.stDur + 1000; sh.propSpeed = PROP_MAX;
     sh.canSpreadFear = canSpread;
@@ -462,7 +454,10 @@
       for (var fi = 0; fi < flock.length; fi++) {
         var o = flock[fi];
         if (o === sh || o.state === 'scared') continue;
-        if (Math.hypot(o.x - sh.x, o.y - sh.y) < 100) makeSheepScared(o, false);
+        // Neugierige Schafe lassen sich weniger leicht anstecken
+        var oCur = o.traits.curiosity != null ? o.traits.curiosity : 0.8;
+        var fearRadius = 100 - oCur * 25; // 0.3→92px, 1.3→68px
+        if (Math.hypot(o.x - sh.x, o.y - sh.y) < fearRadius) makeSheepScared(o, false);
       }
     }
   }
@@ -471,9 +466,14 @@
   function pickNext(sh) {
     if (sh.state === 'scared' || sh.state === 'departing' || sh.state === 'dizzy' || isGroupState(sh.state)) return;
 
+    var cur = sh.traits.curiosity != null ? sh.traits.curiosity : 0.8;
+    var curOK = (performance.now() - cursorLastMove) < 4000 && Math.hypot(sh.x - cursorX, sh.y - cursorY) > 60;
+    var curiousChance = .06 + cur * .08; // 0.3→~8%, 1.3→~16%
+
     if (sh.solo) {
       var r = Math.random();
-      if (r < .35) { sh.state = 'explore'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 3000 + Math.random() * 5000; sh.propSpeed = Math.min(sh.propSpeed + 6, PROP_MAX); }
+      if (curOK && r < curiousChance) { sh.state = 'curious'; sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500; }
+      else if (r < .35) { sh.state = 'explore'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 3000 + Math.random() * 5000; sh.propSpeed = Math.min(sh.propSpeed + 6, PROP_MAX); }
       else if (r < .55) { sh.state = 'dart'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 800 + Math.random() * 1200; sh.propSpeed = Math.min(sh.propSpeed + 12, PROP_MAX); }
       else if (r < .72) { sh.state = 'zigzag'; sh.target = newTarget(); sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500; }
       else if (r < .85) { sh.state = 'circle'; sh.orbitCenter = { x: sh.x, y: sh.y }; sh.orbitAngle = Math.random() * Math.PI * 2; sh.orbitRadius = 40 + Math.random() * 80; sh.orbitDir = Math.random() > .5 ? 1 : -1; sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 3000; }
@@ -481,9 +481,8 @@
       return;
     }
 
-    var curOK = (performance.now() - cursorLastMove) < 4000 && Math.hypot(sh.x - cursorX, sh.y - cursorY) > 60;
     var r = Math.random();
-    if (curOK && r < .12) { sh.state = 'curious'; sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500; }
+    if (curOK && r < curiousChance) { sh.state = 'curious'; sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2500; }
     else if (flock.length > 1 && r < .22) {
       sh.state = 'social';
       var others = flock.filter(function (o) { return o !== sh && o.state !== 'departing'; });
@@ -671,6 +670,266 @@
     }
   }
 
+  /* ═══ Steering-Helper ═══ */
+  function steerTo(sh, tx, ty, strength) {
+    var dx = tx - sh.x, dy = ty - sh.y, d = Math.hypot(dx, dy);
+    if (d > 1) { sh.vx += (dx / d) * strength; sh.vy += (dy / d) * strength; }
+    return d;
+  }
+
+  /* ═══ State-Handler (je ein Verhalten) ═══ */
+  function behaveHover(sh) {
+    sh.vx *= HOVER_DAMP; sh.vy *= HOVER_DAMP;
+    sh.headTarget = Math.sin(sh.stTimer * .005) * 35;
+    if (sh.stTimer > sh.stDur) pickNext(sh);
+  }
+
+  function behaveDart(sh, dt, t, S) {
+    var d = Math.hypot(sh.target.x - sh.x, sh.target.y - sh.y);
+    if (d < 20 || sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    steerTo(sh, sh.target.x, sh.target.y, S * 1.4);
+    sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
+  }
+
+  function behaveExplore(sh, dt, t, S) {
+    var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+    if (d < 25 || sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    var nx = dx / d, ny = dy / d, arr = Math.min(1, d / 60);
+    var w = Math.sin(t * .001 + sh.stTimer * .001 + sh.bobPhase) * .5;
+    var c = Math.cos(w), sn = Math.sin(w);
+    sh.vx += (nx * c - ny * sn) * S * arr; sh.vy += (nx * sn + ny * c) * S * arr;
+    sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 5));
+  }
+
+  function behaveCircle(sh, dt, t, S) {
+    sh.orbitAngle += dt * .003 * sh.orbitDir;
+    var tx = sh.orbitCenter.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
+    var ty = sh.orbitCenter.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
+    steerTo(sh, tx, ty, S * 1.1);
+    sh.headTarget = Math.max(-25, Math.min(25, sh.vx * 4));
+    if (sh.stTimer > sh.stDur) pickNext(sh);
+  }
+
+  function behaveZigzag(sh, dt, t, S) {
+    var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+    if (d < 25 || sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    var nx = dx / d, ny = dy / d;
+    var zig = Math.sin(sh.stTimer * .008) * 1.2, c = Math.cos(zig), sn = Math.sin(zig);
+    sh.vx += (nx * c - ny * sn) * S * 1.2; sh.vy += (nx * sn + ny * c) * S * 1.2;
+    sh.headTarget = Math.sin(sh.stTimer * .006) * 30;
+  }
+
+  function behaveCurious(sh, dt, t, S) {
+    var dx = cursorX - sh.x, dy = cursorY - sh.y, d = Math.hypot(dx, dy);
+    if (sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    var cur = sh.traits.curiosity != null ? sh.traits.curiosity : 0.8;
+    var minDist = 60 - cur * 20; // 0.3→54px, 1.3→34px – neugierigere kommen näher
+    var approach = .7 + cur * .25; // 0.3→0.78, 1.3→1.03 – neugierigere steuern schneller
+    if (d > minDist) { sh.vx += (dx / d) * S * approach; sh.vy += (dy / d) * S * approach; sh.headTarget = Math.max(-30, Math.min(30, dx * .2)); }
+    else { sh.vx *= HOVER_DAMP; sh.vy *= HOVER_DAMP; sh.headTarget = Math.max(-40, Math.min(40, dx * .35)); }
+  }
+
+  function behaveSocial(sh, dt, t, S) {
+    if (!sh.socialTarget || flock.indexOf(sh.socialTarget) === -1 || sh.socialTarget.state === 'departing') { pickNext(sh); return; }
+    var dx = sh.socialTarget.x - sh.x, dy = sh.socialTarget.y - sh.y, d = Math.hypot(dx, dy);
+    if (sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    if (d > 35) {
+      sh.vx += (dx / d) * S * .8; sh.vy += (dy / d) * S * .8;
+    } else {
+      sh.vx += (sh.socialTarget.vx - sh.vx) * .03;
+      sh.vy += (sh.socialTarget.vy - sh.vy) * .03;
+      sh.vx *= .95; sh.vy *= .95;
+    }
+    sh.headTarget = Math.max(-35, Math.min(35, dx * .25));
+  }
+
+  function behaveScared(sh, dt, t, S) {
+    sh.wideEyes = Math.max(sh.wideEyes, 500);
+    if (sh.stTimer > sh.stDur) { sh.wideEyes = 0; pickNext(sh); return; }
+    var cmx = cursorX - sh.x, cmy = cursorY - sh.y, cmd = Math.hypot(cmx, cmy);
+    if (cmd < 100) {
+      if (cmd > 1) { sh.vx -= (cmx / cmd) * S * 1.8; sh.vy -= (cmy / cmd) * S * 1.8; }
+      sh.propSpeed = Math.min(sh.propSpeed + 3, PROP_MAX);
+      sh.scareCorner = nearestCorner(sh.x + (sh.x - cursorX), sh.y + (sh.y - cursorY));
+    } else {
+      if (!sh.scareCorner) sh.scareCorner = nearestCorner(sh.x, sh.y);
+      var dcx = sh.scareCorner.x - sh.x, dcy = sh.scareCorner.y - sh.y, dc = Math.hypot(dcx, dcy);
+      if (dc > 20) {
+        sh.vx += (dcx / dc) * S * .8; sh.vy += (dcy / dc) * S * .8;
+      } else {
+        sh.vx *= .9; sh.vy *= .9;
+        sh.vx += (Math.random() - .5) * .06; sh.vy += (Math.random() - .5) * .06;
+      }
+    }
+    sh.headTarget = Math.max(-40, Math.min(40, cmx * .15 + Math.sin(sh.stTimer * .01) * 5));
+  }
+
+  function behaveHeadbutt(sh, dt, t, S) {
+    if (!sh.headbuttPartner || flock.indexOf(sh.headbuttPartner) === -1 || sh.headbuttPartner.state !== 'headbutt') { endGroupAction(sh); return; }
+    var partner = sh.headbuttPartner;
+    var dx = partner.x - sh.x, dy = partner.y - sh.y, d = Math.hypot(dx, dy);
+    if (sh.headbuttPhase === 0) {
+      if (d > 15) {
+        sh.vx += (dx / d) * S * 1.3; sh.vy += (dy / d) * S * 1.3;
+        sh.headTarget = Math.max(-30, Math.min(30, Math.atan2(dy, dx) * 180 / Math.PI));
+      } else {
+        sh.headbuttPhase = 1;
+        spawnStars((sh.x + partner.x) / 2, (sh.y + partner.y) / 2, 4 + (Math.random() * 3 | 0));
+        sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 14;
+        sh.wideEyes = 1500;
+        var rx = sh.x - partner.x, ry = sh.y - partner.y, rd = Math.hypot(rx, ry) || 1;
+        sh.vx = (rx / rd) * 3; sh.vy = (ry / rd) * 3;
+        sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
+        sh.stDur = sh.stTimer + 800;
+      }
+    } else {
+      sh.vx *= 0.92; sh.vy *= 0.92;
+      if (sh.stTimer > sh.stDur) endGroupAction(sh);
+    }
+  }
+
+  function behaveFollowLeader(sh, dt, t, S) {
+    var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
+    if (d < 25) sh.target = newTarget();
+    d = Math.hypot(sh.target.x - sh.x, sh.target.y - sh.y);
+    var nx = (sh.target.x - sh.x) / (d || 1), ny = (sh.target.y - sh.y) / (d || 1);
+    var arr = Math.min(1, d / 60);
+    sh.vx += nx * S * 0.8 * arr; sh.vy += ny * S * 0.8 * arr;
+    sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 5));
+    if (sh.stTimer > sh.stDur) {
+      if (sh.groupData && sh.groupData.followers) {
+        for (var gi = 0; gi < sh.groupData.followers.length; gi++) endGroupAction(sh.groupData.followers[gi]);
+      }
+      endGroupAction(sh);
+    }
+  }
+
+  function behaveFollowLine(sh, dt, t, S) {
+    if (!sh.followTarget || flock.indexOf(sh.followTarget) === -1 || (sh.followTarget.state !== 'followLeader' && sh.followTarget.state !== 'followLine')) { endGroupAction(sh); return; }
+    var ft = sh.followTarget;
+    var ftSpd = Math.hypot(ft.vx, ft.vy);
+    var behindX, behindY;
+    if (ftSpd > 0.3) { behindX = ft.x - (ft.vx / ftSpd) * 25; behindY = ft.y - (ft.vy / ftSpd) * 25; }
+    else { behindX = ft.x; behindY = ft.y + 25; }
+    var dx = behindX - sh.x, dy = behindY - sh.y, d = Math.hypot(dx, dy);
+    if (d > 5) { sh.vx += (dx / d) * S * 1.2; sh.vy += (dy / d) * S * 1.2; }
+    else { sh.vx *= 0.95; sh.vy *= 0.95; }
+    sh.headTarget = Math.max(-25, Math.min(25, (ft.x - sh.x) * 0.3));
+    if (sh.stTimer > sh.stDur) endGroupAction(sh);
+  }
+
+  function behaveCircleDance(sh, dt, t, S) {
+    if (!sh.groupData) { endGroupAction(sh); return; }
+    sh.orbitAngle += dt * 0.002 * sh.orbitDir;
+    var center = sh.groupData.center;
+    steerTo(sh, center.x + Math.cos(sh.orbitAngle) * sh.orbitRadius, center.y + Math.sin(sh.orbitAngle) * sh.orbitRadius, S * 1.4);
+    sh.headTarget = Math.max(-40, Math.min(40, (center.x - sh.x) * 0.4));
+    if (sh.stTimer > sh.stDur) endGroupAction(sh);
+  }
+
+  function behaveFenceJump(sh, dt, t, S) {
+    if (!sh.groupData) { endGroupAction(sh); return; }
+    var gd = sh.groupData;
+    var myIdx = gd.participants.indexOf(sh);
+    if (sh.fenceJumpPhase === 'wait') {
+      var waitX = Math.max(MARGIN + 20, gd.fenceX - 80 - Math.max(0, myIdx - gd.activeIdx) * 30);
+      sh.vx += (waitX - sh.x) * 0.003; sh.vy *= 0.92; sh.vx *= 0.95;
+      sh.headTarget = Math.sin(sh.stTimer * 0.005) * 15;
+      if (myIdx === gd.activeIdx) sh.fenceJumpPhase = 'jump';
+    } else if (sh.fenceJumpPhase === 'jump') {
+      var jumpTarget = gd.fenceX + 80;
+      sh.vx += (jumpTarget - sh.x) * 0.005;
+      if (sh.x < gd.fenceX) sh.vy -= 0.08;
+      else sh.vy += 0.04;
+      sh.propSpeed = Math.min(sh.propSpeed + 2, PROP_MAX);
+      sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 4));
+      if (sh.x > gd.fenceX + 60) {
+        sh.fenceJumpPhase = 'done';
+        gd.activeIdx++;
+        if (gd.activeIdx < gd.participants.length) gd.participants[gd.activeIdx].fenceJumpPhase = 'jump';
+      }
+    } else {
+      sh.vx *= 0.92; sh.vy *= 0.92;
+      sh.headTarget = Math.sin(sh.stTimer * 0.004) * 20;
+    }
+    if (sh.stTimer > sh.stDur) endGroupAction(sh);
+  }
+
+  function behaveDance(sh, dt, t, S) {
+    if (!sh.groupData) { endGroupAction(sh); return; }
+    var partner = sh.groupData.partner[0] === sh ? sh.groupData.partner[1] : sh.groupData.partner[0];
+    if (flock.indexOf(partner) === -1 || partner.state !== 'dance') { endGroupAction(sh); return; }
+    sh.orbitAngle += dt * 0.003 * sh.orbitDir;
+    var center = sh.groupData.center;
+    steerTo(sh, center.x + Math.cos(sh.orbitAngle) * sh.orbitRadius, center.y + Math.sin(sh.orbitAngle) * sh.orbitRadius, S * 1.3);
+    sh.headTarget = Math.max(-35, Math.min(35, (partner.x - sh.x) * 0.35));
+    if (sh.stTimer > sh.stDur) endGroupAction(sh);
+  }
+
+  function behaveBully(sh, dt, t, S) {
+    if (!sh.bullyTarget || flock.indexOf(sh.bullyTarget) === -1) { endGroupAction(sh); return; }
+    var target = sh.bullyTarget;
+    var dx = target.x - sh.x, dy = target.y - sh.y, d = Math.hypot(dx, dy);
+    if (d > 20) {
+      sh.vx += (dx / d) * S * 1.6; sh.vy += (dy / d) * S * 1.6;
+      sh.headTarget *= 0.9;
+      sh.propSpeed = Math.min(sh.propSpeed + 1, PROP_MAX);
+    } else {
+      var nd = d || 1;
+      target.vx += (dx / nd) * 5; target.vy += (dy / nd) * 4;
+      target.wobbleV += (Math.random() - 0.5) * 16;
+      target.wideEyes = 2000;
+      target.propSpeed = Math.min(target.propSpeed + 25, PROP_MAX);
+      spawnStars((sh.x + target.x) / 2, (sh.y + target.y) / 2, 3 + (Math.random() * 2 | 0));
+      sh.state = 'hover'; sh.stTimer = 0; sh.stDur = 1500 + Math.random() * 1000;
+      sh.groupData = null; sh.bullyTarget = null;
+      sh.vx *= 0.3; sh.vy *= 0.3;
+    }
+    if (sh.state === 'bully' && sh.stTimer > sh.stDur) endGroupAction(sh);
+  }
+
+  function behaveDizzy(sh, dt) {
+    sh.wideEyes = Math.max(sh.wideEyes, 300);
+    if (sh.dizzyPhase === 0) {
+      sh.propSpeed = Math.max(PROP_BASE, sh.propSpeed * 0.92);
+      if (Math.random() < 0.1) sh.propSpeed = Math.min(sh.propSpeed + 15, PROP_MAX * 0.4);
+      sh.vy += 0.15;
+      sh.vx *= 0.95;
+      sh.wobbleV += (Math.random() - 0.5) * 5;
+      sh.headTarget = Math.sin(sh.stTimer * 0.015) * 35;
+      if (sh.y >= H - MARGIN - 5 || sh.stTimer > 1500) {
+        sh.dizzyPhase = 1;
+        sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2000;
+        sh.vy = -1.5;
+        sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 15;
+        spawnStars(sh.x, sh.y, 3 + (Math.random() * 2 | 0));
+      }
+    } else {
+      sh.wobbleV += (Math.random() - 0.5) * 3;
+      sh.headTarget = Math.sin(sh.stTimer * 0.007) * 45;
+      sh.vx += Math.sin(sh.stTimer * 0.004 + sh.bobPhase) * 0.08;
+      sh.vy += Math.cos(sh.stTimer * 0.003) * 0.04;
+      sh.vx *= 0.96; sh.vy *= 0.96;
+      if (Math.random() < 0.02) spawnStars(sh.x, sh.y - 10, 1);
+      if (sh.stTimer > sh.stDur) { sh.wideEyes = 0; pickNext(sh); }
+    }
+  }
+
+  function behaveDeparting(sh, dt, t, S) {
+    steerTo(sh, sh.target.x, sh.target.y, S * 1.5);
+    sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
+  }
+
+  var behaveHandlers = {
+    hover: behaveHover, dart: behaveDart, explore: behaveExplore,
+    circle: behaveCircle, zigzag: behaveZigzag, curious: behaveCurious,
+    social: behaveSocial, scared: behaveScared, headbutt: behaveHeadbutt,
+    followLeader: behaveFollowLeader, followLine: behaveFollowLine,
+    circleDance: behaveCircleDance, fenceJump: behaveFenceJump,
+    dance: behaveDance, bully: behaveBully, dizzy: behaveDizzy,
+    departing: behaveDeparting
+  };
+
   function behave(sh, dt, t) {
     if (sh === dragSheep) {
       sh.headTarget = Math.max(-30, Math.min(30, sh.vx * 5));
@@ -683,259 +942,8 @@
       return;
     }
     sh.stTimer += dt;
-    var S = getSteer(sh);
-
-    switch (sh.state) {
-      case 'hover': {
-        sh.vx *= .94; sh.vy *= .94;
-        sh.headTarget = Math.sin(sh.stTimer * .005) * 35;
-        if (sh.stTimer > sh.stDur) pickNext(sh);
-        break;
-      }
-      case 'dart': {
-        var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
-        if (d < 20 || sh.stTimer > sh.stDur) { pickNext(sh); break; }
-        sh.vx += (dx / d) * S * 1.4; sh.vy += (dy / d) * S * 1.4;
-        sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
-        break;
-      }
-      case 'explore': {
-        var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
-        if (d < 25 || sh.stTimer > sh.stDur) { pickNext(sh); break; }
-        var nx = dx / d, ny = dy / d, arr = Math.min(1, d / 60);
-        var w = Math.sin(t * .001 + sh.stTimer * .001 + sh.bobPhase) * .5;
-        var c = Math.cos(w), sn = Math.sin(w);
-        sh.vx += (nx * c - ny * sn) * S * arr; sh.vy += (nx * sn + ny * c) * S * arr;
-        sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 5));
-        break;
-      }
-      case 'circle': {
-        sh.orbitAngle += dt * .003 * sh.orbitDir;
-        var tx = sh.orbitCenter.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
-        var ty = sh.orbitCenter.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
-        var dx = tx - sh.x, dy = ty - sh.y, d = Math.hypot(dx, dy);
-        if (d > 1) { sh.vx += (dx / d) * S * 1.1; sh.vy += (dy / d) * S * 1.1; }
-        sh.headTarget = Math.max(-25, Math.min(25, sh.vx * 4));
-        if (sh.stTimer > sh.stDur) pickNext(sh);
-        break;
-      }
-      case 'zigzag': {
-        var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
-        if (d < 25 || sh.stTimer > sh.stDur) { pickNext(sh); break; }
-        var nx = dx / d, ny = dy / d;
-        var zig = Math.sin(sh.stTimer * .008) * 1.2, c = Math.cos(zig), sn = Math.sin(zig);
-        sh.vx += (nx * c - ny * sn) * S * 1.2; sh.vy += (nx * sn + ny * c) * S * 1.2;
-        sh.headTarget = Math.sin(sh.stTimer * .006) * 30;
-        break;
-      }
-      case 'curious': {
-        var dx = cursorX - sh.x, dy = cursorY - sh.y, d = Math.hypot(dx, dy);
-        if (sh.stTimer > sh.stDur) { pickNext(sh); break; }
-        if (d > 45) { sh.vx += (dx / d) * S * .9; sh.vy += (dy / d) * S * .9; sh.headTarget = Math.max(-30, Math.min(30, dx * .2)); }
-        else { sh.vx *= .94; sh.vy *= .94; sh.headTarget = Math.max(-40, Math.min(40, dx * .35)); }
-        break;
-      }
-      case 'social': {
-        if (!sh.socialTarget || flock.indexOf(sh.socialTarget) === -1 || sh.socialTarget.state === 'departing') { pickNext(sh); break; }
-        var dx = sh.socialTarget.x - sh.x, dy = sh.socialTarget.y - sh.y, d = Math.hypot(dx, dy);
-        if (sh.stTimer > sh.stDur) { pickNext(sh); break; }
-        if (d > 35) {
-          sh.vx += (dx / d) * S * .8; sh.vy += (dy / d) * S * .8;
-        } else {
-          sh.vx += (sh.socialTarget.vx - sh.vx) * .03;
-          sh.vy += (sh.socialTarget.vy - sh.vy) * .03;
-          sh.vx *= .95; sh.vy *= .95;
-        }
-        sh.headTarget = Math.max(-35, Math.min(35, dx * .25));
-        break;
-      }
-      case 'scared': {
-        sh.wideEyes = Math.max(sh.wideEyes, 500);
-        if (sh.stTimer > sh.stDur) { sh.wideEyes = 0; pickNext(sh); break; }
-        var cmx = cursorX - sh.x, cmy = cursorY - sh.y, cmd = Math.hypot(cmx, cmy);
-        if (cmd < 100) {
-          if (cmd > 1) { sh.vx -= (cmx / cmd) * S * 1.8; sh.vy -= (cmy / cmd) * S * 1.8; }
-          sh.propSpeed = Math.min(sh.propSpeed + 3, PROP_MAX);
-          sh.scareCorner = nearestCorner(sh.x + (sh.x - cursorX), sh.y + (sh.y - cursorY));
-        } else {
-          if (!sh.scareCorner) sh.scareCorner = nearestCorner(sh.x, sh.y);
-          var dcx = sh.scareCorner.x - sh.x, dcy = sh.scareCorner.y - sh.y, dc = Math.hypot(dcx, dcy);
-          if (dc > 20) {
-            sh.vx += (dcx / dc) * S * .8; sh.vy += (dcy / dc) * S * .8;
-          } else {
-            sh.vx *= .9; sh.vy *= .9;
-            sh.vx += (Math.random() - .5) * .06; sh.vy += (Math.random() - .5) * .06;
-          }
-        }
-        sh.headTarget = Math.max(-40, Math.min(40, cmx * .15 + Math.sin(sh.stTimer * .01) * 5));
-        break;
-      }
-      case 'headbutt': {
-        if (!sh.headbuttPartner || flock.indexOf(sh.headbuttPartner) === -1 || sh.headbuttPartner.state !== 'headbutt') { endGroupAction(sh); break; }
-        var partner = sh.headbuttPartner;
-        var dx = partner.x - sh.x, dy = partner.y - sh.y, d = Math.hypot(dx, dy);
-        if (sh.headbuttPhase === 0) {
-          if (d > 15) {
-            sh.vx += (dx / d) * S * 1.3; sh.vy += (dy / d) * S * 1.3;
-            sh.headTarget = Math.max(-30, Math.min(30, Math.atan2(dy, dx) * 180 / Math.PI));
-          } else {
-            sh.headbuttPhase = 1;
-            spawnStars((sh.x + partner.x) / 2, (sh.y + partner.y) / 2, 4 + (Math.random() * 3 | 0));
-            sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 14;
-            sh.wideEyes = 1500;
-            var rx = sh.x - partner.x, ry = sh.y - partner.y, rd = Math.hypot(rx, ry) || 1;
-            sh.vx = (rx / rd) * 3; sh.vy = (ry / rd) * 3;
-            sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
-            sh.stDur = sh.stTimer + 800;
-          }
-        } else {
-          sh.vx *= 0.92; sh.vy *= 0.92;
-          if (sh.stTimer > sh.stDur) endGroupAction(sh);
-        }
-        break;
-      }
-      case 'followLeader': {
-        var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
-        if (d < 25) sh.target = newTarget();
-        d = Math.hypot(sh.target.x - sh.x, sh.target.y - sh.y);
-        var nx = (sh.target.x - sh.x) / (d || 1), ny = (sh.target.y - sh.y) / (d || 1);
-        var arr = Math.min(1, d / 60);
-        sh.vx += nx * S * 0.8 * arr; sh.vy += ny * S * 0.8 * arr;
-        sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 5));
-        if (sh.stTimer > sh.stDur) {
-          if (sh.groupData && sh.groupData.followers) {
-            for (var gi = 0; gi < sh.groupData.followers.length; gi++) endGroupAction(sh.groupData.followers[gi]);
-          }
-          endGroupAction(sh);
-        }
-        break;
-      }
-      case 'followLine': {
-        if (!sh.followTarget || flock.indexOf(sh.followTarget) === -1 || (sh.followTarget.state !== 'followLeader' && sh.followTarget.state !== 'followLine')) { endGroupAction(sh); break; }
-        var ft = sh.followTarget;
-        var ftSpd = Math.hypot(ft.vx, ft.vy);
-        var behindX, behindY;
-        if (ftSpd > 0.3) { behindX = ft.x - (ft.vx / ftSpd) * 25; behindY = ft.y - (ft.vy / ftSpd) * 25; }
-        else { behindX = ft.x; behindY = ft.y + 25; }
-        var dx = behindX - sh.x, dy = behindY - sh.y, d = Math.hypot(dx, dy);
-        if (d > 5) { sh.vx += (dx / d) * S * 1.2; sh.vy += (dy / d) * S * 1.2; }
-        else { sh.vx *= 0.95; sh.vy *= 0.95; }
-        sh.headTarget = Math.max(-25, Math.min(25, (ft.x - sh.x) * 0.3));
-        if (sh.stTimer > sh.stDur) endGroupAction(sh);
-        break;
-      }
-      case 'circleDance': {
-        if (!sh.groupData) { endGroupAction(sh); break; }
-        sh.orbitAngle += dt * 0.002 * sh.orbitDir;
-        var center = sh.groupData.center;
-        var tx = center.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
-        var ty = center.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
-        var dx = tx - sh.x, dy = ty - sh.y, d = Math.hypot(dx, dy);
-        if (d > 1) { sh.vx += (dx / d) * S * 1.4; sh.vy += (dy / d) * S * 1.4; }
-        sh.headTarget = Math.max(-40, Math.min(40, (center.x - sh.x) * 0.4));
-        if (sh.stTimer > sh.stDur) endGroupAction(sh);
-        break;
-      }
-      case 'fenceJump': {
-        if (!sh.groupData) { endGroupAction(sh); break; }
-        var gd = sh.groupData;
-        var myIdx = gd.participants.indexOf(sh);
-        if (sh.fenceJumpPhase === 'wait') {
-          var waitX = Math.max(MARGIN + 20, gd.fenceX - 80 - Math.max(0, myIdx - gd.activeIdx) * 30);
-          sh.vx += (waitX - sh.x) * 0.003; sh.vy *= 0.92; sh.vx *= 0.95;
-          sh.headTarget = Math.sin(sh.stTimer * 0.005) * 15;
-          if (myIdx === gd.activeIdx) sh.fenceJumpPhase = 'jump';
-        } else if (sh.fenceJumpPhase === 'jump') {
-          var jumpTarget = gd.fenceX + 80;
-          sh.vx += (jumpTarget - sh.x) * 0.005;
-          if (sh.x < gd.fenceX) sh.vy -= 0.08;
-          else sh.vy += 0.04;
-          sh.propSpeed = Math.min(sh.propSpeed + 2, PROP_MAX);
-          sh.headTarget = Math.max(-20, Math.min(20, sh.vx * 4));
-          if (sh.x > gd.fenceX + 60) {
-            sh.fenceJumpPhase = 'done';
-            gd.activeIdx++;
-            if (gd.activeIdx < gd.participants.length) gd.participants[gd.activeIdx].fenceJumpPhase = 'jump';
-          }
-        } else {
-          sh.vx *= 0.92; sh.vy *= 0.92;
-          sh.headTarget = Math.sin(sh.stTimer * 0.004) * 20;
-        }
-        if (sh.stTimer > sh.stDur) endGroupAction(sh);
-        break;
-      }
-      case 'dance': {
-        if (!sh.groupData) { endGroupAction(sh); break; }
-        var partner = sh.groupData.partner[0] === sh ? sh.groupData.partner[1] : sh.groupData.partner[0];
-        if (flock.indexOf(partner) === -1 || partner.state !== 'dance') { endGroupAction(sh); break; }
-        sh.orbitAngle += dt * 0.003 * sh.orbitDir;
-        var center = sh.groupData.center;
-        var tx = center.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
-        var ty = center.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
-        var dx = tx - sh.x, dy = ty - sh.y, d = Math.hypot(dx, dy);
-        if (d > 1) { sh.vx += (dx / d) * S * 1.3; sh.vy += (dy / d) * S * 1.3; }
-        sh.headTarget = Math.max(-35, Math.min(35, (partner.x - sh.x) * 0.35));
-        if (sh.stTimer > sh.stDur) endGroupAction(sh);
-        break;
-      }
-      case 'bully': {
-        if (!sh.bullyTarget || flock.indexOf(sh.bullyTarget) === -1) { endGroupAction(sh); break; }
-        var target = sh.bullyTarget;
-        var dx = target.x - sh.x, dy = target.y - sh.y, d = Math.hypot(dx, dy);
-        if (d > 20) {
-          sh.vx += (dx / d) * S * 1.6; sh.vy += (dy / d) * S * 1.6;
-          sh.headTarget *= 0.9;
-          sh.propSpeed = Math.min(sh.propSpeed + 1, PROP_MAX);
-        } else {
-          var nd = d || 1;
-          target.vx += (dx / nd) * 5; target.vy += (dy / nd) * 4;
-          target.wobbleV += (Math.random() - 0.5) * 16;
-          target.wideEyes = 2000;
-          target.propSpeed = Math.min(target.propSpeed + 25, PROP_MAX);
-          spawnStars((sh.x + target.x) / 2, (sh.y + target.y) / 2, 3 + (Math.random() * 2 | 0));
-          sh.state = 'hover'; sh.stTimer = 0; sh.stDur = 1500 + Math.random() * 1000;
-          sh.groupData = null; sh.bullyTarget = null;
-          sh.vx *= 0.3; sh.vy *= 0.3;
-        }
-        if (sh.state === 'bully' && sh.stTimer > sh.stDur) endGroupAction(sh);
-        break;
-      }
-      case 'dizzy': {
-        sh.wideEyes = Math.max(sh.wideEyes, 300);
-        if (sh.dizzyPhase === 0) {
-          /* Absturz: Propeller stottert, Schaf sackt ab */
-          sh.propSpeed = Math.max(PROP_BASE, sh.propSpeed * 0.92);
-          if (Math.random() < 0.1) sh.propSpeed = Math.min(sh.propSpeed + 15, PROP_MAX * 0.4);
-          sh.vy += 0.15;
-          sh.vx *= 0.95;
-          sh.wobbleV += (Math.random() - 0.5) * 5;
-          sh.headTarget = Math.sin(sh.stTimer * 0.015) * 35;
-          if (sh.y >= H - MARGIN - 5 || sh.stTimer > 1500) {
-            sh.dizzyPhase = 1;
-            sh.stTimer = 0; sh.stDur = 2000 + Math.random() * 2000;
-            sh.vy = -1.5;
-            sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 15;
-            spawnStars(sh.x, sh.y, 3 + (Math.random() * 2 | 0));
-          }
-        } else {
-          /* Torkeln: schwerer Wobble, erratische Bewegung */
-          sh.wobbleV += (Math.random() - 0.5) * 3;
-          sh.headTarget = Math.sin(sh.stTimer * 0.007) * 45;
-          sh.vx += Math.sin(sh.stTimer * 0.004 + sh.bobPhase) * 0.08;
-          sh.vy += Math.cos(sh.stTimer * 0.003) * 0.04;
-          sh.vx *= 0.96; sh.vy *= 0.96;
-          if (Math.random() < 0.02) spawnStars(sh.x, sh.y - 10, 1);
-          if (sh.stTimer > sh.stDur) { sh.wideEyes = 0; pickNext(sh); }
-        }
-        break;
-      }
-      case 'departing': {
-        var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
-        if (d > 1) { sh.vx += (dx / d) * S * 1.5; sh.vy += (dy / d) * S * 1.5; }
-        sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
-        break;
-      }
-    }
+    var handler = behaveHandlers[sh.state];
+    if (handler) handler(sh, dt, t, getSteer(sh));
   }
 
   /* ═══ Herdenverhalten (Boids) ═══ */
@@ -986,7 +994,7 @@
       sh.vx *= (sh.throwBoost > 0 ? .996 : FRICTION);
       sh.vy *= (sh.throwBoost > 0 ? .996 : FRICTION);
 
-      sh.x += sh.vx * dt * .06; sh.y += sh.vy * dt * .06;
+      sh.x += sh.vx * dt * DT_SCALE; sh.y += sh.vy * dt * DT_SCALE;
 
       /* Wandkollision */
       if (sh.state !== 'departing') {
@@ -1012,12 +1020,12 @@
       }
     }
 
-    sh.bank += ((-sh.vx * 6) - sh.bank) * .12;
-    sh.wobbleV -= sh.wobble * .3; sh.wobbleV *= .85; sh.wobble += sh.wobbleV * dt * .06;
-    sh.headAngle += (sh.headTarget - sh.headAngle) * .09;
+    sh.bank += ((-sh.vx * 6) - sh.bank) * BANK_LERP;
+    sh.wobbleV -= sh.wobble * WOBBLE_SPRING; sh.wobbleV *= WOBBLE_DAMP; sh.wobble += sh.wobbleV * dt * DT_SCALE;
+    sh.headAngle += (sh.headTarget - sh.headAngle) * HEAD_LERP;
 
-    sh.legDragX += (sh.vx - sh.legDragX) * .04;
-    sh.legDragY += (sh.vy - sh.legDragY) * .04;
+    sh.legDragX += (sh.vx - sh.legDragX) * LEG_DRAG_LERP;
+    sh.legDragY += (sh.vy - sh.legDragY) * LEG_DRAG_LERP;
 
     var spd2 = Math.hypot(sh.vx, sh.vy);
     var tailTarget = spd2 > 0.3 ? Math.max(-1, Math.min(1, -sh.vx / spd2 * 1.5)) : sh.tailSide * .95;
@@ -1101,7 +1109,8 @@
     d.torso.style.transform = 'translate(' + (tx - sh.tw / 2) + 'px,' + (ty - sh.th / 2) + 'px) rotate(' + bankRad + 'rad)';
 
     var labelRotY = sh.tailSide * 65;
-    d.label.style.transform = 'translate(-50%,-50%) rotateY(' + labelRotY + 'deg)';
+    var labelShiftX = -sh.tailSide * sh.tw * 0.3;
+    d.label.style.transform = 'translate(calc(-50% + ' + labelShiftX + 'px),-50%) rotateY(' + labelRotY + 'deg)';
 
     var ts = tr.tailSize;
     var tailWag = Math.sin(sh.bobPhase * .008) * 0.15;
@@ -1134,13 +1143,15 @@
       if (!looked) { etx = Math.sin(sh.headAngle * Math.PI / 180) * 1.5; ety = 0; }
     }
     else { etx = sh.vx * 3; ety = sh.vy * 2; }
-    etx = Math.max(-2, Math.min(2, etx)); ety = Math.max(-1.5, Math.min(1.5, ety));
-    sh.eyeX += (etx - sh.eyeX) * .15; sh.eyeY += (ety - sh.eyeY) * .15;
+    etx = Math.max(-2, Math.min(2, etx));
+    var eyeYLimit = tr.spriteStache >= 0 ? 0.5 : 1.5;
+    ety = Math.max(-1.5, Math.min(eyeYLimit, ety));
+    sh.eyeX += (etx - sh.eyeX) * EYE_LERP; sh.eyeY += (ety - sh.eyeY) * EYE_LERP;
     var ee = sh.isBlinking ? ' scaleY(0.1)' : sh.wideEyes > 0 ? ' scale(1.5)' : '';
     d.eyeL.style.transform = 'translate(' + sh.eyeX + 'px,' + sh.eyeY + 'px)' + ee;
     d.eyeR.style.transform = 'translate(' + sh.eyeX + 'px,' + sh.eyeY + 'px)' + ee;
 
-    /* Propeller (am Rücken/Torso fixiert) */
+    /* Propeller (am Rücken/Torso fixiert) — rein transform-basiert */
     var pSz = d.propSize || 1.0;
     var poleH = POLE_H * pSz, hubSz = HUB_SZ * pSz, halfBw = 14 * pSz;
     var backTop = rot(0, -sh.th / 2 - 1, bankRad);
@@ -1148,11 +1159,10 @@
     var backHub = rot(0, -sh.th / 2 - poleH - 2, bankRad);
     var hubX = tx + backHub.x, hubY = ty + backHub.y;
     var pdx = hubX - topX, pdy = hubY - topY, pL = Math.hypot(pdx, pdy);
-    d.pole.style.height = pL + 'px'; d.pole.style.left = topX + 'px'; d.pole.style.top = topY + 'px';
-    d.pole.style.transform = 'translateX(-50%) rotate(' + Math.atan2(pdx, -pdy) + 'rad)';
-    d.hub.style.width = hubSz + 'px'; d.hub.style.height = hubSz + 'px';
-    d.hub.style.left = (hubX - hubSz / 2) + 'px'; d.hub.style.top = (hubY - hubSz / 2) + 'px';
-    d.bwrap.style.left = (hubX - halfBw) + 'px'; d.bwrap.style.top = (hubY - halfBw) + 'px';
+    d.pole.style.height = pL + 'px';
+    d.pole.style.transform = 'translate(' + (topX - 0.75) + 'px,' + topY + 'px) rotate(' + Math.atan2(pdx, -pdy) + 'rad)';
+    d.hub.style.transform = 'translate(' + (hubX - hubSz / 2) + 'px,' + (hubY - hubSz / 2) + 'px)';
+    d.bwrap.style.transform = 'translate(' + (hubX - halfBw) + 'px,' + (hubY - halfBw) + 'px)';
     d.blades.style.transform = 'rotateX(55deg) rotate(' + sh.propAngle + 'deg)';
     d.blades.style.opacity = Math.max(.25, 1 - (sh.propSpeed - PROP_BASE) / (PROP_MAX - PROP_BASE) * .75);
 
@@ -1182,13 +1192,29 @@
   }
 
   /* ═══ Stars ═══ */
+  /* Star-Pool: wiederverwendbare Elemente statt DOM-Create/Remove */
+  var STAR_POOL_SIZE = 24;
+  var starPool = [];
+  var starIdx = 0;
+  (function initStarPool() {
+    for (var i = 0; i < STAR_POOL_SIZE; i++) {
+      var el = document.createElement('div'); el.className = 'star'; el.textContent = '\u2B50';
+      el.style.display = 'none';
+      overlay.appendChild(el);
+      starPool.push(el);
+    }
+  })();
+
   function spawnStars(x, y, n) {
     for (var i = 0; i < n; i++) {
-      var el = document.createElement('div'); el.className = 'star'; el.textContent = '\u2B50';
+      var el = starPool[starIdx]; starIdx = (starIdx + 1) % STAR_POOL_SIZE;
       var a = (Math.PI * 2 / n) * i + (Math.random() - .5), dd = 14 + Math.random() * 22;
       el.style.cssText = 'left:' + x + 'px;top:' + y + 'px;font-size:' + (6 + Math.random() * 4) + 'px;';
       el.style.setProperty('--dx', Math.cos(a) * dd + 'px'); el.style.setProperty('--dy', Math.sin(a) * dd + 'px');
-      overlay.appendChild(el); setTimeout(function (e) { e.remove(); }, 450, el);
+      /* Animation neu starten */
+      el.style.animation = 'none'; el.offsetHeight; el.style.animation = '';
+      el.style.display = '';
+      setTimeout(function (e) { e.style.display = 'none'; }, STAR_DURATION, el);
     }
   }
 
@@ -1315,8 +1341,10 @@
     return { version: 1, timestamp: Date.now(), sheep: sheep };
   }
 
-  function saveFlock() {
+  function saveFlock(force) {
     if (dismissed) return;
+    if (!force && !flockDirty) return;
+    flockDirty = false;
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serializeFlock()));
     } catch (e) { /* quota exceeded — ignore */ }
@@ -1354,13 +1382,14 @@
 
   /* Auto-save every 3s */
   setInterval(saveFlock, SAVE_INTERVAL);
-  window.addEventListener('beforeunload', saveFlock);
+  window.addEventListener('beforeunload', function () { saveFlock(true); });
 
   /* ═══ Haupt-Loop ═══ */
   var lastT = 0;
   function frame(t) {
     var dt = lastT ? Math.min(t - lastT, 40) : 16;
     lastT = t;
+    if (flock.length) markDirty();
     for (var fi = 0; fi < flock.length; fi++) {
       var sh = flock[fi];
       try { behave(sh, dt, t); } catch (e) { pickNext(sh); }
@@ -1434,7 +1463,7 @@
             sh.wideEyes = 600;
             sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
             if (ownerName && !sh.ownerName) sh.ownerName = ownerName;
-            saveFlock();
+            saveFlock(true);
             return sh;
           }
         }
@@ -1469,7 +1498,7 @@
       sh.target = newTarget();
       sh.stTimer = 0;
       sh.stDur = 800 + Math.random() * 600;
-      saveFlock();
+      saveFlock(true);
       return sh;
     },
     scare: function (fx, fy) {

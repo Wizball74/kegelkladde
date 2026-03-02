@@ -73,7 +73,7 @@
 
 .s-pole {
   width: 1.5px; background: #555; border-radius: .75px;
-  transform-origin: top center; z-index: 4;
+  transform-origin: 0.75px 0; z-index: 4;
 }
 .s-hub {
   width: 4px; height: 4px;

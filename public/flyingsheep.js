@@ -356,6 +356,11 @@
     attachCssAccessory(head, torso, legEls, shinEls, tr, cfg);
     attachSpriteOverlays(head, tr, cfg);
 
+    /* Namens-Bubble: zeigt ownerName über dem Schaf (erste 10s + beim Draggen) */
+    var nameEl = document.createElement('div');
+    nameEl.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);pointer-events:none;z-index:100;background:rgba(0,0,0,.72);color:#fff;font:600 .7rem/1 system-ui,sans-serif;padding:3px 8px;border-radius:8px;white-space:nowrap;display:none;transition:opacity .6s;';
+    wrap.appendChild(nameEl);
+
     /* Debug-Label: zeigt aktuellen State unter dem Schaf (Konsole: SHEEP_DEBUG=true) */
     var debugEl = document.createElement('div');
     debugEl.style.cssText = 'position:absolute;left:50%;top:18px;transform:translateX(-50%);font:600 7px/1 monospace;color:#f00;white-space:nowrap;pointer-events:none;z-index:99;text-shadow:0 0 2px #fff,0 0 2px #fff;display:none;';
@@ -366,7 +371,7 @@
       lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls,
       pole: prop.pole, hub: prop.hub, bwrap: prop.bwrap, blades: prop.blades,
       eyeL: face.eyeL, eyeR: face.eyeR, propSize: prop.propSize,
-      debugEl: debugEl
+      nameEl: nameEl, debugEl: debugEl
     };
   }
 
@@ -407,7 +412,7 @@
       legDragX: 0, legDragY: 0,
       groupData: null, headbuttPartner: null, headbuttPhase: 0,
       followTarget: null, bullyTarget: null, fenceJumpPhase: 'wait',
-      dizzyPhase: 0, greetTarget: null, greetPhase: 0,
+      dizzyPhase: 0, greetTarget: null, greetPhase: 0, showNameTimer: 0,
       stuckTimer: 0, lastCheckX: x, lastCheckY: y,
     };
     sheep.target = newTarget();
@@ -1089,26 +1094,29 @@
     var gt = sh.greetTarget;
     var dx = gt.x - sh.x, dy = gt.y - sh.y, d = Math.hypot(dx, dy);
     if (sh.stTimer > sh.stDur) { sh.greetTarget = null; sh.state = 'hover'; pickNext(sh); return; }
+    /* Greet ignoriert Age — volle Kraft, sofort los */
+    var greetSteer = BASE_STEER * (sh.traits.energy != null ? sh.traits.energy : 1) / Math.sqrt(sh.sizeMultiplier);
     if (sh.greetPhase === 0) {
-      /* Phase 0: Hinfliegen */
-      if (d > 40) {
-        steerTo(sh, gt.x, gt.y, S * 1.5);
-        sh.propSpeed = Math.min(sh.propSpeed + 1, PROP_MAX);
+      /* Phase 0: Sprint zum neuen Schaf — schnell und direkt */
+      sh.propSpeed = PROP_MAX;
+      if (d > 30) {
+        steerTo(sh, gt.x, gt.y, greetSteer * 3.5);
       } else {
         /* Angekommen → Phase 1: Umkreisen */
         sh.greetPhase = 1;
         sh.orbitCenter = { x: gt.x, y: gt.y };
         sh.orbitAngle = Math.atan2(sh.y - gt.y, sh.x - gt.x);
-        sh.orbitRadius = 30 + Math.random() * 20;
+        sh.orbitRadius = 25 + Math.random() * 20;
         sh.orbitDir = Math.random() > 0.5 ? 1 : -1;
       }
     } else {
       /* Phase 1: Um das neue Schaf kreisen, Blick auf es */
       sh.orbitCenter.x = gt.x; sh.orbitCenter.y = gt.y;
-      sh.orbitAngle += dt * 0.003 * sh.orbitDir;
+      sh.orbitAngle += dt * 0.005 * sh.orbitDir;
       var tx = sh.orbitCenter.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
       var ty = sh.orbitCenter.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
-      steerTo(sh, tx, ty, S * 1.2);
+      steerTo(sh, tx, ty, greetSteer * 2.5);
+      sh.propSpeed = Math.min(sh.propSpeed + 0.5, PROP_MAX * 0.7);
     }
     sh.headTarget = Math.max(-35, Math.min(35, dx * 0.3));
   }
@@ -1183,13 +1191,16 @@
 
   /* ═══ Physik ═══ */
   function physics(sh, dt) {
-    /* Aging */
+    /* Aging + Namens-Timer */
     sh.age += dt;
+    if (sh.showNameTimer > 0) sh.showNameTimer = Math.max(0, sh.showNameTimer - dt);
 
     if (sh !== dragSheep) {
       sh.throwBoost = Math.max(0, sh.throwBoost - dt);
       var maxSpd = getMaxSpeed(sh);
-      var curMax = sh.throwBoost > 0 ? maxSpd + (sh.throwBoost / 500) * 4 : maxSpd;
+      var curMax = sh.throwBoost > 0 ? maxSpd + (sh.throwBoost / 500) * 4
+                 : sh.state === 'greet' ? maxSpd * 1.8
+                 : maxSpd;
       var spd = Math.hypot(sh.vx, sh.vy);
       if (spd > curMax) { sh.vx *= curMax / spd; sh.vy *= curMax / spd; }
       sh.vx *= (sh.throwBoost > 0 ? .996 : FRICTION);
@@ -1403,6 +1414,23 @@
       }
     }
 
+    /* Namens-Bubble: frisch gespawnt (showNameTimer > 0) oder beim Draggen */
+    if (d.nameEl) {
+      var showName = sh.ownerName && (sh.showNameTimer > 0 || sh === dragSheep);
+      if (showName) {
+        if (d.nameEl.style.display === 'none') {
+          d.nameEl.textContent = sh.ownerName;
+          d.nameEl.style.display = '';
+          d.nameEl.style.opacity = '1';
+        }
+        d.nameEl.style.top = (-28 * sh.sizeMultiplier - 6) + 'px';
+        /* Sanftes Ausblenden in den letzten 2s */
+        if (sh.showNameTimer < 2000 && sh !== dragSheep) d.nameEl.style.opacity = Math.max(0, sh.showNameTimer / 2000);
+      } else if (d.nameEl.style.display !== 'none') {
+        d.nameEl.style.display = 'none';
+      }
+    }
+
     /* Debug: State + Solo + Timer unter dem Schaf (Konsole: SHEEP_DEBUG=true) */
     if (d.debugEl) {
       if (window.SHEEP_DEBUG) {
@@ -1448,29 +1476,7 @@
   var dragSheep = null, dragOX = 0, dragOY = 0, dragLX = 0, dragLY = 0, dragLT = 0;
   var velBuf = [];
   var dragPrevVX = 0, dragPrevVY = 0, dragShakeScore = 0;
-  var dragBubble = null;
-
-  function showDragBubble(sh) {
-    if (!sh.ownerName) return;
-    if (!dragBubble) {
-      dragBubble = document.createElement('div');
-      dragBubble.className = 's-drag-bubble';
-      document.body.appendChild(dragBubble);
-    }
-    dragBubble.textContent = sh.ownerName;
-    dragBubble.style.display = 'block';
-    moveDragBubble(sh.x, sh.y, sh.sizeMultiplier);
-  }
-
-  function moveDragBubble(x, y, sizeMul) {
-    if (!dragBubble || dragBubble.style.display === 'none') return;
-    dragBubble.style.left = x + 'px';
-    dragBubble.style.top = (y - 28 * (sizeMul || 1) - 14) + 'px';
-  }
-
-  function hideDragBubble() {
-    if (dragBubble) dragBubble.style.display = 'none';
-  }
+  /* Drag-Bubble entfernt — nameEl im wrap uebernimmt die Anzeige (render-Loop) */
 
   function findNearest(x, y) {
     var best = null, bestD = 40;
@@ -1495,7 +1501,6 @@
     dragLX = e.clientX; dragLY = e.clientY; dragLT = performance.now();
     velBuf.length = 0;
     dragShakeScore = 0; dragPrevVX = 0; dragPrevVY = 0;
-    showDragBubble(sh);
     /* Herde aufscheuchen — nahe Schafe erschrecken sich richtig */
     for (var fi = 0; fi < flock.length; fi++) {
       var o = flock[fi];
@@ -1533,7 +1538,6 @@
     dragShakeScore *= 0.993;
     dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
     dragSheep.propSpeed = Math.min(dragSheep.propSpeed + .5, PROP_MAX);
-    moveDragBubble(dragSheep.x, dragSheep.y, dragSheep.sizeMultiplier);
   });
 
   document.addEventListener('pointerup', function () {
@@ -1542,6 +1546,8 @@
     if (velBuf.length) { for (var vi = 0; vi < velBuf.length; vi++) { ax += velBuf[vi].vx; ay += velBuf[vi].vy; } ax /= velBuf.length; ay /= velBuf.length; }
     dragSheep.vx = ax * .8; dragSheep.vy = ay * .8;
     dragSheep.wobbleV += (Math.random() - .5) * 12;
+    /* Drag = Aufmerksamkeit → Schaf wird wieder munter (age nicht resetten wegen Ahnengalerie) */
+    dragSheep.age = Math.min(dragSheep.age, AGE_START);
     /* Heftig geschüttelt? → Absturz + Torkeln */
     if (dragShakeScore > 15) {
       dragSheep.state = 'dizzy'; dragSheep.dizzyPhase = 0;
@@ -1551,7 +1557,6 @@
       dragSheep.throwBoost = 2500; dragSheep.resumeDelay = 1200;
     }
     velBuf.length = 0; dragShakeScore = 0; dragSheep = null;
-    hideDragBubble();
   });
 
   /* ═══ Persistence ═══ */
@@ -1726,15 +1731,17 @@
             sh.wideEyes = 600;
             sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
             if (ownerName && !sh.ownerName) sh.ownerName = ownerName;
+            sh.showNameTimer = 10000;
             /* Andere Schafe kommen begruessen */
             for (var gi = 0; gi < flock.length; gi++) {
               var o = flock[gi];
               if (o === sh || o === dragSheep || o.state === 'departing' || o.state === 'scared') continue;
               if (o.resumeDelay > 0 || o.throwBoost > 0) continue;
               o.state = 'greet'; o.stTimer = 0;
-              o.stDur = 8000 + Math.random() * 7000;
+              o.stDur = 15000 + Math.random() * 10000;
               o.greetTarget = sh; o.greetPhase = 0;
-              o.propSpeed = Math.min(o.propSpeed + 10, PROP_MAX);
+              /* age nicht resetten (Ahnengalerie!) — greet ignoriert age via eigene Steer-Berechnung */
+              o.propSpeed = PROP_MAX;
             }
             saveFlock(true);
             return sh;
@@ -1771,15 +1778,17 @@
       sh.target = newTarget();
       sh.stTimer = 0;
       sh.stDur = 3000 + Math.random() * 2000;
+      sh.showNameTimer = 10000;
       /* Alle anderen Schafe kommen begruessen */
       for (var gi = 0; gi < flock.length; gi++) {
         var o = flock[gi];
         if (o === sh || o === dragSheep || o.state === 'departing' || o.state === 'scared') continue;
         if (o.resumeDelay > 0 || o.throwBoost > 0) continue;
         o.state = 'greet'; o.stTimer = 0;
-        o.stDur = 8000 + Math.random() * 7000;
+        o.stDur = 15000 + Math.random() * 10000;
         o.greetTarget = sh; o.greetPhase = 0;
-        o.propSpeed = Math.min(o.propSpeed + 10, PROP_MAX);
+        o.age = 0; /* Aufwachen — volles Tempo */
+        o.propSpeed = PROP_MAX;
       }
       saveFlock(true);
       return sh;

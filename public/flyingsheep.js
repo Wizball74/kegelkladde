@@ -112,9 +112,15 @@
     var skinColor = isBlack ? '#2a2a2a' : '#444';
     var accColors = ['#e44', '#44e', '#4a4', '#e4e', '#fa0', '#0cd', '#f80', '#c44'];
     var accColor = accColors[Math.random() * accColors.length | 0];
-    var spriteHat = Math.random() < 0.55 ? (Math.random() * 16 | 0) : -1;
-    var spriteGlasses = Math.random() < 0.40 ? (Math.random() * 32 | 0) : -1;
-    var spriteStache = Math.random() < 0.35 ? (Math.random() * 12 | 0) : -1;
+    var sCfg = sheepCfg();
+    var hatCount = 16 + ((sCfg.spriteHat && sCfg.spriteHat.customSlots) || []).length;
+    var glCount = 32 + ((sCfg.spriteGlasses && sCfg.spriteGlasses.customSlots) || []).length;
+    var stCount = 12 + ((sCfg.spriteStache && sCfg.spriteStache.customSlots) || []).length;
+    var spriteHat = Math.random() < 0.55 ? (Math.random() * hatCount | 0) : -1;
+    var spriteGlasses = Math.random() < 0.40 ? (Math.random() * glCount | 0) : -1;
+    var spriteStache = Math.random() < 0.35 ? (Math.random() * stCount | 0) : -1;
+    var spriteBody = -1;  // nur via Epic-Meilenstein
+    var spriteTail = -1;  // nur via Epic-Meilenstein
     /* Accessoire-Pool: nur kompatible Typen einfügen */
     var accPool = ['bowtie', 'bell', 'flower', 'scarf', 'shoes'];
     if (spriteHat < 0) accPool.push('tophat', 'partyhat', 'crown', 'beanie');
@@ -156,7 +162,7 @@
     var propSize = +(0.7 + Math.random() * 0.6).toFixed(2);
     var propShapes = ['standard', 'standard', 'standard', 'round', 'slim', 'teardrop'];
     var propShape = propShapes[Math.random() * propShapes.length | 0];
-    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees, propBladeCount: propBladeCount, propBladeColor: propBladeColor, propHubColor: propHubColor, propSize: propSize, propShape: propShape };
+    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, spriteBody: spriteBody, spriteTail: spriteTail, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees, propBladeCount: propBladeCount, propBladeColor: propBladeColor, propHubColor: propHubColor, propSize: propSize, propShape: propShape };
   }
 
   /* ═══ DOM-Factory: Sub-Funktionen ═══ */
@@ -254,13 +260,37 @@
   }
 
   function applySpriteOverlay(head, el, idx, spriteCfg, defaults) {
-    var item = (spriteCfg.items && spriteCfg.items[idx]) || {};
-    if (spriteCfg.customSheet) el.style.backgroundImage = 'url(' + spriteCfg.customSheet + ')';
-    var cols = spriteCfg.cols || defaults.cols;
-    var slotW = spriteCfg.slotW || defaults.slotW;
-    var slotH = spriteCfg.slotH || defaults.slotH;
-    var col = idx % cols, row = (idx / cols) | 0;
-    el.style.backgroundPosition = -(col * slotW) + 'px ' + -(row * slotH) + 'px';
+    var customSlots = spriteCfg.customSlots || [];
+    var defaultCount = defaults.defaultCount || 16;
+    var item;
+
+    if (idx >= defaultCount && customSlots[idx - defaultCount]) {
+      // Custom Slot → Einzelbild
+      var cs = customSlots[idx - defaultCount];
+      item = cs;
+      if (cs.image) {
+        el.style.backgroundImage = 'url(' + cs.image + ')';
+        el.style.backgroundSize = 'contain';
+        el.style.backgroundPosition = 'center';
+      }
+    } else {
+      item = (spriteCfg.items && spriteCfg.items[idx]) || {};
+      if (item.customImage) {
+        // Default-Slot mit ersetztem Bild
+        el.style.backgroundImage = 'url(' + item.customImage + ')';
+        el.style.backgroundSize = 'contain';
+        el.style.backgroundPosition = 'center';
+      } else {
+        // Standard: Spritesheet
+        if (spriteCfg.customSheet) el.style.backgroundImage = 'url(' + spriteCfg.customSheet + ')';
+        var cols = spriteCfg.cols || defaults.cols;
+        var slotW = spriteCfg.slotW || defaults.slotW;
+        var slotH = spriteCfg.slotH || defaults.slotH;
+        var col = idx % cols, row = (idx / cols) | 0;
+        el.style.backgroundPosition = -(col * slotW) + 'px ' + -(row * slotH) + 'px';
+      }
+    }
+
     var posY = (spriteCfg.offsetY != null ? spriteCfg.offsetY : defaults.offsetY) + (item.dY || 0);
     el.style[defaults.posYProp || 'top'] = posY + 'px';
     var totalX = (spriteCfg.offsetX || 0) + (item.dX || 0);
@@ -270,7 +300,26 @@
     head.appendChild(el);
   }
 
-  function attachSpriteOverlays(head, tr, cfg) {
+  function applyCustomSpriteOverlay(parent, el, idx, spriteCfg, defaults) {
+    var customSlots = spriteCfg.customSlots || [];
+    var cs = customSlots[idx];
+    if (!cs) return;
+    var item = cs;
+    if (cs.image) {
+      el.style.backgroundImage = 'url(' + cs.image + ')';
+      el.style.backgroundSize = 'contain';
+      el.style.backgroundPosition = 'center';
+    }
+    var posY = (spriteCfg.offsetY || 0) + (item.dY || 0);
+    el.style.top = posY + 'px';
+    var totalX = (spriteCfg.offsetX || 0) + (item.dX || 0);
+    if (totalX) el.style.left = totalX + 'px';
+    var totalS = (spriteCfg.scale != null ? spriteCfg.scale : 1) * (item.dS || 1);
+    if (totalS !== 1) el.style.transform = 'scale(' + totalS + ')';
+    parent.appendChild(el);
+  }
+
+  function attachSpriteOverlays(head, tr, cfg, torso, tail) {
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
       if (tr.spriteHat >= 16) {
@@ -282,20 +331,30 @@
       } else {
         hatEl.className = 's-sprite-hat';
         applySpriteOverlay(head, hatEl, tr.spriteHat, cfg.spriteHat || {},
-          { cols: 4, slotW: 9.85, slotH: 8.85, offsetY: -8, scale: 1 });
+          { cols: 4, slotW: 9.85, slotH: 8.85, offsetY: -8, scale: 1, defaultCount: 16 });
       }
     }
     if (tr.spriteGlasses >= 0) {
       var glEl = document.createElement('div');
       glEl.className = 's-sprite-glasses';
       applySpriteOverlay(head, glEl, tr.spriteGlasses, cfg.spriteGlasses || {},
-        { cols: 4, slotW: 16.975, slotH: 8.3375, offsetY: 1.5, scale: 0.65 });
+        { cols: 4, slotW: 16.975, slotH: 8.3375, offsetY: 1.5, scale: 0.65, defaultCount: 32 });
     }
     if (tr.spriteStache >= 0) {
       var stEl = document.createElement('div');
       stEl.className = 's-sprite-stache';
       applySpriteOverlay(head, stEl, tr.spriteStache, cfg.spriteStache || {},
-        { cols: 3, slotW: 40, slotH: 30, offsetY: -1, scale: 0.25, posYProp: 'bottom' });
+        { cols: 3, slotW: 40, slotH: 30, offsetY: -1, scale: 0.25, posYProp: 'bottom', defaultCount: 12 });
+    }
+    if (tr.spriteBody >= 0 && torso) {
+      var bdEl = document.createElement('div');
+      bdEl.className = 's-sprite-body epic-shimmer';
+      applyCustomSpriteOverlay(torso, bdEl, tr.spriteBody, cfg.spriteBody || {});
+    }
+    if (tr.spriteTail >= 0 && tail) {
+      var tlEl = document.createElement('div');
+      tlEl.className = 's-sprite-tail epic-shimmer';
+      applyCustomSpriteOverlay(tail, tlEl, tr.spriteTail, cfg.spriteTail || {});
     }
   }
 
@@ -354,7 +413,7 @@
 
     /* Accessoire + Sprite-Overlays */
     attachCssAccessory(head, torso, legEls, shinEls, tr, cfg);
-    attachSpriteOverlays(head, tr, cfg);
+    attachSpriteOverlays(head, tr, cfg, torso, tail);
 
     /* Namens-Bubble: zeigt ownerName über dem Schaf (erste 10s + beim Draggen) */
     var nameEl = document.createElement('div');
@@ -414,6 +473,7 @@
       followTarget: null, bullyTarget: null, fenceJumpPhase: 'wait',
       dizzyPhase: 0, greetTarget: null, greetPhase: 0, showNameTimer: 0,
       stuckTimer: 0, lastCheckX: x, lastCheckY: y,
+      scoreCounts: opts.scoreCounts || { alle9: 0, kranz: 0 },
     };
     sheep.target = newTarget();
     /* Sofort positionieren damit kein Frame bei (0,0) sichtbar ist */
@@ -1418,12 +1478,20 @@
     if (d.nameEl) {
       var showName = sh.ownerName && (sh.showNameTimer > 0 || sh === dragSheep);
       if (showName) {
-        if (d.nameEl.style.display === 'none') {
-          d.nameEl.textContent = sh.ownerName;
+        var sc = sh.scoreCounts || { alle9: 0, kranz: 0 };
+        var badge = '';
+        if (sc.alle9 > 0) badge += ' \u2B50' + sc.alle9;
+        if (sc.kranz > 0) badge += ' \uD83C\uDF40' + sc.kranz;
+        var nameText = sh.ownerName + badge;
+        if (d.nameEl.style.display === 'none' || d.nameEl.textContent !== nameText) {
+          d.nameEl.textContent = nameText;
           d.nameEl.style.display = '';
           d.nameEl.style.opacity = '1';
         }
-        d.nameEl.style.top = (-28 * sh.sizeMultiplier - 6) + 'px';
+        var wrapScale = tr.scale * sh.sizeMultiplier;
+        var invScale = 1 / wrapScale;
+        d.nameEl.style.top = (-28 - 6 / wrapScale) + 'px';
+        d.nameEl.style.transform = 'translateX(-50%) scale(' + invScale + ')';
         /* Sanftes Ausblenden in den letzten 2s */
         if (sh.showNameTimer < 2000 && sh !== dragSheep) d.nameEl.style.opacity = Math.max(0, sh.showNameTimer / 2000);
       } else if (d.nameEl.style.display !== 'none') {
@@ -1469,6 +1537,55 @@
       el.style.animation = 'none'; el.offsetHeight; el.style.animation = '';
       el.style.display = '';
       setTimeout(function (e) { e.style.display = 'none'; }, STAR_DURATION, el);
+    }
+  }
+
+  /* ═══ PUFF Particles (Epic Items) ═══ */
+  var PUFF_POOL_SIZE = 40;
+  var puffPool = [];
+  var puffIdx = 0;
+  var PUFF_COLORS = [
+    'rgba(252,178,96,.9)',
+    'rgba(253,238,152,.9)',
+    'rgba(255,215,64,.9)',
+    'rgba(218,119,242,.8)',
+    'rgba(255,107,107,.7)',
+    'rgba(255,255,255,.8)',
+  ];
+  (function initPuffPool() {
+    for (var i = 0; i < PUFF_POOL_SIZE; i++) {
+      var el = document.createElement('div');
+      el.style.cssText = 'position:absolute;pointer-events:none;z-index:31;border-radius:50%;display:none;';
+      overlay.appendChild(el);
+      puffPool.push(el);
+    }
+  })();
+
+  function spawnPuff(x, y, n) {
+    n = n || 25;
+    for (var i = 0; i < n; i++) {
+      var el = puffPool[puffIdx]; puffIdx = (puffIdx + 1) % PUFF_POOL_SIZE;
+      var angle = (Math.PI * 2 / n) * i + (Math.random() - .5) * 0.5;
+      var dist = 20 + Math.random() * 40;
+      var size = 2 + Math.random() * 5;
+      var color = PUFF_COLORS[Math.random() * PUFF_COLORS.length | 0];
+      var dur = 500 + Math.random() * 400;
+      el.style.display = 'block';
+      el.style.width = size + 'px';
+      el.style.height = size + 'px';
+      el.style.background = color;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.opacity = '1';
+      el.style.transform = 'translate(-50%,-50%) scale(1)';
+      el.style.transition = 'none';
+      el.offsetHeight;
+      el.style.transition = 'all ' + dur + 'ms ease-out';
+      el.style.left = (x + Math.cos(angle) * dist) + 'px';
+      el.style.top = (y + Math.sin(angle) * dist) + 'px';
+      el.style.opacity = '0';
+      el.style.transform = 'translate(-50%,-50%) scale(0.1)';
+      (function(e, d) { setTimeout(function() { e.style.display = 'none'; }, d + 50); })(el, dur);
     }
   }
 
@@ -1568,7 +1685,7 @@
         x: sh.x, y: sh.y, vx: sh.vx, vy: sh.vy,
         traits: sh.traits,
         ownerId: sh.ownerId, ownerName: sh.ownerName, letter: sh.letter,
-        sizeMultiplier: sh.sizeMultiplier, age: sh.age,
+        sizeMultiplier: sh.sizeMultiplier, age: sh.age, scoreCounts: sh.scoreCounts || { alle9: 0, kranz: 0 },
         state: (isGroupState(sh.state) || sh.state === 'dizzy' || sh.state === 'scared' || sh.state === 'retreat') ? 'explore' : sh.state, tailSide: sh.tailSide,
         solo: sh.solo, bank: sh.bank, propSpeed: sh.propSpeed,
       });
@@ -1613,6 +1730,7 @@
         solo: s.solo,
         bank: s.bank || 0,
         propSpeed: s.propSpeed || 15,
+        scoreCounts: s.scoreCounts || { alle9: 0, kranz: 0 },
         _skipMount: true,
       });
       frag.appendChild(sh.dom.wrap);
@@ -1694,6 +1812,64 @@
       groupCooldown = 15000 + Math.random() * 30000;
     }
     sheepCollisions();
+    /* ── Critter-Loop: Physik, Kicks, Render, Cleanup ── */
+    for (var ci = critters.length - 1; ci >= 0; ci--) {
+      var cr = critters[ci];
+      /* Launched + off-screen → entfernen */
+      if (cr.launched) {
+        if (cr.x < -80 || cr.x > W + 80 || cr.y < -80 || cr.y > H + 80) {
+          cr.dom.wrap.remove(); critters.splice(ci, 1); continue;
+        }
+        critterPhysics(cr, dt); critterRender(cr); continue;
+      }
+      /* Schafe kicken Critters */
+      for (var si = 0; si < flock.length; si++) {
+        var sh = flock[si];
+        if (sh.state === 'departing' || sh.state === 'scared') continue;
+        if (cr.kickCD[si] > 0) continue;
+        var dxc = cr.x - sh.x, dyc = cr.y - sh.y;
+        var dc = Math.hypot(dxc, dyc);
+        if (dc < 20 * sh.sizeMultiplier && dc > 0) {
+          cr.kicksLeft--;
+          var nx = dxc / dc, ny = dyc / dc;
+          if (cr.kicksLeft <= 0) {
+            /* ══ DEATH KICK — ab geht die Post! ══ */
+            cr.launched = true;
+            var launchForce = 8 + Math.hypot(sh.vx, sh.vy) * 2;
+            cr.vx = nx * launchForce * 0.4;
+            cr.vy = -Math.abs(launchForce);  // immer nach oben raus
+            cr.wobbleV = (Math.random() - .5) * 60;
+            /* Konfetti-Kanone in Abflugrichtung */
+            spawnStars(cr.x, cr.y, 6);
+            spawnPuff(cr.x, cr.y, 20);
+            /* Kicker-Schaf: extra Kick-Anim */
+            sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 400;
+            sh.wobbleV += (Math.random() > .5 ? 1 : -1) * 12;
+            /* Alle Schafe applaudieren */
+            for (var ai = 0; ai < flock.length; ai++) {
+              var applSh = flock[ai];
+              if (applSh.state === 'departing' || applSh.state === 'scared') continue;
+              applSh.wideEyes = 1500;
+              applSh.wobbleV += (Math.random() - .5) * 8;
+              applSh.kickLeg = Math.random() * 4 | 0;
+              applSh.kickTimer = 300 + Math.random() * 200;
+              applSh.propSpeed = Math.min(applSh.propSpeed + 15, PROP_MAX);
+            }
+          } else {
+            /* Normaler Kick */
+            var kickForce = 2.5 + Math.hypot(sh.vx, sh.vy) * 1.2;
+            cr.vx = nx * kickForce; cr.vy = ny * kickForce;
+            cr.wobbleV += (Math.random() - .5) * 25;
+            sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 250;
+            spawnStars(cr.x, cr.y, 2);
+          }
+          cr.kickCD[si] = CRITTER_KICK_CD;
+          break; // max 1 Kick pro Frame
+        }
+      }
+      critterPhysics(cr, dt);
+      critterRender(cr);
+    }
     /* Cleanup: Schafe die den Screen verlassen haben oder stuck sind */
     for (var i = flock.length - 1; i >= 0; i--) {
       var sh = flock[i];
@@ -1714,6 +1890,109 @@
     requestAnimationFrame(frame);
   }
 
+  /* ═══ Critter-System (Triclops Mini-Schwarzschaf) ═══ */
+  var critters = [];
+  var MAX_CRITTERS = 5;
+  var CRITTER_FRICTION = 0.995;
+  var CRITTER_BOUNCE = 0.5;
+  var CRITTER_SPEED = 0.3;
+  var CRITTER_KICK_CD = 10000;
+  var CRITTER_MIN_KICKS = 8;
+  var CRITTER_MAX_KICKS = 25;
+
+  function createCritterDOM() {
+    var wrap = document.createElement('div'); wrap.className = 'critter-wrap';
+    var body = document.createElement('div'); body.className = 'critter-body';
+    var earL = document.createElement('div'); earL.className = 'critter-ear l';
+    var earR = document.createElement('div'); earR.className = 'critter-ear r';
+    var eyeL = document.createElement('div'); eyeL.className = 'critter-eye l';
+    var pupilL = document.createElement('div'); pupilL.className = 'critter-pupil';
+    eyeL.appendChild(pupilL);
+    var eyeR = document.createElement('div'); eyeR.className = 'critter-eye r';
+    var pupilR = document.createElement('div'); pupilR.className = 'critter-pupil';
+    eyeR.appendChild(pupilR);
+    var feet = document.createElement('div'); feet.className = 'critter-feet';
+    var footL = document.createElement('div'); footL.className = 'critter-foot';
+    var footR = document.createElement('div'); footR.className = 'critter-foot';
+    feet.appendChild(footL); feet.appendChild(footR);
+    body.appendChild(earL); body.appendChild(earR);
+    body.appendChild(eyeL); body.appendChild(eyeR);
+    body.appendChild(feet);
+    wrap.appendChild(body);
+    return { wrap: wrap, body: body, pupilL: pupilL, pupilR: pupilR };
+  }
+
+  function spawnCritter(x, y) {
+    /* Bei MAX_CRITTERS: das mit wenigsten verbleibenden Kicks entfernen */
+    if (critters.length >= MAX_CRITTERS) {
+      var weakest = critters[0];
+      for (var i = 1; i < critters.length; i++) {
+        if (critters[i].kicksLeft < weakest.kicksLeft) weakest = critters[i];
+      }
+      weakest.dom.wrap.remove();
+      critters.splice(critters.indexOf(weakest), 1);
+    }
+    var angle = Math.random() * Math.PI * 2;
+    var dom = createCritterDOM();
+    var cr = {
+      dom: dom, x: x, y: y,
+      vx: Math.cos(angle) * CRITTER_SPEED,
+      vy: Math.sin(angle) * CRITTER_SPEED,
+      wobble: 0, wobbleV: 0,
+      scale: 0.9 + Math.random() * 0.2,
+      kickCD: {},
+      kicksLeft: CRITTER_MIN_KICKS + (Math.random() * (CRITTER_MAX_KICKS - CRITTER_MIN_KICKS) | 0),
+      launched: false
+    };
+    overlay.appendChild(dom.wrap);
+    critters.push(cr);
+    return cr;
+  }
+
+  function critterPhysics(cr, dt) {
+    if (cr.launched) {
+      /* Launched: nur Position updaten, kein Bouncing, kein Drift-Reset */
+      cr.x += cr.vx * dt * DT_SCALE; cr.y += cr.vy * dt * DT_SCALE;
+      cr.wobbleV -= cr.wobble * 0.2; cr.wobbleV *= 0.9; cr.wobble += cr.wobbleV * dt * DT_SCALE;
+      return;
+    }
+    cr.vx *= CRITTER_FRICTION; cr.vy *= CRITTER_FRICTION;
+    /* Geschwindigkeit zu niedrig → neue zufällige Drift-Richtung */
+    if (Math.hypot(cr.vx, cr.vy) < 0.1) {
+      var a = Math.random() * Math.PI * 2;
+      cr.vx = Math.cos(a) * CRITTER_SPEED;
+      cr.vy = Math.sin(a) * CRITTER_SPEED;
+    }
+    cr.x += cr.vx * dt * DT_SCALE; cr.y += cr.vy * dt * DT_SCALE;
+    /* Wand-Bouncing */
+    if (cr.x < 10) { cr.x = 10; cr.vx = Math.abs(cr.vx) * CRITTER_BOUNCE; }
+    if (cr.x > W - 10) { cr.x = W - 10; cr.vx = -Math.abs(cr.vx) * CRITTER_BOUNCE; }
+    if (cr.y < 10) { cr.y = 10; cr.vy = Math.abs(cr.vy) * CRITTER_BOUNCE; }
+    if (cr.y > H - 10) { cr.y = H - 10; cr.vy = -Math.abs(cr.vy) * CRITTER_BOUNCE; }
+    /* Wobble-Spring */
+    cr.wobbleV -= cr.wobble * 0.2; cr.wobbleV *= 0.9; cr.wobble += cr.wobbleV * dt * DT_SCALE;
+    /* Kick-Cooldowns runterzählen */
+    for (var k in cr.kickCD) {
+      if (cr.kickCD[k] > 0) { cr.kickCD[k] -= dt; if (cr.kickCD[k] <= 0) delete cr.kickCD[k]; }
+    }
+  }
+
+  function critterRender(cr) {
+    cr.dom.wrap.style.transform = 'translate(' + cr.x + 'px,' + cr.y + 'px) scale(' + cr.scale + ') rotate(' + (cr.wobble * 3) + 'deg)';
+    /* Pupillen-Tracking: zum nächsten Schaf schauen */
+    var lookX = cursorX, lookY = cursorY, bestD = 200;
+    for (var fi = 0; fi < flock.length; fi++) {
+      var sh = flock[fi];
+      var d = Math.hypot(sh.x - cr.x, sh.y - cr.y);
+      if (d < bestD) { bestD = d; lookX = sh.x; lookY = sh.y; }
+    }
+    var dx = lookX - cr.x, dy = lookY - cr.y;
+    var dd = Math.hypot(dx, dy) || 1;
+    var px = (dx / dd) * 1.2, py = (dy / dd) * 1.2;
+    cr.dom.pupilL.style.transform = 'translate(' + px + 'px,' + py + 'px)';
+    cr.dom.pupilR.style.transform = 'translate(' + px + 'px,' + py + 'px)';
+  }
+
   /* ═══ Public API ═══ */
   window.flyingSheep = {
     spawn: function (x, y, ownerId, letter, ownerName, opts) {
@@ -1727,6 +2006,9 @@
           if (flock[i].ownerId === String(ownerId)) {
             var sh = flock[i];
             sh.sizeMultiplier = Math.min(2.5, sh.sizeMultiplier + 0.25);
+            if (!sh.scoreCounts) sh.scoreCounts = { alle9: 0, kranz: 0 };
+            if (opts.scoreType === 'kranz') sh.scoreCounts.kranz++;
+            else sh.scoreCounts.alle9++;
             sh.wobbleV += (Math.random() > .5 ? 1 : -1) * 14;
             sh.wideEyes = 600;
             sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
@@ -1756,7 +2038,10 @@
         }
         removeSheep(oldest, 'eviction');
       }
-      var createOpts = { ownerName: ownerName || '' };
+      var initCounts = { alle9: 0, kranz: 0 };
+      if (opts.scoreType === 'kranz') initCounts.kranz = 1;
+      else initCounts.alle9 = 1;
+      var createOpts = { ownerName: ownerName || '', scoreCounts: initCounts };
       /* Vanilla-Modus: Schaf ohne jedes Accessoire, Standard-Propeller */
       if (opts.vanilla) {
         var tr = generateTraits();
@@ -1820,6 +2105,43 @@
         sh.propSpeed = PROP_MAX;
       }
       try { sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    },
+    epicUpgrade: function (event) {
+      var memberId = String(event.memberId);
+      var targetSheep = null;
+      for (var i = 0; i < flock.length; i++) {
+        if (flock[i].ownerId === memberId) { targetSheep = flock[i]; break; }
+      }
+      if (!targetSheep) return;
+
+      var cfg = sheepCfg();
+
+      if (event.reward === 'body') {
+        targetSheep.traits.spriteBody = event.slotIndex;
+        var bdEl = document.createElement('div');
+        bdEl.className = 's-sprite-body epic-shimmer';
+        applyCustomSpriteOverlay(targetSheep.dom.torso, bdEl, event.slotIndex, cfg.spriteBody || {});
+      } else {
+        targetSheep.traits.spriteTail = event.slotIndex;
+        var tlEl = document.createElement('div');
+        tlEl.className = 's-sprite-tail epic-shimmer';
+        applyCustomSpriteOverlay(targetSheep.dom.tail, tlEl, event.slotIndex, cfg.spriteTail || {});
+      }
+
+      spawnPuff(targetSheep.x, targetSheep.y, 30);
+      spawnStars(targetSheep.x, targetSheep.y, 6);
+
+      targetSheep.wobbleV += (Math.random() > .5 ? 1 : -1) * 18;
+      targetSheep.wideEyes = 2000;
+      targetSheep.propSpeed = PROP_MAX;
+      targetSheep.showNameTimer = 8000;
+
+      saveFlock(true);
+    },
+    spawnCritter: function (x, y) {
+      if (x == null || x < 10 || x > W - 10) x = 10 + Math.random() * (W - 20);
+      if (y == null || y < 10 || y > H - 10) y = 10 + Math.random() * (H - 20);
+      return spawnCritter(x, y);
     },
   };
 

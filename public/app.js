@@ -842,7 +842,7 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
     if (kladdeData && kladdeData.dataset.gags === "1" && op === "inc" && window.matchMedia("(min-width: 900px)").matches) {
       if (target === "pudel") gagPudel(controlsEl);
       if (target === "triclops") gagConfetti(controlsEl);
-      if ((target === "alle9" || target === "kranz") && event.isTrusted) {
+      if ((target === "alle9" || target === "kranz" || target === "triclops") && event.isTrusted) {
         if (window.flyingSheep) {
           const row = controlsEl.closest("tr");
           const memberId = row?.dataset.memberId;
@@ -850,7 +850,11 @@ document.querySelectorAll(".marker-controls").forEach((controlsEl) => {
           const name = nameCol?.dataset.name || nameCol?.textContent.trim() || "?";
           const letter = name.charAt(0).toUpperCase();
           const rect = controlsEl.getBoundingClientRect();
-          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, memberId, letter, name);
+          if (target === "triclops") {
+            window.flyingSheep.spawnCritter(rect.left + rect.width / 2, rect.top);
+          } else {
+            window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, memberId, letter, name, { scoreType: target });
+          }
         }
       }
     }
@@ -1000,6 +1004,14 @@ document.querySelectorAll("[data-present]").forEach((cb) => {
   });
 });
 
+// TBD: Pudelkönig-Checkbox — auto-save bei Änderung (NICHT LÖSCHEN!)
+document.querySelectorAll("[data-pudelkoenig]").forEach((cb) => {
+  cb.addEventListener("change", () => {
+    const row = cb.closest("tr");
+    if (row) autoSaveRow(row);
+  });
+});
+
 // Recalc + debounced save on any number input change (Strafen etc.)
 document.querySelectorAll(".kladde-table .no-spin").forEach((input) => {
   input.addEventListener("input", () => {
@@ -1076,6 +1088,8 @@ function buildSavePayload(row) {
     payload.spiel_2550 = (Number(row.querySelector(`[name="spiel_2550_${memberId}"]`)?.value) || 0) / 10;
     payload.monte_tiebreak = row.querySelector(`[name="monte_tiebreak_${memberId}"]`)?.value || 0;
     payload.aussteigen_tiebreak = row.querySelector(`[name="aussteigen_tiebreak_${memberId}"]`)?.value || 0;
+    // TBD: Pudelkönig — NICHT LÖSCHEN! Wird später für Epic Body-Sprites genutzt.
+    payload.pudelkoenig = row.querySelector("[data-pudelkoenig]")?.checked ? 1 : 0;
   } else if (kladdeStatus === 2) {
     payload.paid = row.querySelector(`[name="paid_${memberId}"]`)?.value || 0;
     payload.penalties = row.querySelector(`[name="penalties_${memberId}"]`)?.value || 0;
@@ -1100,6 +1114,10 @@ function autoSaveRow(row) {
     if (data.ok) {
       showSaved();
       if (kladdeStatus === 2) updateKassenstand();
+      // Epic-Meilenstein → Schaf upgraden!
+      if (data.epicEvent && window.flyingSheep && window.flyingSheep.epicUpgrade) {
+        window.flyingSheep.epicUpgrade(data.epicEvent);
+      }
     } else {
       showToast(data.error || "Fehler beim Speichern", "error");
     }
@@ -5396,12 +5414,16 @@ function initMemberDragDrop() {
       liveFx.stop(); liveFx.explosion(btn, "purple");
     }
 
-    // Flying Sheep bei 9er/Kranz
-    if ((marker === "alle9" || marker === "kranz") && window.flyingSheep) {
+    // Flying Sheep bei 9er/Kranz, Critter bei Triclops
+    if ((marker === "alle9" || marker === "kranz" || marker === "triclops") && window.flyingSheep) {
       var p = gameOrder[currentTurnIdx];
       if (p) {
         var rect = btn.getBoundingClientRect();
-        window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+        if (marker === "triclops") {
+          window.flyingSheep.spawnCritter(rect.left + rect.width / 2, rect.top);
+        } else {
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name, { scoreType: marker });
+        }
       }
     }
 
@@ -5489,7 +5511,7 @@ function initMemberDragDrop() {
         var p = gameOrder[currentTurnIdx];
         if (p && confirmBtn) {
           var rect = confirmBtn.getBoundingClientRect();
-          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name, { scoreType: 'alle9' });
         }
       }
     } else if (wasKranz && fromFull) {
@@ -5500,7 +5522,7 @@ function initMemberDragDrop() {
         var p = gameOrder[currentTurnIdx];
         if (p && confirmBtn) {
           var rect = confirmBtn.getBoundingClientRect();
-          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name, { scoreType: 'kranz' });
         }
       }
     } else if (count > 0 && confirmBtn) {
@@ -6098,10 +6120,14 @@ function initMemberDragDrop() {
       liveFx.stop(); liveFx.explosion(btn, "purple");
     }
 
-    // Flying Sheep bei 9er/Kranz
-    if ((marker === "alle9" || marker === "kranz") && window.flyingSheep) {
+    // Flying Sheep bei 9er/Kranz, Critter bei Triclops
+    if ((marker === "alle9" || marker === "kranz" || marker === "triclops") && window.flyingSheep) {
       var rect = btn.getBoundingClientRect();
-      window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, player.id, player.name.charAt(0).toUpperCase(), player.name);
+      if (marker === "triclops") {
+        window.flyingSheep.spawnCritter(rect.left + rect.width / 2, rect.top);
+      } else {
+        window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, player.id, player.name.charAt(0).toUpperCase(), player.name, { scoreType: marker });
+      }
     }
 
     // Advance to next player
@@ -6469,7 +6495,6 @@ function initMemberDragDrop() {
       }
       var teamTotal = calcSechsTageTeamTotal(team);
       html += '<div class="st-cell st-sum st-cell-total">' + (allComplete ? teamTotal : '') + '</div>';
-
       // P2 row
       var p2Player = solo ? team.p1 : team.p2;
       var p2Name = solo ? 'Wurf 2' : team.p2.name.split(' ')[0];
@@ -6506,10 +6531,14 @@ function initMemberDragDrop() {
     liveControls.renderVolle({
       onPick: function(throwVal, marker, btn) {
         onSechsTageValue(throwVal);
-        // Flying Sheep bei 9er/Kranz
-        if ((marker === "alle9" || marker === "kranz") && window.flyingSheep && activePlayer) {
+        // Flying Sheep bei 9er/Kranz, Critter bei Triclops
+        if ((marker === "alle9" || marker === "kranz" || marker === "triclops") && window.flyingSheep && activePlayer) {
           var rect = btn.getBoundingClientRect();
-          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, activePlayer.id, activePlayer.name.charAt(0).toUpperCase(), activePlayer.name);
+          if (marker === "triclops") {
+            window.flyingSheep.spawnCritter(rect.left + rect.width / 2, rect.top);
+          } else {
+            window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, activePlayer.id, activePlayer.name.charAt(0).toUpperCase(), activePlayer.name, { scoreType: marker });
+          }
         }
       },
       onUndo: function() {
@@ -7253,15 +7282,20 @@ function initMemberDragDrop() {
     monteState.pickedMarker = null;
     hideMonteCursor();
 
-    // Flying Sheep bei 9er/Kranz — erst beim tatsächlichen Setzen
-    if ((marker === "alle9" || marker === "kranz") && window.flyingSheep) {
-      var p = null;
-      for (var gi = 0; gi < gameOrder.length; gi++) {
-        if (String(gameOrder[gi].id) === String(uid)) { p = gameOrder[gi]; break; }
-      }
-      if (p) {
+    // Flying Sheep bei 9er/Kranz, Critter bei Triclops — erst beim tatsächlichen Setzen
+    if ((marker === "alle9" || marker === "kranz" || marker === "triclops") && window.flyingSheep) {
+      if (marker === "triclops") {
         var rect = cell ? cell.getBoundingClientRect() : { left: W / 2, top: H / 2, width: 0 };
-        window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name);
+        window.flyingSheep.spawnCritter(rect.left + rect.width / 2, rect.top);
+      } else {
+        var p = null;
+        for (var gi = 0; gi < gameOrder.length; gi++) {
+          if (String(gameOrder[gi].id) === String(uid)) { p = gameOrder[gi]; break; }
+        }
+        if (p) {
+          var rect = cell ? cell.getBoundingClientRect() : { left: W / 2, top: H / 2, width: 0 };
+          window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name, { scoreType: marker });
+        }
       }
     }
 
@@ -8028,49 +8062,163 @@ function initMemberDragDrop() {
     var hCfg = sheepCfg.spriteHat || {};
     var gCfg = sheepCfg.spriteGlasses || {};
     var sCfg = sheepCfg.spriteStache || {};
+    var bdCfg = sheepCfg.spriteBody || {};
+    var tlCfg = sheepCfg.spriteTail || {};
 
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div'); hatEl.className = 's-sprite-hat';
-      var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
       var hItem = (hCfg.items && hCfg.items[tr.spriteHat]) || {};
-      hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
+      var hCustomSlots = hCfg.customSlots || [];
+      if (tr.spriteHat >= 16 && hCustomSlots[tr.spriteHat - 16]) {
+        var hcs = hCustomSlots[tr.spriteHat - 16];
+        hItem = hcs;
+        if (hcs.image) { hatEl.style.backgroundImage = 'url(' + hcs.image + ')'; hatEl.style.backgroundSize = 'contain'; hatEl.style.backgroundPosition = 'center'; }
+      } else if (hItem.customImage) {
+        hatEl.style.backgroundImage = 'url(' + hItem.customImage + ')'; hatEl.style.backgroundSize = 'contain'; hatEl.style.backgroundPosition = 'center';
+      } else {
+        var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
+        hatEl.style.backgroundPosition = -(hatCol * (hCfg.slotW || 9.85)) + 'px ' + -(hatRow * (hCfg.slotH || 8.85)) + 'px';
+      }
       hatEl.style.top = ((hCfg.offsetY != null ? hCfg.offsetY : -8) + (hItem.dY || 0)) + 'px';
       var hTotalX = (hCfg.offsetX || 0) + (hItem.dX || 0);
       if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
-      if (hCfg.scale && hCfg.scale !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hCfg.scale + ')';
+      var hTotalS = (hCfg.scale != null ? hCfg.scale : 1) * (hItem.dS || 1);
+      if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
       head.appendChild(hatEl);
     }
     if (tr.spriteGlasses >= 0) {
       var glEl = document.createElement('div'); glEl.className = 's-sprite-glasses';
-      var glCol = tr.spriteGlasses % 7, glRow = (tr.spriteGlasses / 7) | 0;
       var gItem = (gCfg.items && gCfg.items[tr.spriteGlasses]) || {};
-      glEl.style.backgroundPosition = -(glCol * (gCfg.slotW || 5.514)) + 'px ' + -(glRow * (gCfg.slotH || 7.52)) + 'px';
+      var gCustomSlots = gCfg.customSlots || [];
+      if (tr.spriteGlasses >= 32 && gCustomSlots[tr.spriteGlasses - 32]) {
+        var gcs = gCustomSlots[tr.spriteGlasses - 32];
+        gItem = gcs;
+        if (gcs.image) { glEl.style.backgroundImage = 'url(' + gcs.image + ')'; glEl.style.backgroundSize = 'contain'; glEl.style.backgroundPosition = 'center'; }
+      } else if (gItem.customImage) {
+        glEl.style.backgroundImage = 'url(' + gItem.customImage + ')'; glEl.style.backgroundSize = 'contain'; glEl.style.backgroundPosition = 'center';
+      } else {
+        var glCol = tr.spriteGlasses % 7, glRow = (tr.spriteGlasses / 7) | 0;
+        glEl.style.backgroundPosition = -(glCol * (gCfg.slotW || 5.514)) + 'px ' + -(glRow * (gCfg.slotH || 7.52)) + 'px';
+      }
       glEl.style.top = ((gCfg.offsetY != null ? gCfg.offsetY : 1.5) + (gItem.dY || 0)) + 'px';
       var gTotalX = (gCfg.offsetX || 0) + (gItem.dX || 0);
       if (gTotalX) glEl.style.left = 'calc(50% + ' + gTotalX + 'px)';
-      if (gCfg.scale && gCfg.scale !== 1) glEl.style.transform = 'translateX(-50%) scale(' + gCfg.scale + ')';
+      var gTotalS = (gCfg.scale != null ? gCfg.scale : 0.65) * (gItem.dS || 1);
+      if (gTotalS !== 1) glEl.style.transform = 'translateX(-50%) scale(' + gTotalS + ')';
       head.appendChild(glEl);
     }
     if (tr.spriteStache >= 0) {
       var stEl = document.createElement('div'); stEl.className = 's-sprite-stache';
       var sItem = (sCfg.items && sCfg.items[tr.spriteStache]) || {};
-      var stacheRegions = sCfg.regions || [
-        {x:5,y:18,w:100,h:55},{x:110,y:5,w:100,h:65},{x:5,y:108,w:90,h:65},{x:105,y:108,w:105,h:65},
-        {x:5,y:210,w:95,h:60},{x:105,y:200,w:105,h:55},{x:5,y:290,w:95,h:70},{x:105,y:275,w:105,h:65}
-      ];
-      var sr = stacheRegions[tr.spriteStache];
-      stEl.style.backgroundPosition = -(sr.x / 10) + 'px ' + -(sr.y / 10) + 'px';
-      stEl.style.width = (sr.w / 10) + 'px';
-      stEl.style.height = (sr.h / 10) + 'px';
+      var sCustomSlots = sCfg.customSlots || [];
+      if (tr.spriteStache >= 12 && sCustomSlots[tr.spriteStache - 12]) {
+        var scs = sCustomSlots[tr.spriteStache - 12];
+        sItem = scs;
+        if (scs.image) { stEl.style.backgroundImage = 'url(' + scs.image + ')'; stEl.style.backgroundSize = 'contain'; stEl.style.backgroundPosition = 'center'; }
+      } else if (sItem.customImage) {
+        stEl.style.backgroundImage = 'url(' + sItem.customImage + ')'; stEl.style.backgroundSize = 'contain'; stEl.style.backgroundPosition = 'center';
+      } else {
+        var stacheRegions = sCfg.regions || [
+          {x:5,y:18,w:100,h:55},{x:110,y:5,w:100,h:65},{x:5,y:108,w:90,h:65},{x:105,y:108,w:105,h:65},
+          {x:5,y:210,w:95,h:60},{x:105,y:200,w:105,h:55},{x:5,y:290,w:95,h:70},{x:105,y:275,w:105,h:65}
+        ];
+        var sr = stacheRegions[tr.spriteStache];
+        if (sr) {
+          stEl.style.backgroundPosition = -(sr.x / 10) + 'px ' + -(sr.y / 10) + 'px';
+          stEl.style.width = (sr.w / 10) + 'px';
+          stEl.style.height = (sr.h / 10) + 'px';
+        }
+      }
       stEl.style.bottom = ((sCfg.offsetY != null ? sCfg.offsetY : -1) + (sItem.dY || 0)) + 'px';
       var sTotalX = (sCfg.offsetX || 0) + (sItem.dX || 0);
       if (sTotalX) stEl.style.left = 'calc(50% + ' + sTotalX + 'px)';
-      if (sCfg.scale && sCfg.scale !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sCfg.scale + ')';
+      var sTotalS = (sCfg.scale != null ? sCfg.scale : 0.25) * (sItem.dS || 1);
+      if (sTotalS !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sTotalS + ')';
       head.appendChild(stEl);
+    }
+    if (tr.spriteBody >= 0) {
+      var bdCustomSlots = bdCfg.customSlots || [];
+      var bdCs = bdCustomSlots[tr.spriteBody];
+      if (bdCs && bdCs.image) {
+        var bdEl = document.createElement('div'); bdEl.className = 's-sprite-body epic-shimmer';
+        bdEl.style.backgroundImage = 'url(' + bdCs.image + ')'; bdEl.style.backgroundSize = 'contain'; bdEl.style.backgroundPosition = 'center';
+        var bdPosY = (bdCfg.offsetY || 0) + (bdCs.dY || 0);
+        bdEl.style.top = bdPosY + 'px';
+        var bdTotalX = (bdCfg.offsetX || 0) + (bdCs.dX || 0);
+        if (bdTotalX) bdEl.style.left = bdTotalX + 'px';
+        var bdTotalS = (bdCfg.scale || 1) * (bdCs.dS || 1);
+        if (bdTotalS !== 1) bdEl.style.transform = 'scale(' + bdTotalS + ')';
+        torso.appendChild(bdEl);
+      }
+    }
+    if (tr.spriteTail >= 0) {
+      var tlCustomSlots = tlCfg.customSlots || [];
+      var tlCs = tlCustomSlots[tr.spriteTail];
+      if (tlCs && tlCs.image) {
+        var tlEl = document.createElement('div'); tlEl.className = 's-sprite-tail epic-shimmer';
+        tlEl.style.backgroundImage = 'url(' + tlCs.image + ')'; tlEl.style.backgroundSize = 'contain'; tlEl.style.backgroundPosition = 'center';
+        var tlPosY = (tlCfg.offsetY || 0) + (tlCs.dY || 0);
+        tlEl.style.top = tlPosY + 'px';
+        var tlTotalX = (tlCfg.offsetX || 0) + (tlCs.dX || 0);
+        if (tlTotalX) tlEl.style.left = tlTotalX + 'px';
+        var tlTotalS = (tlCfg.scale || 1) * (tlCs.dS || 1);
+        if (tlTotalS !== 1) tlEl.style.transform = 'scale(' + tlTotalS + ')';
+        tail.appendChild(tlEl);
+      }
     }
   }
 
-  containers.forEach(renderGraveyardSheep);
+  var deathCauseLabels = {
+    eviction: '🐃 Rauswurf',
+    thrown: '🚀 Hinausgeworfen',
+    dismissed: '👋 Verabschiedet',
+    departed: '✈️ Abgereist',
+    stuck: '🐛 Steckengeblieben',
+    unknown: '❓ Unbekannt'
+  };
+
+  function formatAge(ms) {
+    var totalSec = Math.round(ms / 1000);
+    if (totalSec < 60) return totalSec + ' Sek';
+    var min = Math.floor(totalSec / 60);
+    var sec = totalSec % 60;
+    if (min < 60) return min + ' Min ' + (sec > 0 ? sec + ' Sek' : '');
+    var h = Math.floor(min / 60);
+    min = min % 60;
+    return h + ' Std ' + (min > 0 ? min + ' Min' : '');
+  }
+
+  function formatDiedAt(str) {
+    if (!str) return '–';
+    var d = new Date(str.includes('T') ? str : str + 'Z');
+    if (isNaN(d.getTime())) return str;
+    var pad = function(n) { return n < 10 ? '0' + n : n; };
+    return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  containers.forEach(function(c) {
+    renderGraveyardSheep(c);
+    var ageMs = parseInt(c.dataset.ageMs, 10);
+    var diedAt = c.dataset.diedAt || '';
+    var cause = c.dataset.deathCause || 'unknown';
+    var tip = document.createElement('div');
+    tip.className = 'stall-sheep-tip';
+    tip.innerHTML =
+      '<b>' + (deathCauseLabels[cause] || cause) + '</b><br>' +
+      '⏱ ' + (ageMs > 0 ? formatAge(ageMs) : '–') + '<br>' +
+      '† ' + formatDiedAt(diedAt);
+    c.appendChild(tip);
+  });
+
+  // Tap-Toggle für Mobilgeräte
+  document.addEventListener('click', function(e) {
+    var sheep = e.target.closest('.stall-sheep');
+    if (!sheep || e.target.closest('.stall-sheep-delete')) return;
+    document.querySelectorAll('.stall-sheep.tip-active').forEach(function(el) {
+      if (el !== sheep) el.classList.remove('tip-active');
+    });
+    sheep.classList.toggle('tip-active');
+  });
 
   // Schaf-Löschung in der Ahnengalerie
   document.addEventListener("click", function(e) {

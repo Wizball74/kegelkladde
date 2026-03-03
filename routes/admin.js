@@ -299,16 +299,22 @@ router.get("/admin/umkleide", requireAuth, requireAdmin, (req, res) => {
 });
 
 router.post("/admin/umkleide/save", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
-  const config = req.body.config;
-  if (!config || typeof config !== "object") {
-    return res.status(400).json({ error: "Ungültige Konfiguration." });
+  try {
+    const config = req.body.config;
+    if (!config || typeof config !== "object") {
+      return res.status(400).json({ error: "Ungültige Konfiguration." });
+    }
+    const jsonStr = JSON.stringify(config);
+    console.log("[Umkleide] Config-Größe:", (jsonStr.length / 1024).toFixed(1) + " KB");
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(jsonStr);
+    logAudit(req.session.userId, "SHEEP_CONFIG_UPDATE", "settings", null, { configKeys: Object.keys(config) });
+    res.json({ ok: true, message: "Accessoire-Konfiguration gespeichert." });
+  } catch (err) {
+    console.error("[Umkleide] Save-Fehler:", err.message);
+    res.status(500).json({ error: "Speichern fehlgeschlagen: " + err.message });
   }
-  const jsonStr = JSON.stringify(config);
-  db.prepare(
-    "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-  ).run(jsonStr);
-  logAudit(req.session.userId, "SHEEP_CONFIG_UPDATE", "settings", null, { configKeys: Object.keys(config) });
-  res.json({ ok: true, message: "Accessoire-Konfiguration gespeichert." });
 });
 
 router.post("/admin/umkleide/reset", requireAuth, requireAdmin, verifyCsrf, (req, res) => {

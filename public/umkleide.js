@@ -978,13 +978,63 @@
   }
 
   /* ═══ Export / Import ═══ */
+
+  function fetchAsDataUrl(url) {
+    return fetch(url)
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+      .then(function (blob) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onloadend = function () { resolve(reader.result); };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      });
+  }
+
+  function embedImages(exportCfg) {
+    var CATS = ['spriteHat', 'spriteGlasses', 'spriteStache', 'spriteBody', 'spriteTail'];
+    var tasks = [];
+    CATS.forEach(function (cat) {
+      var catCfg = exportCfg[cat];
+      if (!catCfg) return;
+      // customSlots[].image
+      if (catCfg.customSlots) {
+        catCfg.customSlots.forEach(function (slot) {
+          if (slot.image && slot.image.indexOf('data:') !== 0) {
+            tasks.push(fetchAsDataUrl(slot.image).then(function (d) { slot.image = d; }, function () {}));
+          }
+        });
+      }
+      // items[].customImage
+      if (catCfg.items) {
+        Object.keys(catCfg.items).forEach(function (key) {
+          var ci = catCfg.items[key].customImage;
+          if (ci && ci.indexOf('data:') !== 0) {
+            tasks.push(fetchAsDataUrl(ci).then(function (d) { catCfg.items[key].customImage = d; }, function () {}));
+          }
+        });
+      }
+    });
+    return Promise.all(tasks);
+  }
+
   document.getElementById('btnExport').addEventListener('click', function () {
-    var blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'sheep-config.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Exportiere\u2026';
+    var exportCfg = JSON.parse(JSON.stringify(cfg));
+    embedImages(exportCfg).then(function () {
+      var blob = new Blob([JSON.stringify(exportCfg, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'sheep-config.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      btn.disabled = false;
+      btn.textContent = 'Exportieren';
+      if (typeof showToast === 'function') showToast('Export inkl. Bilder heruntergeladen.', 'success');
+    });
   });
 
   document.getElementById('btnImport').addEventListener('click', function () {
@@ -999,10 +1049,14 @@
       try {
         var imported = JSON.parse(e.target.result);
         if (typeof imported !== 'object' || !imported) throw new Error('Kein Objekt');
-        // Merge in cfg
-        if (imported.spriteHat) Object.assign(cfg.spriteHat, imported.spriteHat);
-        if (imported.spriteGlasses) Object.assign(cfg.spriteGlasses, imported.spriteGlasses);
-        if (imported.spriteStache) Object.assign(cfg.spriteStache, imported.spriteStache);
+        // Merge alle Sprite-Kategorien
+        var CATS = ['spriteHat', 'spriteGlasses', 'spriteStache', 'spriteBody', 'spriteTail'];
+        CATS.forEach(function (cat) {
+          if (imported[cat]) {
+            if (!cfg[cat]) cfg[cat] = {};
+            Object.assign(cfg[cat], imported[cat]);
+          }
+        });
         if (imported.cssAccessories) {
           for (var k in imported.cssAccessories) {
             if (cfg.cssAccessories[k]) Object.assign(cfg.cssAccessories[k], imported.cssAccessories[k]);

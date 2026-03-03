@@ -31,7 +31,7 @@ app.set("views", path.join(__dirname, "views"));
 // Security and parsing middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/uploads/pinnwand", express.static(path.join(__dirname, "data", "uploads", "pinnwand")));
 app.use("/uploads/avatars", express.static(path.join(__dirname, "data", "uploads", "avatars")));

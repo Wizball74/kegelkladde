@@ -322,7 +322,9 @@
   function attachSpriteOverlays(head, tr, cfg, torso, tail) {
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
-      if (tr.spriteHat >= 16 && tr.spriteHat < 25) {
+      var hatCfg = cfg.spriteHat || {};
+      var wigHasCustom = tr.spriteHat >= 16 && tr.spriteHat < 25 && hatCfg.items && hatCfg.items[tr.spriteHat] && hatCfg.items[tr.spriteHat].customImage;
+      if (tr.spriteHat >= 16 && tr.spriteHat < 25 && !wigHasCustom) {
         hatEl.className = 's-sprite-wig';
         var wigIdx = tr.spriteHat - 16;
         var wigCol = wigIdx % 3, wigRow = (wigIdx / 3) | 0;
@@ -330,7 +332,7 @@
         head.appendChild(hatEl);
       } else {
         hatEl.className = 's-sprite-hat';
-        applySpriteOverlay(head, hatEl, tr.spriteHat, cfg.spriteHat || {},
+        applySpriteOverlay(head, hatEl, tr.spriteHat, hatCfg,
           { cols: 4, slotW: 9.85, slotH: 8.85, offsetY: -8, scale: 1, defaultCount: 25 });
       }
     }

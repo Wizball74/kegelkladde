@@ -301,8 +301,9 @@
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
       var hC = cfg.spriteHat;
-      if (tr.spriteHat >= 16 && tr.spriteHat < 25) {
-        // Perücken (index 16-24)
+      var wigCustom = tr.spriteHat >= 16 && tr.spriteHat < 25 && hC.items && hC.items[tr.spriteHat] && hC.items[tr.spriteHat].customImage;
+      if (tr.spriteHat >= 16 && tr.spriteHat < 25 && !wigCustom) {
+        // Perücken (index 16-24) — Standard-Spritesheet
         hatEl.className = 's-sprite-wig';
         var wigIdx = tr.spriteHat - 16;
         var wc = wigIdx % 3, wr = (wigIdx / 3) | 0;

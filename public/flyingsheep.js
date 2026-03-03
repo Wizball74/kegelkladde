@@ -101,7 +101,7 @@
   /* ═══ Traits ═══ */
   function generateTraits() {
     var isBlack = Math.random() < 0.08;
-    var scale = 0.6 + Math.random() * 0.8;
+    var scale = (Math.random() < 0.7 ? 0.9 : Math.random() < 0.7 ? 0.7 : 0.6) + Math.random() * 0.8;
     var chub = 0.7 + Math.random() * 0.7;
     var legMul = 0.9 + Math.random() * 0.8;
     var headMul = 0.75 + Math.random() * 0.5;
@@ -326,8 +326,12 @@
       var tlEl = document.createElement('div');
       tlEl.className = 's-sprite-tail epic-shimmer';
       applyCustomSpriteOverlay(tail, tlEl, tr.spriteTail, cfg.spriteTail || {});
+      /* Scale vom Kind → Parent verschieben (einheitlicher transform-origin) */
+      tail.dataset.spriteScale = tlEl.style.transform || '';
+      tlEl.style.transform = '';
       tail.style.background = 'none';
       tail.style.border = 'none';
+      tail.style.borderRadius = '0';
     }
     return bodySprite;
   }
@@ -435,7 +439,7 @@
       resumeDelay: 0, throwBoost: 0,
       orbitCenter: { x: 0, y: 0 }, orbitAngle: 0, orbitRadius: 40, orbitDir: 1,
       blinkTimer: (1500 + Math.random() * 3000) / (traits.energy || 1), isBlinking: false, blinkDur: 0,
-      wideEyes: 0, kickLeg: -1, kickTimer: 0, kickCD: (1500 + Math.random() * 2500) / (traits.energy || 1),
+      wideEyes: 0, kickLeg: -1, kickTimer: 0, kickCD: (1500 + Math.random() * 2500) / (traits.energy || 1), critterPause: 0, chasingCritter: null,
       socialTarget: null, collisionCD: 0,
       scareCorner: null, canSpreadFear: false,
       solo: opts.solo != null ? opts.solo : Math.random() < (1 - (traits.sociability != null ? traits.sociability : 0.5)),
@@ -673,6 +677,7 @@
     sh.groupData = null;
     sh.headbuttPartner = null;
     sh.headbuttPhase = 0;
+    sh.headbuttTimer = 0;
     sh.followTarget = null;
     sh.bullyTarget = null;
     sh.fenceJumpPhase = 'wait';
@@ -713,9 +718,9 @@
     if (!a || !b) return;
     var dur = 8000 + Math.random() * 7000;
     a.state = 'headbutt'; a.stTimer = 0; a.stDur = dur;
-    a.groupData = { type: 'headbutt' }; a.headbuttPartner = b; a.headbuttPhase = 0;
+    a.groupData = { type: 'headbutt' }; a.headbuttPartner = b; a.headbuttPhase = 0; a.headbuttTimer = 0;
     b.state = 'headbutt'; b.stTimer = 0; b.stDur = dur;
-    b.groupData = { type: 'headbutt' }; b.headbuttPartner = a; b.headbuttPhase = 0;
+    b.groupData = { type: 'headbutt' }; b.headbuttPartner = a; b.headbuttPhase = 0; b.headbuttTimer = 0;
   }
 
   function startBully(available) {
@@ -794,14 +799,14 @@
     var b = others[0];
     var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
     var radius = 30 + Math.random() * 25;
-    var dur = 20000 + Math.random() * 40000;
+    var dur = 6000 + Math.random() * 8000;
     var dir = Math.random() > 0.5 ? 1 : -1;
     var center = { x: cx, y: cy };
     var data = { type: 'dance', center: center, partner: [a, b] };
-    a.state = 'dance'; a.stTimer = 0; a.stDur = dur;
+    a.state = 'dance'; a.stTimer = 0; a.stDur = dur; a.danceWindDown = 0;
     a.groupData = data; a.orbitCenter = center;
     a.orbitAngle = 0; a.orbitRadius = radius; a.orbitDir = dir;
-    b.state = 'dance'; b.stTimer = 0; b.stDur = dur;
+    b.state = 'dance'; b.stTimer = 0; b.stDur = dur + 1000 + Math.random() * 2000; b.danceWindDown = 0;
     b.groupData = data; b.orbitCenter = center;
     b.orbitAngle = Math.PI; b.orbitRadius = radius; b.orbitDir = dir;
   }
@@ -835,9 +840,53 @@
     if (sh.stTimer > sh.stDur) pickNext(sh);
   }
 
+  /* Critter-Jagd: Schaf lenkt auf nahen Critter zu */
+  function chaseCritter(sh, S) {
+    if (!critters.length) return false;
+    if (sh.critterPause > 0) return false;   // nach Kick kurz Abstand halten
+    /* Gezieltes Target (nach eigenem Kick oder vorbeifliegender Ball) */
+    if (sh.chasingCritter) {
+      var cc = sh.chasingCritter;
+      if (cc.launched || critters.indexOf(cc) === -1) { sh.chasingCritter = null; }
+      else {
+        var cd = Math.hypot(cc.x - sh.x, cc.y - sh.y);
+        if (cd > 500 * sh.sizeMultiplier) { sh.chasingCritter = null; } // sehr weit, aufgeben
+        /* Nah dran aber Kick-CD aktiv → 90 % loslassen, 10 % "Kuschelkick" */
+        else if (cd < 25 * sh.sizeMultiplier && cc.kickCD[flock.indexOf(sh)] > 0) {
+          if (Math.random() < 0.9) { sh.chasingCritter = null; sh.critterPause = 600; }
+          else return true;  // Bug-Feature: ineinander kleben bleiben
+        }
+        else {
+          var cdx = cc.x - sh.x, cdy = cc.y - sh.y, cdd = cd || 1;
+          /* Stärker beschleunigen je weiter weg (Spurt-Effekt) */
+          var urgency = Math.min(cd / 80, 2.5);
+          sh.vx += (cdx / cdd) * S * (3 + urgency); sh.vy += (cdy / cdd) * S * (3 + urgency);
+          sh.headTarget = Math.max(-30, Math.min(30, cdx * 0.4));
+          sh.propSpeed = Math.min(sh.propSpeed + 2, PROP_MAX);
+          return true;
+        }
+      }
+    }
+    /* Opportunistisch: nächsten Critter in Reichweite jagen */
+    var best = null, bestD = 150 * sh.sizeMultiplier;
+    for (var ci = 0; ci < critters.length; ci++) {
+      var cr = critters[ci];
+      if (cr.launched) continue;
+      var d = Math.hypot(cr.x - sh.x, cr.y - sh.y);
+      if (d < bestD) { bestD = d; best = cr; }
+    }
+    if (!best) return false;
+    var dx = best.x - sh.x, dy = best.y - sh.y, d = bestD || 1;
+    sh.vx += (dx / d) * S * 3; sh.vy += (dy / d) * S * 3;
+    sh.headTarget = Math.max(-30, Math.min(30, dx * 0.4));
+    sh.propSpeed = Math.min(sh.propSpeed + 1, PROP_MAX * 0.8);
+    return true;
+  }
+
   function behaveDart(sh, dt, t, S) {
     var d = Math.hypot(sh.target.x - sh.x, sh.target.y - sh.y);
     if (sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    if (chaseCritter(sh, S)) return;
     if (d < 20) { sh.target = sh.solo ? newTarget() : nearTarget(sh, 200); }
     steerTo(sh, sh.target.x, sh.target.y, S * 1.4);
     sh.headTarget = Math.max(-22, Math.min(22, sh.vx * 5));
@@ -846,6 +895,7 @@
   function behaveExplore(sh, dt, t, S) {
     var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
     if (sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    if (chaseCritter(sh, S)) return;
     if (d < 25) { sh.target = newTarget(); dx = sh.target.x - sh.x; dy = sh.target.y - sh.y; d = Math.hypot(dx, dy); }
     var nx = dx / d, ny = dy / d, arr = Math.min(1, d / 60);
     var w = Math.sin(t * .001 + sh.stTimer * .001 + sh.bobPhase) * .5;
@@ -867,6 +917,7 @@
   function behaveZigzag(sh, dt, t, S) {
     var dx = sh.target.x - sh.x, dy = sh.target.y - sh.y, d = Math.hypot(dx, dy);
     if (sh.stTimer > sh.stDur) { pickNext(sh); return; }
+    if (chaseCritter(sh, S)) return;
     if (d < 25) { sh.target = newTarget(); dx = sh.target.x - sh.x; dy = sh.target.y - sh.y; d = Math.hypot(dx, dy); }
     var nx = dx / d, ny = dy / d;
     /* Starke seitliche Auslenkung: langsame Frequenz (.002), grosser Winkel (2.2 rad ≈ 126°) */
@@ -935,21 +986,56 @@
     if (!sh.headbuttPartner || flock.indexOf(sh.headbuttPartner) === -1 || sh.headbuttPartner.state !== 'headbutt') { endGroupAction(sh); return; }
     var partner = sh.headbuttPartner;
     var dx = partner.x - sh.x, dy = partner.y - sh.y, d = Math.hypot(dx, dy);
+    /* Phase 0: Anlauf — rückwärts voneinander entfernen */
     if (sh.headbuttPhase === 0) {
-      if (d > 15) {
-        sh.vx += (dx / d) * S * 1.3; sh.vy += (dy / d) * S * 1.3;
-        sh.headTarget = Math.max(-30, Math.min(30, Math.atan2(dy, dx) * 180 / Math.PI));
+      sh.headTarget = Math.max(-30, Math.min(30, Math.atan2(dy, dx) * 180 / Math.PI));
+      if (d < 80) {
+        var awayX = -dx / (d || 1), awayY = -dy / (d || 1);
+        sh.vx += awayX * S * 1.5; sh.vy += awayY * S * 1.5;
       } else {
-        sh.headbuttPhase = 1;
-        spawnStars((sh.x + partner.x) / 2, (sh.y + partner.y) / 2, 4 + (Math.random() * 3 | 0));
-        sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 14;
-        sh.wideEyes = 1500;
-        var rx = sh.x - partner.x, ry = sh.y - partner.y, rd = Math.hypot(rx, ry) || 1;
-        sh.vx = (rx / rd) * 3; sh.vy = (ry / rd) * 3;
-        sh.propSpeed = Math.min(sh.propSpeed + 20, PROP_MAX);
-        sh.stDur = sh.stTimer + 800;
+        sh.vx *= 0.85; sh.vy *= 0.85;
       }
-    } else {
+      if (!sh.headbuttTimer) sh.headbuttTimer = 0;
+      sh.headbuttTimer += dt;
+      if (sh.headbuttTimer > 1200 && d >= 60) {
+        sh.headbuttPhase = 1; sh.headbuttTimer = 0;
+        sh.vx *= 0.3; sh.vy *= 0.3;
+      }
+    }
+    /* Phase 1: Kurze Pause — Schafe schauen sich an */
+    else if (sh.headbuttPhase === 1) {
+      sh.vx *= 0.88; sh.vy *= 0.88;
+      sh.headTarget = Math.max(-30, Math.min(30, Math.atan2(dy, dx) * 180 / Math.PI));
+      if (!sh.headbuttTimer) sh.headbuttTimer = 0;
+      sh.headbuttTimer += dt;
+      if (sh.headbuttTimer > 600) {
+        sh.headbuttPhase = 2; sh.headbuttTimer = 0;
+      }
+    }
+    /* Phase 2: Vollgas aufeinander zu */
+    else if (sh.headbuttPhase === 2) {
+      sh.headTarget = Math.max(-30, Math.min(30, Math.atan2(dy, dx) * 180 / Math.PI));
+      /* Velocity direkt auf Partner setzen statt aufaddieren (verhindert Orbit) */
+      var chargeSpeed = 4 + S * 2;
+      sh.vx = (dx / (d || 1)) * chargeSpeed; sh.vy = (dy / (d || 1)) * chargeSpeed;
+      sh.propSpeed = Math.min(sh.propSpeed + 2, PROP_MAX);
+      if (!sh.headbuttTimer) sh.headbuttTimer = 0;
+      sh.headbuttTimer += dt;
+      /* Timeout: nach 3s Aufprall erzwingen falls sie sich verfehlen */
+      if (sh.headbuttTimer > 3000) d = 0;
+      if (d < 15) {
+        sh.headbuttPhase = 3;
+        spawnStars((sh.x + partner.x) / 2, (sh.y + partner.y) / 2, 5 + (Math.random() * 4 | 0));
+        sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 18;
+        sh.wideEyes = 2000;
+        var rx = sh.x - partner.x, ry = sh.y - partner.y, rd = Math.hypot(rx, ry) || 1;
+        sh.vx = (rx / rd) * 4.5; sh.vy = (ry / rd) * 4.5;
+        sh.propSpeed = Math.min(sh.propSpeed + 25, PROP_MAX);
+        sh.stDur = sh.stTimer + 1000;
+      }
+    }
+    /* Phase 3: Rückstoß + Abklingen */
+    else {
       sh.vx *= 0.92; sh.vy *= 0.92;
       if (sh.stTimer > sh.stDur) endGroupAction(sh);
     }
@@ -1032,13 +1118,52 @@
 
   function behaveDance(sh, dt, t, S) {
     if (!sh.groupData) { endGroupAction(sh); return; }
-    var partner = sh.groupData.partner[0] === sh ? sh.groupData.partner[1] : sh.groupData.partner[0];
-    if (flock.indexOf(partner) === -1 || partner.state !== 'dance') { endGroupAction(sh); return; }
+    var partners = sh.groupData.partner;
+    /* Tote Partner entfernen */
+    for (var pi = partners.length - 1; pi >= 0; pi--) {
+      if (partners[pi] !== sh && (flock.indexOf(partners[pi]) === -1 || partners[pi].state !== 'dance')) partners.splice(pi, 1);
+    }
+    /* Allein übrig → noch kurz weitertanzen, dann aufhören */
+    if (partners.length < 2) {
+      if (!sh.danceWindDown) sh.danceWindDown = 800 + Math.random() * 1500;
+      sh.danceWindDown -= dt;
+      if (sh.danceWindDown <= 0) { sh.danceWindDown = 0; endGroupAction(sh); return; }
+    }
     sh.orbitAngle += dt * 0.003 * sh.orbitDir;
     var center = sh.groupData.center;
-    steerTo(sh, center.x + Math.cos(sh.orbitAngle) * sh.orbitRadius, center.y + Math.sin(sh.orbitAngle) * sh.orbitRadius, S * 1.3);
-    sh.headTarget = Math.max(-35, Math.min(35, (partner.x - sh.x) * 0.35));
-    if (sh.stTimer > sh.stDur) endGroupAction(sh);
+    var tx = center.x + Math.cos(sh.orbitAngle) * sh.orbitRadius;
+    var ty = center.y + Math.sin(sh.orbitAngle) * sh.orbitRadius;
+    /* Position sanft auf Kreisbahn ziehen statt nur beschleunigen */
+    sh.x += (tx - sh.x) * 0.08;
+    sh.y += (ty - sh.y) * 0.08;
+    sh.vx = (tx - sh.x) * 0.5;
+    sh.vy = (ty - sh.y) * 0.5;
+    /* Kopf zum nächsten Partner drehen */
+    var nearest = null, nearD = Infinity;
+    for (var ni = 0; ni < partners.length; ni++) {
+      if (partners[ni] === sh) continue;
+      var nd = Math.hypot(partners[ni].x - sh.x, partners[ni].y - sh.y);
+      if (nd < nearD) { nearD = nd; nearest = partners[ni]; }
+    }
+    if (nearest) sh.headTarget = Math.max(-35, Math.min(35, (nearest.x - sh.x) * 0.35));
+    /* Vorbeifliegende Schafe zum Mittanzen einladen (nur erster Partner prüft) */
+    if (sh === partners[0]) {
+      for (var ri = 0; ri < flock.length; ri++) {
+        var recruit = flock[ri];
+        if (recruit.state !== 'explore' && recruit.state !== 'dart') continue;
+        var rd = Math.hypot(recruit.x - center.x, recruit.y - center.y);
+        if (rd < sh.orbitRadius + 40) {
+          var angle = Math.atan2(recruit.y - center.y, recruit.x - center.x);
+          var remaining = sh.stDur - sh.stTimer;
+          recruit.state = 'dance'; recruit.stTimer = 0;
+          recruit.stDur = remaining + Math.random() * 2000;
+          recruit.groupData = sh.groupData; recruit.orbitCenter = center;
+          recruit.orbitAngle = angle; recruit.orbitRadius = sh.orbitRadius; recruit.orbitDir = sh.orbitDir;
+          partners.push(recruit);
+        }
+      }
+    }
+    if (sh.stTimer > sh.stDur) { sh.danceWindDown = 0; endGroupAction(sh); }
   }
 
   function behaveBully(sh, dt, t, S) {
@@ -1295,6 +1420,7 @@
       if (sh.kickCD <= 0 && sh.kickLeg === -1) { sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 250; sh.kickCD = 1500 + Math.random() * 3000; }
     }
     if (sh.kickTimer > 0) { sh.kickTimer -= dt; if (sh.kickTimer <= 0) sh.kickLeg = -1; }
+    if (sh.critterPause > 0) sh.critterPause -= dt;
     sh.collisionCD = Math.max(0, sh.collisionCD - dt);
   }
 
@@ -1308,22 +1434,28 @@
         var minD = COLLISION_R * (a.sizeMultiplier + b.sizeMultiplier);
         if (d < minD && d > 0) {
           var nx = dx / d, ny = dy / d, overlap = minD - d;
-          a.x -= nx * overlap * .5; a.y -= ny * overlap * .5;
-          b.x += nx * overlap * .5; b.y += ny * overlap * .5;
+          /* Masse = visuelle Größe² (Fläche) */
+          var sA = a.traits.scale * a.sizeMultiplier, sB = b.traits.scale * b.sizeMultiplier;
+          var mA = sA * sA, mB = sB * sB;
+          var mT = mA + mB;
+          var rA = mB / mT, rB = mA / mT;  // leichteres Schaf bekommt mehr ab
+          /* Überlappung auflösen: gewichtet nach Masse */
+          a.x -= nx * overlap * rA; a.y -= ny * overlap * rA;
+          b.x += nx * overlap * rB; b.y += ny * overlap * rB;
           var rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
-          if (rv > 0) { a.vx -= nx * rv * .4; a.vy -= ny * rv * .4; b.vx += nx * rv * .4; b.vy += ny * rv * .4; }
-          /* Abstoßung auch bei gleicher Geschwindigkeit (Anti-Kleben) */
+          if (rv > 0) { a.vx -= nx * rv * rA * .8; a.vy -= ny * rv * rA * .8; b.vx += nx * rv * rB * .8; b.vy += ny * rv * rB * .8; }
+          /* Abstoßung (Anti-Kleben): massegewichtet */
           var push = 0.3 + overlap * 0.05;
-          a.vx -= nx * push; a.vy -= ny * push;
-          b.vx += nx * push; b.vy += ny * push;
-          /* Parallel-Lock brechen: wenn beide in ähnliche Richtung → senkrechter Kick + neue Ziele */
+          a.vx -= nx * push * rA; a.vy -= ny * push * rA;
+          b.vx += nx * push * rB; b.vy += ny * push * rB;
+          /* Parallel-Lock brechen */
           var spdA = Math.hypot(a.vx, a.vy), spdB = Math.hypot(b.vx, b.vy);
           if (spdA > 0.3 && spdB > 0.3) {
             var dotNorm = (a.vx * b.vx + a.vy * b.vy) / (spdA * spdB);
             if (dotNorm > 0.4) {
               var perpX = -ny, perpY = nx;
-              a.vx += perpX * 1.2; a.vy += perpY * 1.2;
-              b.vx -= perpX * 1.2; b.vy -= perpY * 1.2;
+              a.vx += perpX * 1.2 * rA; a.vy += perpY * 1.2 * rA;
+              b.vx -= perpX * 1.2 * rB; b.vy -= perpY * 1.2 * rB;
               a.target = newTarget(); b.target = newTarget();
               if (a.state !== 'scared' && a.state !== 'departing' && !isGroupState(a.state)) { a.state = 'dart'; a.stTimer = 0; a.stDur = 600 + Math.random() * 400; }
               if (b.state !== 'scared' && b.state !== 'departing' && !isGroupState(b.state)) { b.state = 'dart'; b.stTimer = 0; b.stDur = 600 + Math.random() * 400; }
@@ -1331,14 +1463,10 @@
           }
           if (rv > 1.5 && a.collisionCD <= 0 && b.collisionCD <= 0) {
             spawnStars((a.x + b.x) / 2, (a.y + b.y) / 2, 2 + (Math.random() * 2 | 0));
-            a.wobbleV += (Math.random() - .5) * 8; b.wobbleV += (Math.random() - .5) * 8;
+            /* Leichteres Schaf wackelt mehr */
+            a.wobbleV += (Math.random() - .5) * 8 * (rA * 2); b.wobbleV += (Math.random() - .5) * 8 * (rB * 2);
             a.propSpeed = Math.min(a.propSpeed + 10, PROP_MAX); b.propSpeed = Math.min(b.propSpeed + 10, PROP_MAX);
             a.collisionCD = 500; b.collisionCD = 500;
-            /* Heftige Kollision → beide erschrecken sich */
-            if (rv > 2.5) {
-              if (a.state !== 'scared') makeSheepScared(a, false);
-              if (b.state !== 'scared') makeSheepScared(b, false);
-            }
           }
         }
       }
@@ -1372,13 +1500,31 @@
     d.label.style.transform = 'translate(calc(-50% + ' + labelShiftX + 'px),-50%) rotateY(' + labelRotY + 'deg)';
 
     var ts = tr.tailSize;
-    var tailWag = Math.sin(sh.bobPhase * .008) * 0.15;
+    var tailWag = Math.sin(sh.bobPhase * .004) * 0.07;
     var tailLocalX = sh.tailSide * (sh.tw / 2 + ts * .3);
     var tailLocalY = 1;
     var tailPos = rot(tailLocalX, tailLocalY, bankRad);
     var tailX = tx + tailPos.x, tailY = ty + tailPos.y;
-    var tailFlip = (tr.spriteTail >= 0 && sh.tailSide < 0) ? ' scaleX(-1)' : '';
-    d.tail.style.transform = 'translate(' + (tailX - ts / 2) + 'px,' + (tailY - ts / 2) + 'px) rotate(' + ((tailWag + sh.tailSide * .4) * Math.PI) + 'rad)' + tailFlip;
+    if (tr.spriteTail >= 0) {
+      /* Sprite-Schwanz: Mitte des Elements = Körperkante (Ansatzpunkt)
+         Alle Transforms auf dem Parent → ein einziger transform-origin */
+      var absSide = Math.min(Math.abs(sh.tailSide), 1);
+      var sideSign = sh.tailSide >= 0 ? 1 : -1;
+      var stLocalX = sideSign * (sh.tw / 2);
+      var stPos = rot(stLocalX, 1, bankRad);
+      var stX = tx + stPos.x, stY = ty + stPos.y;
+      var spriteRot = tailWag * Math.PI;
+      var flipX = sh.tailSide >= 0 ? absSide : -absSide;
+      d.tail.style.transformOrigin = '50% 50%';
+      /* Scale aus data-Attribut (vom Kind hierher verschoben) */
+      var sprScale = d.tail.dataset.spriteScale || '';
+      d.tail.style.transform = 'translate(' + (stX - ts / 2) + 'px,' + (stY - ts / 2) + 'px) rotate(' + spriteRot + 'rad) scaleX(' + flipX + ')' + (sprScale ? ' ' + sprScale : '');
+    } else {
+      /* Standard-Kreisschwanz: Drehpunkt in der Mitte */
+      var tailRot = (tailWag + sh.tailSide * .4) * Math.PI;
+      d.tail.style.transformOrigin = '50% 50%';
+      d.tail.style.transform = 'translate(' + (tailX - ts / 2) + 'px,' + (tailY - ts / 2) + 'px) rotate(' + tailRot + 'rad)';
+    }
 
     var headSideX = -sh.tailSide * (sh.tw * 0.38);
     var hOff = rot(headSideX, -5, bankRad);
@@ -1397,7 +1543,7 @@
     else if (sh.state === 'bully' && sh.bullyTarget) { etx = (sh.bullyTarget.x - headVX) * .04; ety = (sh.bullyTarget.y - headVY) * .04; }
     else if (sh.state === 'followLine' && sh.followTarget) { etx = (sh.followTarget.x - headVX) * .04; ety = (sh.followTarget.y - headVY) * .04; }
     else if (sh.state === 'greet' && sh.greetTarget) { etx = (sh.greetTarget.x - headVX) * .04; ety = (sh.greetTarget.y - headVY) * .04; }
-    else if (sh.state === 'dance' && sh.groupData) { var dp = sh.groupData.partner[0] === sh ? sh.groupData.partner[1] : sh.groupData.partner[0]; etx = (dp.x - headVX) * .04; ety = (dp.y - headVY) * .04; }
+    else if (sh.state === 'dance' && sh.groupData) { var dps = sh.groupData.partner, dp = null, dpD = Infinity; for (var di = 0; di < dps.length; di++) { if (dps[di] !== sh) { var dd = Math.hypot(dps[di].x - sh.x, dps[di].y - sh.y); if (dd < dpD) { dpD = dd; dp = dps[di]; } } } if (dp) { etx = (dp.x - headVX) * .04; ety = (dp.y - headVY) * .04; } else { etx = 0; ety = 0; } }
     else if (sh.state === 'hover') {
       var looked = false;
       for (var fi = 0; fi < flock.length; fi++) { var o = flock[fi]; if (o !== sh && Math.hypot(o.x - sh.x, o.y - sh.y) < 50) { etx = (o.x - headVX) * .04; ety = (o.y - headVY) * .04; looked = true; break; } }
@@ -1572,7 +1718,7 @@
   }
 
   /* ═══ Drag ═══ */
-  var dragSheep = null, dragOX = 0, dragOY = 0, dragLX = 0, dragLY = 0, dragLT = 0;
+  var dragSheep = null, dragCritter = null, dragOX = 0, dragOY = 0, dragLX = 0, dragLY = 0, dragLT = 0;
   var velBuf = [];
   var dragPrevVX = 0, dragPrevVY = 0, dragShakeScore = 0;
   /* Drag-Bubble entfernt — nameEl im wrap uebernimmt die Anzeige (render-Loop) */
@@ -1589,8 +1735,29 @@
     return best;
   }
 
-  /* Capture-phase: intercept clicks near sheep before page elements get them */
+  function findNearestCritter(x, y) {
+    var best = null, bestD = 20;
+    for (var ci = 0; ci < critters.length; ci++) {
+      var cr = critters[ci];
+      if (cr.launched) continue;
+      var d = Math.hypot(cr.x - x, cr.y - y);
+      if (d < bestD) { bestD = d; best = cr; }
+    }
+    return best;
+  }
+
+  /* Capture-phase: intercept clicks near sheep/critters before page elements get them */
   document.addEventListener('pointerdown', function (e) {
+    /* Critter zuerst prüfen (kleiner, sonst nie greifbar) */
+    var cr = findNearestCritter(e.clientX, e.clientY);
+    if (cr) {
+      e.preventDefault(); e.stopPropagation();
+      dragCritter = cr;
+      dragOX = cr.x - e.clientX; dragOY = cr.y - e.clientY;
+      dragLX = e.clientX; dragLY = e.clientY; dragLT = performance.now();
+      velBuf.length = 0;
+      return;
+    }
     if (flock.length === 0) return;
     var sh = findNearest(e.clientX, e.clientY);
     if (!sh) return;
@@ -1618,6 +1785,17 @@
   }, true);
 
   document.addEventListener('pointermove', function (e) {
+    if (dragCritter) {
+      e.preventDefault();
+      var now = performance.now(), dtt = now - dragLT;
+      if (dtt > 1) {
+        velBuf.push({ vx: (e.clientX - dragLX) / dtt * 16, vy: (e.clientY - dragLY) / dtt * 16, t: now });
+        while (velBuf.length && now - velBuf[0].t > 80) velBuf.shift();
+      }
+      dragCritter.x = e.clientX + dragOX; dragCritter.y = e.clientY + dragOY;
+      dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
+      return;
+    }
     if (!dragSheep) return; e.preventDefault();
     var now = performance.now(), dtt = now - dragLT;
     if (dtt > 1) {
@@ -1640,6 +1818,14 @@
   });
 
   document.addEventListener('pointerup', function () {
+    if (dragCritter) {
+      var ax = 0, ay = 0;
+      if (velBuf.length) { for (var vi = 0; vi < velBuf.length; vi++) { ax += velBuf[vi].vx; ay += velBuf[vi].vy; } ax /= velBuf.length; ay /= velBuf.length; }
+      dragCritter.vx = ax * .6; dragCritter.vy = ay * .6;
+      dragCritter.wobbleV += (Math.random() - .5) * 15;
+      velBuf.length = 0; dragCritter = null;
+      return;
+    }
     if (!dragSheep) return;
     var ax = 0, ay = 0;
     if (velBuf.length) { for (var vi = 0; vi < velBuf.length; vi++) { ax += velBuf[vi].vx; ay += velBuf[vi].vy; } ax /= velBuf.length; ay /= velBuf.length; }
@@ -1672,7 +1858,17 @@
         solo: sh.solo, bank: sh.bank, propSpeed: sh.propSpeed,
       });
     }
-    return { version: 1, timestamp: Date.now(), sheep: sheep };
+    var crs = [];
+    for (var ci = 0; ci < critters.length; ci++) {
+      var cr = critters[ci];
+      if (cr.launched) continue;  // fliegende Critter nicht speichern
+      crs.push({
+        x: cr.x, y: cr.y, vx: cr.vx, vy: cr.vy,
+        scale: cr.scale, kicksLeft: cr.kicksLeft,
+        traits: cr.traits
+      });
+    }
+    return { version: 1, timestamp: Date.now(), sheep: sheep, critters: crs };
   }
 
   function saveFlock(force) {
@@ -1718,6 +1914,30 @@
       frag.appendChild(sh.dom.wrap);
     }
     overlay.appendChild(frag);
+    /* Critter wiederherstellen */
+    if (Array.isArray(data.critters)) {
+      for (var ci = 0; ci < data.critters.length; ci++) {
+        var sc = data.critters[ci];
+        var ct = sc.traits || generateCritterTraits();
+        var cdom = createCritterDOM(ct);
+        cdom.traits = ct;
+        var cx = Math.max(10, Math.min(W - 10, sc.x || W / 2));
+        var cy = Math.max(10, Math.min(H - 10, sc.y || H / 2));
+        var cr = {
+          dom: cdom, x: cx, y: cy,
+          vx: sc.vx || 0, vy: sc.vy || 0,
+          wobble: 0, wobbleV: 0,
+          scale: sc.scale || 1,
+          kickCD: {},
+          kicksLeft: sc.kicksLeft || CRITTER_MIN_KICKS,
+          launched: false,
+          dizzyTime: 0, dizzySpeed: 0, dizzyAngle: 0,
+          traits: ct
+        };
+        overlay.appendChild(cdom.wrap);
+        critters.push(cr);
+      }
+    }
   }
 
   /* Auto-save every 3s */
@@ -1797,13 +2017,14 @@
     /* ── Critter-Loop: Physik, Kicks, Render, Cleanup ── */
     for (var ci = critters.length - 1; ci >= 0; ci--) {
       var cr = critters[ci];
-      /* Launched + off-screen → entfernen */
+      /* Off-screen → entfernen (launched ODER nach oben rausgeschleudert) */
+      if (cr.x < -80 || cr.x > W + 80 || cr.y < -80 || cr.y > H + 80) {
+        cr.dom.wrap.remove(); critters.splice(ci, 1); continue;
+      }
       if (cr.launched) {
-        if (cr.x < -80 || cr.x > W + 80 || cr.y < -80 || cr.y > H + 80) {
-          cr.dom.wrap.remove(); critters.splice(ci, 1); continue;
-        }
         critterPhysics(cr, dt); critterRender(cr); continue;
       }
+      if (cr === dragCritter) { critterRender(cr); continue; }
       /* Schafe kicken Critters */
       for (var si = 0; si < flock.length; si++) {
         var sh = flock[si];
@@ -1824,8 +2045,9 @@
             /* Konfetti-Kanone in Abflugrichtung */
             spawnStars(cr.x, cr.y, 6);
             spawnPuff(cr.x, cr.y, 20);
-            /* Kicker-Schaf: extra Kick-Anim */
+            /* Kicker-Schaf: extra Kick-Anim + Pause */
             sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 400;
+            sh.critterPause = 1200;
             sh.wobbleV += (Math.random() > .5 ? 1 : -1) * 12;
             /* Alle Schafe applaudieren */
             for (var ai = 0; ai < flock.length; ai++) {
@@ -1838,19 +2060,78 @@
               applSh.propSpeed = Math.min(applSh.propSpeed + 15, PROP_MAX);
             }
           } else {
-            /* Normaler Kick */
-            var kickForce = 2.5 + Math.hypot(sh.vx, sh.vy) * 1.2;
+            /* Normaler Kick — Critter wegschleudern */
+            var kickForce = 5 + Math.hypot(sh.vx, sh.vy) * 1.5;
             cr.vx = nx * kickForce; cr.vy = ny * kickForce;
             cr.wobbleV += (Math.random() - .5) * 25;
             sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 250;
+            /* 50 % Chance: dem Ball hinterherjagen, sonst Pause */
+            if (Math.random() < 0.5) {
+              sh.chasingCritter = cr;
+              sh.critterPause = 250;   // nur Kick-Anim abwarten
+            } else {
+              sh.critterPause = 800 + Math.random() * 400;
+            }
             spawnStars(cr.x, cr.y, 2);
           }
           cr.kickCD[si] = CRITTER_KICK_CD;
           break; // max 1 Kick pro Frame
         }
       }
+      /* Vorbeifliegender Ball: 20 % Chance, dass Schafe hinterherjagen */
+      var crSpd = Math.hypot(cr.vx, cr.vy);
+      if (crSpd > 2) {
+        for (var bi = 0; bi < flock.length; bi++) {
+          var bsh = flock[bi];
+          if (bsh.chasingCritter) continue;                 // jagt schon
+          if (bsh.critterPause > 0) continue;               // Kick-Pause
+          if (bsh.state !== 'explore' && bsh.state !== 'dart' && bsh.state !== 'zigzag') continue;
+          var bd = Math.hypot(cr.x - bsh.x, cr.y - bsh.y);
+          if (bd < 120 * bsh.sizeMultiplier && Math.random() < 0.005) {  // ~20 % über Durchflug
+            bsh.chasingCritter = cr;
+          }
+        }
+      }
       critterPhysics(cr, dt);
       critterRender(cr);
+    }
+    /* Critter-Fusion: zwei Critter treffen sich → verschmelzen zum größeren */
+    for (var fi = 0; fi < critters.length; fi++) {
+      var ca = critters[fi];
+      if (ca.launched || ca === dragCritter) continue;
+      for (var fj = fi + 1; fj < critters.length; fj++) {
+        var cb = critters[fj];
+        if (cb.launched || cb === dragCritter) continue;
+        var fd = Math.hypot(ca.x - cb.x, ca.y - cb.y);
+        var touchD = (ca.scale + cb.scale) * 8;
+        if (fd < touchD && fd > 0) {
+          /* Fusion! Größerer schluckt kleineren */
+          var big = ca.scale >= cb.scale ? ca : cb;
+          var small = ca.scale >= cb.scale ? cb : ca;
+          /* Masse-gewichtete Position + Velocity */
+          var mBig = big.scale * big.scale, mSmall = small.scale * small.scale;
+          var mT = mBig + mSmall;
+          big.x = (big.x * mBig + small.x * mSmall) / mT;
+          big.y = (big.y * mBig + small.y * mSmall) / mT;
+          big.vx = (big.vx * mBig + small.vx * mSmall) / mT;
+          big.vy = (big.vy * mBig + small.vy * mSmall) / mT;
+          /* Wachsen: Fläche addieren → neuer Scale (via CSS transform) */
+          big.scale = Math.sqrt(big.scale * big.scale + small.scale * small.scale);
+          big.kicksLeft = big.kicksLeft + small.kicksLeft;
+          big.wobbleV += (Math.random() - .5) * 20;
+          /* Effekte */
+          spawnPuff((ca.x + cb.x) / 2, (ca.y + cb.y) / 2, 20);
+          spawnStars((ca.x + cb.x) / 2, (ca.y + cb.y) / 2, 4);
+          /* Kleinen entfernen */
+          small.dom.wrap.remove();
+          critters.splice(critters.indexOf(small), 1);
+          /* Schafe die den Kleinen jagten → auf den Großen umlenken */
+          for (var si = 0; si < flock.length; si++) {
+            if (flock[si].chasingCritter === small) flock[si].chasingCritter = big;
+          }
+          break;  // max 1 Fusion pro Frame
+        }
+      }
     }
     /* Cleanup: Schafe die den Screen verlassen haben oder stuck sind */
     for (var i = flock.length - 1; i >= 0; i--) {
@@ -1882,26 +2163,58 @@
   var CRITTER_MIN_KICKS = 8;
   var CRITTER_MAX_KICKS = 25;
 
-  function createCritterDOM() {
+  var CRITTER_COLORS = ['#2a2a2a', '#3a3a3a', '#4a3a2e', '#2e3a4a', '#3a2a3a', '#3e3e2e', '#1e2e3e'];
+  var CRITTER_EAR_COLORS = ['#2a2a2a', '#3a2020', '#20302a', '#2a2040', '#403020'];
+
+  function createCritterDOM(traits) {
     var wrap = document.createElement('div'); wrap.className = 'critter-wrap';
     var body = document.createElement('div'); body.className = 'critter-body';
+    body.style.background = traits.bodyColor;
+    body.style.width = traits.bodyW + 'px'; body.style.height = traits.bodyH + 'px';
     var earL = document.createElement('div'); earL.className = 'critter-ear l';
     var earR = document.createElement('div'); earR.className = 'critter-ear r';
-    var eyeL = document.createElement('div'); eyeL.className = 'critter-eye l';
-    var pupilL = document.createElement('div'); pupilL.className = 'critter-pupil';
-    eyeL.appendChild(pupilL);
-    var eyeR = document.createElement('div'); eyeR.className = 'critter-eye r';
-    var pupilR = document.createElement('div'); pupilR.className = 'critter-pupil';
-    eyeR.appendChild(pupilR);
-    var feet = document.createElement('div'); feet.className = 'critter-feet';
+    earL.style.background = earR.style.background = traits.earColor;
+    /* Ein großes Zyklopenauge (zentriert) */
+    var eye = document.createElement('div'); eye.className = 'critter-eye critter-eye-c';
+    var es = traits.eyeSize * 1.4;
+    eye.style.width = eye.style.height = es + 'px';
+    var pupil = document.createElement('div'); pupil.className = 'critter-pupil';
+    pupil.style.width = pupil.style.height = (es * 0.5) + 'px';
+    pupil.style.top = pupil.style.left = (es * 0.25) + 'px';
+    eye.appendChild(pupil);
+    /* Drei Beinchen */
+    var feet = document.createElement('div'); feet.className = 'critter-feet critter-feet-tri';
     var footL = document.createElement('div'); footL.className = 'critter-foot';
+    var footM = document.createElement('div'); footM.className = 'critter-foot';
     var footR = document.createElement('div'); footR.className = 'critter-foot';
-    feet.appendChild(footL); feet.appendChild(footR);
+    feet.appendChild(footL); feet.appendChild(footM); feet.appendChild(footR);
     body.appendChild(earL); body.appendChild(earR);
-    body.appendChild(eyeL); body.appendChild(eyeR);
+    body.appendChild(eye);
     body.appendChild(feet);
     wrap.appendChild(body);
-    return { wrap: wrap, body: body, pupilL: pupilL, pupilR: pupilR };
+    return { wrap: wrap, body: body, pupil: pupil };
+  }
+
+  function mixHex(c1, c2, t) {
+    var r1 = parseInt(c1.slice(1,3),16), g1 = parseInt(c1.slice(3,5),16), b1 = parseInt(c1.slice(5,7),16);
+    var r2 = parseInt(c2.slice(1,3),16), g2 = parseInt(c2.slice(3,5),16), b2 = parseInt(c2.slice(5,7),16);
+    var r = Math.round(r1+(r2-r1)*t), g = Math.round(g1+(g2-g1)*t), b = Math.round(b1+(b2-b1)*t);
+    return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+  }
+  function generateCritterTraits() {
+    var bw = 12 + Math.random() * 5, bh = 11 + Math.random() * 5;
+    var area = bw * bh;
+    var c1 = CRITTER_COLORS[Math.random() * CRITTER_COLORS.length | 0];
+    var bodyColor = area > 200
+      ? mixHex(c1, CRITTER_COLORS[Math.random() * CRITTER_COLORS.length | 0], 0.3 + Math.random() * 0.4)
+      : c1;
+    return {
+      bodyColor: bodyColor,
+      earColor: CRITTER_EAR_COLORS[Math.random() * CRITTER_EAR_COLORS.length | 0],
+      bodyW: bw,
+      bodyH: bh,
+      eyeSize: 5 + Math.random() * 2.5
+    };
   }
 
   function spawnCritter(x, y) {
@@ -1915,7 +2228,9 @@
       critters.splice(critters.indexOf(weakest), 1);
     }
     var angle = Math.random() * Math.PI * 2;
-    var dom = createCritterDOM();
+    var traits = generateCritterTraits();
+    var dom = createCritterDOM(traits);
+    dom.traits = traits;  // für Serialisierung
     var cr = {
       dom: dom, x: x, y: y,
       vx: Math.cos(angle) * CRITTER_SPEED,
@@ -1924,7 +2239,9 @@
       scale: 0.9 + Math.random() * 0.2,
       kickCD: {},
       kicksLeft: CRITTER_MIN_KICKS + (Math.random() * (CRITTER_MAX_KICKS - CRITTER_MIN_KICKS) | 0),
-      launched: false
+      launched: false,
+      dizzyTime: 0, dizzySpeed: 0, dizzyAngle: 0,
+      traits: traits
     };
     overlay.appendChild(dom.wrap);
     critters.push(cr);
@@ -1946,11 +2263,26 @@
       cr.vy = Math.sin(a) * CRITTER_SPEED;
     }
     cr.x += cr.vx * dt * DT_SCALE; cr.y += cr.vy * dt * DT_SCALE;
-    /* Wand-Bouncing */
+    /* Wand-Bouncing — bei hartem Aufprall: Pupille dreht sich */
+    var preSpd = Math.hypot(cr.vx, cr.vy);
     if (cr.x < 10) { cr.x = 10; cr.vx = Math.abs(cr.vx) * CRITTER_BOUNCE; }
     if (cr.x > W - 10) { cr.x = W - 10; cr.vx = -Math.abs(cr.vx) * CRITTER_BOUNCE; }
-    if (cr.y < 10) { cr.y = 10; cr.vy = Math.abs(cr.vy) * CRITTER_BOUNCE; }
+    /* Decke offen — Schwerkraft zieht zurück (wie Schafe) */
+    if (cr.y < 10) { cr.vy += 0.006 * dt; }
     if (cr.y > H - 10) { cr.y = H - 10; cr.vy = -Math.abs(cr.vy) * CRITTER_BOUNCE; }
+    var postSpd = Math.hypot(cr.vx, cr.vy);
+    if (preSpd - postSpd > 1.5) {
+      cr.dizzyTime = 1500 + preSpd * 400;
+      cr.dizzySpeed = 0.015 + preSpd * 0.004;
+      cr.dizzyAngle = cr.dizzyAngle || 0;
+    }
+    /* Dizzy-Decay */
+    if (cr.dizzyTime > 0) {
+      cr.dizzyAngle += cr.dizzySpeed * dt * DT_SCALE;
+      cr.dizzyTime -= dt;
+      /* Speed fällt exponentiell ab → Pupille pendelt ein */
+      cr.dizzySpeed *= Math.pow(0.997, dt * DT_SCALE);
+    }
     /* Wobble-Spring */
     cr.wobbleV -= cr.wobble * 0.2; cr.wobbleV *= 0.9; cr.wobble += cr.wobbleV * dt * DT_SCALE;
     /* Kick-Cooldowns runterzählen */
@@ -1961,18 +2293,25 @@
 
   function critterRender(cr) {
     cr.dom.wrap.style.transform = 'translate(' + cr.x + 'px,' + cr.y + 'px) scale(' + cr.scale + ') rotate(' + (cr.wobble * 3) + 'deg)';
-    /* Pupillen-Tracking: zum nächsten Schaf schauen */
-    var lookX = cursorX, lookY = cursorY, bestD = 200;
-    for (var fi = 0; fi < flock.length; fi++) {
-      var sh = flock[fi];
-      var d = Math.hypot(sh.x - cr.x, sh.y - cr.y);
-      if (d < bestD) { bestD = d; lookX = sh.x; lookY = sh.y; }
+    var px, py;
+    if (cr.dizzyTime > 0) {
+      /* Dizzy: Pupille kreist — Radius schrumpft mit dizzySpeed */
+      var radius = Math.min(1.5, cr.dizzySpeed * 100);
+      px = Math.cos(cr.dizzyAngle) * radius;
+      py = Math.sin(cr.dizzyAngle) * radius;
+    } else {
+      /* Normal: Pupillen-Tracking zum nächsten Schaf */
+      var lookX = cursorX, lookY = cursorY, bestD = 200;
+      for (var fi = 0; fi < flock.length; fi++) {
+        var sh = flock[fi];
+        var d = Math.hypot(sh.x - cr.x, sh.y - cr.y);
+        if (d < bestD) { bestD = d; lookX = sh.x; lookY = sh.y; }
+      }
+      var dx = lookX - cr.x, dy = lookY - cr.y;
+      var dd = Math.hypot(dx, dy) || 1;
+      px = (dx / dd) * 1.5; py = (dy / dd) * 1.5;
     }
-    var dx = lookX - cr.x, dy = lookY - cr.y;
-    var dd = Math.hypot(dx, dy) || 1;
-    var px = (dx / dd) * 1.2, py = (dy / dd) * 1.2;
-    cr.dom.pupilL.style.transform = 'translate(' + px + 'px,' + py + 'px)';
-    cr.dom.pupilR.style.transform = 'translate(' + px + 'px,' + py + 'px)';
+    cr.dom.pupil.style.transform = 'translate(' + px + 'px,' + py + 'px)';
   }
 
   /* ═══ Public API ═══ */
@@ -2127,8 +2466,12 @@
         var tlEl = document.createElement('div');
         tlEl.className = 's-sprite-tail epic-shimmer';
         applyCustomSpriteOverlay(targetSheep.dom.tail, tlEl, event.slotIndex, cfg.spriteTail || {});
+        /* Scale vom Kind → Parent verschieben (einheitlicher transform-origin) */
+        targetSheep.dom.tail.dataset.spriteScale = tlEl.style.transform || '';
+        tlEl.style.transform = '';
         targetSheep.dom.tail.style.background = 'none';
         targetSheep.dom.tail.style.border = 'none';
+        targetSheep.dom.tail.style.borderRadius = '0';
       }
 
       spawnPuff(targetSheep.x, targetSheep.y, 30);

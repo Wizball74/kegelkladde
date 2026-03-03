@@ -68,7 +68,6 @@
 .s-leg.fr { z-index: 4; }
 .s-tail {
   border-radius: 50%; z-index: 2;
-  transform-origin: center top;
 }
 
 .s-pole {
@@ -218,9 +217,12 @@
   background: #f5f0d0; border-radius: 50%; top: 2px; }
 .critter-eye.l { left: 1px; }
 .critter-eye.r { right: 1px; }
+.critter-eye-c { left: 50%; transform: translateX(-50%); top: 1px;
+  border: .8px solid #c8c0a0; }
 .critter-pupil { position: absolute; width: 3px; height: 3px;
   background: #111; border-radius: 50%; top: 1.8px; left: 1.8px;
   will-change: transform; }
 .critter-feet { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
   width: 10px; display: flex; justify-content: space-between; }
+.critter-feet-tri { width: 12px; }
 .critter-foot { width: 2.5px; height: 2.5px; background: #1a1a1a; border-radius: 50%; }

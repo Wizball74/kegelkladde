@@ -56,6 +56,8 @@
         <button type="button" class="tab-btn active" data-tab="u-huete">H&uuml;te</button>
         <button type="button" class="tab-btn" data-tab="u-brillen">Brillen</button>
         <button type="button" class="tab-btn" data-tab="u-baerte">B&auml;rte</button>
+        <button type="button" class="tab-btn" data-tab="u-koerper">K&ouml;rper</button>
+        <button type="button" class="tab-btn" data-tab="u-schwanz">Schwanz</button>
         <button type="button" class="tab-btn" data-tab="u-css">CSS-Acc.</button>
         <button type="button" class="tab-btn" data-tab="u-gesicht">Gesicht</button>
       </div>
@@ -63,75 +65,112 @@
       <!-- Sprite-H&uuml;te -->
       <div id="tab-u-huete" class="tab-panel active">
         <div class="umkleide-sprite-grid" id="hatGrid"></div>
-        <div class="umkleide-upload" data-category="spriteHat">
-          <div class="umkleide-upload-row">
-            <input type="file" accept="image/png,image/webp,image/jpeg" hidden />
-            <button type="button" class="btn-sm umkleide-upload-btn">Spritesheet hochladen</button>
-            <span class="umkleide-upload-status">Standard</span>
-            <button type="button" class="btn-sm umkleide-upload-reset" style="display:none;">Zur&uuml;cksetzen</button>
-          </div>
-        </div>
-        <div class="umkleide-sliders">
-          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Alle H&uuml;te (global)</h3>
-          <label>Position Y <input type="range" id="hatY" min="-20" max="5" step="0.5" value="-8"><span id="hatYV">-8</span>px</label>
-          <label>Position X <input type="range" id="hatX" min="-10" max="10" step="0.5" value="0"><span id="hatXV">0</span>px</label>
-          <label>Gr&ouml;&szlig;e <input type="range" id="hatS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="hatSV">1.0</span>x</label>
-        </div>
-        <div class="umkleide-sliders" id="hatItemSliders" style="margin-top:.5rem;display:none;">
+        <div class="umkleide-sliders" id="hatItemSliders" style="display:none;">
           <h3 style="margin:0 0 .4rem;font-size:.85rem;">Hut <span id="hatItemLabel">#0</span> (Feinkorrektur)</h3>
           <label>dY <input type="range" id="hatIdY" min="-8" max="8" step="0.5" value="0"><span id="hatIdYV">0</span>px</label>
           <label>dX <input type="range" id="hatIdX" min="-8" max="8" step="0.5" value="0"><span id="hatIdXV">0</span>px</label>
           <label>dGr&ouml;&szlig;e <input type="range" id="hatIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="hatIdSV">1</span>x</label>
+        </div>
+        <div class="umkleide-sliders umkleide-global-locked" style="margin-top:.5rem;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">
+            <button type="button" class="umkleide-lock-btn" title="Entsperren um globale Werte zu &auml;ndern">&#128274;</button>
+            Alle H&uuml;te (global)
+          </h3>
+          <div class="umkleide-global-sliders">
+            <label>Position Y <input type="range" id="hatY" min="-20" max="5" step="0.5" value="-8"><span id="hatYV">-8</span>px</label>
+            <label>Position X <input type="range" id="hatX" min="-10" max="10" step="0.5" value="0"><span id="hatXV">0</span>px</label>
+            <label>Gr&ouml;&szlig;e <input type="range" id="hatS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="hatSV">1.0</span>x</label>
+          </div>
         </div>
       </div>
 
       <!-- Sprite-Brillen -->
       <div id="tab-u-brillen" class="tab-panel">
         <div class="umkleide-sprite-grid" id="glassesGrid"></div>
-        <div class="umkleide-upload" data-category="spriteGlasses">
-          <div class="umkleide-upload-row">
-            <input type="file" accept="image/png,image/webp,image/jpeg" hidden />
-            <button type="button" class="btn-sm umkleide-upload-btn">Spritesheet hochladen</button>
-            <span class="umkleide-upload-status">Standard</span>
-            <button type="button" class="btn-sm umkleide-upload-reset" style="display:none;">Zur&uuml;cksetzen</button>
-          </div>
-        </div>
-        <div class="umkleide-sliders">
-          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Alle Brillen (global)</h3>
-          <label>Position Y <input type="range" id="glY" min="-10" max="10" step="0.5" value="1.5"><span id="glYV">1.5</span>px</label>
-          <label>Position X <input type="range" id="glX" min="-10" max="10" step="0.5" value="0"><span id="glXV">0</span>px</label>
-          <label>Gr&ouml;&szlig;e <input type="range" id="glS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="glSV">1.0</span>x</label>
-        </div>
-        <div class="umkleide-sliders" id="glItemSliders" style="margin-top:.5rem;display:none;">
+        <div class="umkleide-sliders" id="glItemSliders" style="display:none;">
           <h3 style="margin:0 0 .4rem;font-size:.85rem;">Brille <span id="glItemLabel">#0</span> (Feinkorrektur)</h3>
           <label>dY <input type="range" id="glIdY" min="-8" max="8" step="0.5" value="0"><span id="glIdYV">0</span>px</label>
           <label>dX <input type="range" id="glIdX" min="-8" max="8" step="0.5" value="0"><span id="glIdXV">0</span>px</label>
           <label>dGr&ouml;&szlig;e <input type="range" id="glIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="glIdSV">1</span>x</label>
+        </div>
+        <div class="umkleide-sliders umkleide-global-locked" style="margin-top:.5rem;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">
+            <button type="button" class="umkleide-lock-btn" title="Entsperren um globale Werte zu &auml;ndern">&#128274;</button>
+            Alle Brillen (global)
+          </h3>
+          <div class="umkleide-global-sliders">
+            <label>Position Y <input type="range" id="glY" min="-10" max="10" step="0.5" value="1.5"><span id="glYV">1.5</span>px</label>
+            <label>Position X <input type="range" id="glX" min="-10" max="10" step="0.5" value="0"><span id="glXV">0</span>px</label>
+            <label>Gr&ouml;&szlig;e <input type="range" id="glS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="glSV">1.0</span>x</label>
+          </div>
         </div>
       </div>
 
       <!-- Sprite-B&auml;rte -->
       <div id="tab-u-baerte" class="tab-panel">
         <div class="umkleide-sprite-grid" id="stacheGrid"></div>
-        <div class="umkleide-upload" data-category="spriteStache">
-          <div class="umkleide-upload-row">
-            <input type="file" accept="image/png,image/webp,image/jpeg" hidden />
-            <button type="button" class="btn-sm umkleide-upload-btn">Spritesheet hochladen</button>
-            <span class="umkleide-upload-status">Standard</span>
-            <button type="button" class="btn-sm umkleide-upload-reset" style="display:none;">Zur&uuml;cksetzen</button>
-          </div>
-        </div>
-        <div class="umkleide-sliders">
-          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Alle B&auml;rte (global)</h3>
-          <label>Position Y <input type="range" id="stY" min="-8" max="8" step="0.5" value="-1"><span id="stYV">-1</span>px</label>
-          <label>Position X <input type="range" id="stX" min="-10" max="10" step="0.5" value="0"><span id="stXV">0</span>px</label>
-          <label>Gr&ouml;&szlig;e <input type="range" id="stS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="stSV">1.0</span>x</label>
-        </div>
-        <div class="umkleide-sliders" id="stItemSliders" style="margin-top:.5rem;display:none;">
+        <div class="umkleide-sliders" id="stItemSliders" style="display:none;">
           <h3 style="margin:0 0 .4rem;font-size:.85rem;">Bart <span id="stItemLabel">#0</span> (Feinkorrektur)</h3>
           <label>dY <input type="range" id="stIdY" min="-8" max="8" step="0.5" value="0"><span id="stIdYV">0</span>px</label>
           <label>dX <input type="range" id="stIdX" min="-8" max="8" step="0.5" value="0"><span id="stIdXV">0</span>px</label>
           <label>dGr&ouml;&szlig;e <input type="range" id="stIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="stIdSV">1</span>x</label>
+        </div>
+        <div class="umkleide-sliders umkleide-global-locked" style="margin-top:.5rem;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">
+            <button type="button" class="umkleide-lock-btn" title="Entsperren um globale Werte zu &auml;ndern">&#128274;</button>
+            Alle B&auml;rte (global)
+          </h3>
+          <div class="umkleide-global-sliders">
+            <label>Position Y <input type="range" id="stY" min="-8" max="8" step="0.5" value="-1"><span id="stYV">-1</span>px</label>
+            <label>Position X <input type="range" id="stX" min="-10" max="10" step="0.5" value="0"><span id="stXV">0</span>px</label>
+            <label>Gr&ouml;&szlig;e <input type="range" id="stS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="stSV">1.0</span>x</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sprite-K&ouml;rper -->
+      <div id="tab-u-koerper" class="tab-panel">
+        <p class="subtle" style="margin:0 0 .5rem;font-size:.78rem;">Standard: Buchstabe auf dem Torso. Custom-Sprites werden dar&uuml;ber gelegt.</p>
+        <div class="umkleide-sprite-grid" id="bodyGrid"></div>
+        <div class="umkleide-sliders" id="bodyItemSliders" style="display:none;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">K&ouml;rper-Sprite <span id="bodyItemLabel">#0</span> (Feinkorrektur)</h3>
+          <label>dY <input type="range" id="bodyIdY" min="-8" max="8" step="0.5" value="0"><span id="bodyIdYV">0</span>px</label>
+          <label>dX <input type="range" id="bodyIdX" min="-8" max="8" step="0.5" value="0"><span id="bodyIdXV">0</span>px</label>
+          <label>dGr&ouml;&szlig;e <input type="range" id="bodyIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="bodyIdSV">1</span>x</label>
+        </div>
+        <div class="umkleide-sliders umkleide-global-locked" style="margin-top:.5rem;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">
+            <button type="button" class="umkleide-lock-btn" title="Entsperren um globale Werte zu &auml;ndern">&#128274;</button>
+            Alle K&ouml;rper-Sprites (global)
+          </h3>
+          <div class="umkleide-global-sliders">
+            <label>Position Y <input type="range" id="bodyY" min="-10" max="10" step="0.5" value="0"><span id="bodyYV">0</span>px</label>
+            <label>Position X <input type="range" id="bodyX" min="-10" max="10" step="0.5" value="0"><span id="bodyXV">0</span>px</label>
+            <label>Gr&ouml;&szlig;e <input type="range" id="bodyS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="bodySV">1.0</span>x</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sprite-Schwanz -->
+      <div id="tab-u-schwanz" class="tab-panel">
+        <p class="subtle" style="margin:0 0 .5rem;font-size:.78rem;">Standard: Wollkn&auml;uel. Custom-Sprites werden dar&uuml;ber gelegt.</p>
+        <div class="umkleide-sprite-grid" id="tailGrid"></div>
+        <div class="umkleide-sliders" id="tailItemSliders" style="display:none;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">Schwanz-Sprite <span id="tailItemLabel">#0</span> (Feinkorrektur)</h3>
+          <label>dY <input type="range" id="tailIdY" min="-8" max="8" step="0.5" value="0"><span id="tailIdYV">0</span>px</label>
+          <label>dX <input type="range" id="tailIdX" min="-8" max="8" step="0.5" value="0"><span id="tailIdXV">0</span>px</label>
+          <label>dGr&ouml;&szlig;e <input type="range" id="tailIdS" min="0.5" max="2.0" step="0.05" value="1"><span id="tailIdSV">1</span>x</label>
+        </div>
+        <div class="umkleide-sliders umkleide-global-locked" style="margin-top:.5rem;">
+          <h3 style="margin:0 0 .4rem;font-size:.85rem;">
+            <button type="button" class="umkleide-lock-btn" title="Entsperren um globale Werte zu &auml;ndern">&#128274;</button>
+            Alle Schwanz-Sprites (global)
+          </h3>
+          <div class="umkleide-global-sliders">
+            <label>Position Y <input type="range" id="tailY" min="-10" max="10" step="0.5" value="0"><span id="tailYV">0</span>px</label>
+            <label>Position X <input type="range" id="tailX" min="-10" max="10" step="0.5" value="0"><span id="tailXV">0</span>px</label>
+            <label>Gr&ouml;&szlig;e <input type="range" id="tailS" min="0.5" max="2.5" step="0.05" value="1.0"><span id="tailSV">1.0</span>x</label>
+          </div>
         </div>
       </div>
 
@@ -174,6 +213,7 @@
     <button type="button" class="btn-sm" id="btnExport" title="Config als JSON exportieren">Exportieren</button>
     <button type="button" class="btn-sm" id="btnImport" title="Config-JSON importieren">Importieren</button>
     <input type="file" id="importFile" accept=".json" hidden />
+    <input type="file" id="slotSpriteFile" accept="image/png,image/webp,image/jpeg" hidden />
   </div>
 </section>
 

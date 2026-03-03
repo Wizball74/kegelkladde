@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog, deleteDeadSheepByDate } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog, deleteDeadSheepByDate, getCumulativeCount, checkEpicMilestone } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
@@ -443,11 +443,31 @@ router.post("/kegelkladde/attendance-auto", requireAuth, verifyCsrf, (req, res) 
     const spiel_2550 = Math.max(0, Math.round((Number.parseFloat(req.body.spiel_2550) || 0) * 100) / 100);
     const monte_tiebreak = Math.max(0, Math.min(99, Number.parseInt(req.body.monte_tiebreak, 10) || 0));
     const aussteigen_tiebreak = Math.max(0, Math.min(99, Number.parseInt(req.body.aussteigen_tiebreak, 10) || 0));
+    // TBD: Pudelkönig — NICHT LÖSCHEN! Wird später für Epic Body-Sprites genutzt.
+    const pudelkoenig = req.body.pudelkoenig ? 1 : 0;
+
+    // Epic: kumulative Zählung VOR dem Update merken
+    const epicBefore = {
+      alle9: getCumulativeCount(memberId, "alle9"),
+      kranz: getCumulativeCount(memberId, "kranz"),
+    };
 
     db.prepare(
-      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?, spiel_2550 = ?, monte_tiebreak = ?, aussteigen_tiebreak = ?
+      `UPDATE attendance SET present = ?, triclops = ?, penalties = ?, alle9 = ?, kranz = ?, pudel = ?, va = ?, monte = ?, aussteigen = ?, sechs_tage = ?, spiel_2550 = ?, monte_tiebreak = ?, aussteigen_tiebreak = ?, pudelkoenig = ?
        WHERE gameday_id = ? AND user_id = ?`
-    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, spiel_2550, monte_tiebreak, aussteigen_tiebreak, gamedayId, memberId);
+    ).run(present, triclops, penalties, alle9, kranz, pudel, va, monte, aussteigen, sechs_tage, spiel_2550, monte_tiebreak, aussteigen_tiebreak, pudelkoenig, gamedayId, memberId);
+
+    // Epic: Meilenstein-Check nach dem Update
+    let epicEvent = null;
+    for (const field of ["alle9", "kranz"]) {
+      const oldCum = epicBefore[field];
+      const newCum = getCumulativeCount(memberId, field);
+      if (newCum > oldCum) {
+        epicEvent = checkEpicMilestone(memberId, field, oldCum, newCum);
+        if (epicEvent) { epicEvent.memberId = memberId; break; }
+      }
+    }
+    return res.json({ ok: true, epicEvent: epicEvent || undefined });
   } else if (dayExists.settled === 2) {
     const paid = Math.max(0, Math.round((Number.parseFloat(req.body.paid) || 0) * 100) / 100);
     const penalties = Math.max(0, Math.min(999, Math.round((Number.parseFloat(req.body.penalties) || 0) * 100) / 100));

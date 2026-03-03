@@ -1507,6 +1507,26 @@ td.col-active.cell-empty:not(.marker-cell) > * {
   min-height: 0.85em;
 }
 
+/* TBD: Pudelkönig — NICHT LÖSCHEN! Wird später für Epic Body-Sprites genutzt. */
+.pudelkoenig-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+.pudelkoenig-label:has(input:checked) {
+  opacity: 1;
+}
+.pudelkoenig-label input {
+  display: none;
+}
+.pudelkoenig-icon {
+  font-size: 0.85rem;
+}
+
 /* Inactive rows (not present) */
 .row-inactive td {
   color: #999;
@@ -3267,6 +3287,42 @@ tr.row-locked td.name-col {
 .stall-sheep:hover .stall-sheep-delete {
   display: block;
 }
+/* Schaf-Tooltip */
+.stall-sheep-tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(40,30,10,.92);
+  color: #f5e6c8;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.stall-sheep-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(40,30,10,.92);
+}
+.stall-sheep:hover .stall-sheep-tip,
+.stall-sheep.tip-active .stall-sheep-tip {
+  display: block;
+}
+.stall-sheep-tip b {
+  color: #ffd740;
+  font-weight: 600;
+}
+
 /* Mini-Stats Footer */
 .stall-stats {
   position: relative; z-index: 4;
@@ -4526,7 +4582,7 @@ tr.row-locked td.name-col {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  object-fit: cover;
+  object-fit: contain;
   border: 3px solid var(--accent-light);
 }
 
@@ -8006,9 +8062,39 @@ td.ast-col-active::after {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; background: var(--panel); overflow: hidden;
   transition: border-color .15s, background .15s;
+  position: relative;
 }
 .umkleide-sprite-tile:hover { border-color: var(--accent); background: var(--accent-light); }
 .umkleide-sprite-tile.active { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 2px var(--accent); }
+/* Upload-Button (Ecke) auf Hover */
+.sprite-tile-upload-overlay {
+  position: absolute; bottom: -4px; right: -4px;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent, #4a90d9); color: #fff;
+  opacity: 0; transition: opacity .15s;
+  z-index: 20; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.sprite-tile-upload-overlay svg { width: 12px; height: 12px; }
+.umkleide-sprite-tile:hover .sprite-tile-upload-overlay { opacity: 1; }
+/* ✕-Button für Custom-Slots */
+.sprite-tile-remove-btn {
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--danger, #c44); color: #fff;
+  font-size: 14px; line-height: 18px; text-align: center;
+  cursor: pointer; z-index: 25;
+  opacity: 0; transition: opacity .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.umkleide-sprite-tile:hover .sprite-tile-remove-btn { opacity: 1; }
+/* "+" Tile */
+.sprite-tile-add {
+  border-style: dashed; border-color: var(--muted);
+  background: transparent;
+}
+.sprite-tile-add:hover { border-color: var(--accent); background: var(--accent-light); }
 .umkleide-sliders {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--radius-sm); padding: 1rem;
@@ -8019,6 +8105,33 @@ td.ast-col-active::after {
 }
 .umkleide-sliders input[type="range"] { flex: 1; min-width: 100px; }
 .umkleide-sliders span { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-size: .8rem; }
+/* Vorhängeschloss für globale Slider */
+.umkleide-lock-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0; margin-right: .3rem;
+  border: 1.5px solid var(--line); border-radius: 4px;
+  background: var(--panel); cursor: pointer;
+  font-size: .8rem; line-height: 1;
+  vertical-align: middle;
+  transition: background .15s, border-color .15s;
+}
+.umkleide-lock-btn:hover {
+  border-color: var(--accent); background: var(--accent-light);
+}
+.umkleide-global-locked .umkleide-global-sliders {
+  opacity: .35;
+  pointer-events: none;
+  user-select: none;
+  filter: grayscale(.6);
+  transition: opacity .2s, filter .2s;
+}
+.umkleide-global-unlocked .umkleide-global-sliders {
+  opacity: 1;
+  pointer-events: auto;
+  filter: none;
+}
+
 .umkleide-css-btns {
   display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem;
 }
@@ -8029,18 +8142,6 @@ td.ast-col-active::after {
 }
 .umkleide-css-btns button:hover { border-color: var(--accent); }
 .umkleide-css-btns button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.umkleide-upload { margin: .5rem 0; }
-.umkleide-upload-row {
-  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
-  font-size: .8rem;
-}
-.umkleide-upload-status {
-  color: var(--muted); font-size: .78rem;
-  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.umkleide-upload-reset {
-  font-size: .75rem; color: var(--danger, #c44); border-color: var(--danger, #c44);
-}
 .umkleide-actions {
   display: flex; gap: .75rem; margin-top: 1.5rem;
   padding-top: 1.5rem; border-top: 2px solid var(--line);

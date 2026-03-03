@@ -55,7 +55,11 @@
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
       "Bash(railway:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx:*)"
     ]
   }
 }

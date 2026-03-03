@@ -2,7 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, getRecentAuditLog, getUsersWithLastLogin, createBackup, rotateBackups, listBackups, listBackupGamedays, restoreGamedays, backupDir } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, getRecentAuditLog, getUsersWithLastLogin, createBackup, rotateBackups, listBackups, listBackupGamedays, restoreGamedays, backupDir, getEpicMilestonesConfig } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize, formatEuro } = require("../utils/helpers");
 
@@ -331,24 +331,33 @@ router.post("/admin/umkleide/reset", requireAuth, requireAdmin, verifyCsrf, (req
   res.json({ ok: true, message: "Auf Standardwerte zurückgesetzt." });
 });
 
-// ═══ Spritesheet-Upload ═══
+// ═══ Einzel-Sprite-Upload ═══
 
-const spriteUploadDir = path.join(__dirname, "..", "data", "uploads", "spritesheets");
-if (!fs.existsSync(spriteUploadDir)) {
-  fs.mkdirSync(spriteUploadDir, { recursive: true });
+const DEFAULT_SLOT_COUNTS = { spriteHat: 16, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
+
+const spriteSlotDir = path.join(__dirname, "..", "data", "uploads", "sprites");
+if (!fs.existsSync(spriteSlotDir)) {
+  fs.mkdirSync(spriteSlotDir, { recursive: true });
 }
 
-const spriteStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, spriteUploadDir),
+const spriteSlotStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const cat = req.body.category || "unknown";
+    const catDir = path.join(spriteSlotDir, cat);
+    if (!fs.existsSync(catDir)) fs.mkdirSync(catDir, { recursive: true });
+    cb(null, catDir);
+  },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    const cat = req.body.category || "slot";
+    const idx = req.body.slotIndex || "0";
+    const uniqueName = `${cat}-${idx}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
     cb(null, uniqueName);
   }
 });
 
-const spriteUpload = multer({
-  storage: spriteStorage,
+const spriteSlotUpload = multer({
+  storage: spriteSlotStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = [".png", ".jpg", ".jpeg", ".webp"];
@@ -357,68 +366,143 @@ const spriteUpload = multer({
   }
 });
 
-router.post("/admin/umkleide/upload-sprite", requireAuth, requireAdmin, spriteUpload.single("spritesheet"), verifyCsrf, (req, res) => {
-  const validCats = ["spriteHat", "spriteGlasses", "spriteStache"];
+function loadSheepConfig() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
+  try { return row ? JSON.parse(row.value) : {}; } catch (e) { return {}; }
+}
+
+function saveSheepConfig(cfg) {
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(JSON.stringify(cfg));
+}
+
+function deleteSpriteFile(url) {
+  if (!url) return;
+  const filename = path.basename(url);
+  const category = url.split("/").slice(-2, -1)[0]; // e.g. "spriteHat"
+  const filePath = path.join(spriteSlotDir, category, filename);
+  fs.unlink(filePath, (err) => { if (err && err.code !== "ENOENT") console.warn("unlink failed:", filePath, err.message); });
+}
+
+// Upload Einzel-Sprite für einen Slot
+router.post("/admin/umkleide/upload-slot-sprite", requireAuth, requireAdmin, spriteSlotUpload.single("sprite"), verifyCsrf, (req, res) => {
+  const validCats = ["spriteHat", "spriteGlasses", "spriteStache", "spriteBody", "spriteTail"];
   const category = req.body.category;
-  if (!validCats.includes(category)) {
-    if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.warn("unlink failed:", req.file.path, err.message); });
-    return res.status(400).json({ error: "Ungültige Kategorie." });
+  const slotIndex = parseInt(req.body.slotIndex, 10);
+  if (!validCats.includes(category) || !Number.isInteger(slotIndex) || slotIndex < 0) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    return res.status(400).json({ error: "Ungültige Parameter." });
   }
   if (!req.file) {
     return res.status(400).json({ error: "Keine Datei hochgeladen." });
   }
 
-  const url = "/uploads/spritesheets/" + req.file.filename;
-
-  // Config laden, customSheet setzen, altes Sheet löschen
-  const configRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
-  let cfg = {};
-  try { cfg = configRow ? JSON.parse(configRow.value) : {}; } catch (e) { /* ignore */ }
-
+  const url = `/uploads/sprites/${category}/${req.file.filename}`;
+  const defaultCount = DEFAULT_SLOT_COUNTS[category] || 0;
+  const cfg = loadSheepConfig();
   if (!cfg[category]) cfg[category] = {};
+  if (!cfg[category].items) cfg[category].items = {};
+  if (!cfg[category].customSlots) cfg[category].customSlots = [];
 
-  // Altes Custom-Sheet löschen
-  if (cfg[category].customSheet) {
-    const oldFile = path.basename(cfg[category].customSheet);
-    const oldPath = path.join(spriteUploadDir, oldFile);
-    fs.unlink(oldPath, (err) => { if (err) console.warn("unlink failed:", oldPath, err.message); });
+  if (slotIndex < defaultCount) {
+    // Default-Slot: customImage ersetzen
+    if (!cfg[category].items[slotIndex]) cfg[category].items[slotIndex] = { dY: 0, dX: 0, dS: 1 };
+    // Altes Bild löschen
+    deleteSpriteFile(cfg[category].items[slotIndex].customImage);
+    cfg[category].items[slotIndex].customImage = url;
+  } else {
+    // Custom-Slot
+    const csIdx = slotIndex - defaultCount;
+    if (csIdx < 0 || csIdx >= cfg[category].customSlots.length) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: "Slot existiert nicht." });
+    }
+    deleteSpriteFile(cfg[category].customSlots[csIdx].image);
+    cfg[category].customSlots[csIdx].image = url;
   }
 
-  cfg[category].customSheet = url;
-  const jsonStr = JSON.stringify(cfg);
-  db.prepare(
-    "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-  ).run(jsonStr);
-
-  logAudit(req.session.userId, "SPRITE_UPLOAD", "settings", null, { category, filename: req.file.filename });
-  res.json({ ok: true, url, message: "Spritesheet hochgeladen." });
+  saveSheepConfig(cfg);
+  logAudit(req.session.userId, "SLOT_SPRITE_UPLOAD", "settings", null, { category, slotIndex, filename: req.file.filename });
+  res.json({ ok: true, url, message: "Sprite hochgeladen." });
 });
 
-router.post("/admin/umkleide/remove-sprite", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
-  const validCats = ["spriteHat", "spriteGlasses", "spriteStache"];
+// Neuen Custom-Slot hinzufügen
+router.post("/admin/umkleide/add-slot", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const validCats = ["spriteHat", "spriteGlasses", "spriteStache", "spriteBody", "spriteTail"];
   const category = req.body.category;
   if (!validCats.includes(category)) {
     return res.status(400).json({ error: "Ungültige Kategorie." });
   }
 
-  const configRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
-  let cfg = {};
-  try { cfg = configRow ? JSON.parse(configRow.value) : {}; } catch (e) { /* ignore */ }
+  const defaultCount = DEFAULT_SLOT_COUNTS[category] || 0;
+  const cfg = loadSheepConfig();
+  if (!cfg[category]) cfg[category] = {};
+  if (!cfg[category].customSlots) cfg[category].customSlots = [];
 
-  if (cfg[category] && cfg[category].customSheet) {
-    const oldFile = path.basename(cfg[category].customSheet);
-    const oldPath = path.join(spriteUploadDir, oldFile);
-    fs.unlink(oldPath, (err) => { if (err) console.warn("unlink failed:", oldPath, err.message); });
-    delete cfg[category].customSheet;
+  cfg[category].customSlots.push({ image: null, dY: 0, dX: 0, dS: 1 });
+  const newSlotIndex = defaultCount + cfg[category].customSlots.length - 1;
 
-    const jsonStr = JSON.stringify(cfg);
-    db.prepare(
-      "INSERT INTO settings (key, value) VALUES ('sheep_accessory_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-    ).run(jsonStr);
+  saveSheepConfig(cfg);
+  logAudit(req.session.userId, "SLOT_ADD", "settings", null, { category, slotIndex: newSlotIndex });
+  res.json({ ok: true, slotIndex: newSlotIndex, message: "Slot hinzugefügt." });
+});
+
+// Custom-Slot entfernen
+router.post("/admin/umkleide/remove-slot", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const validCats = ["spriteHat", "spriteGlasses", "spriteStache", "spriteBody", "spriteTail"];
+  const category = req.body.category;
+  const slotIndex = parseInt(req.body.slotIndex, 10);
+  if (!validCats.includes(category) || !Number.isInteger(slotIndex)) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
   }
 
-  logAudit(req.session.userId, "SPRITE_REMOVE", "settings", null, { category });
-  res.json({ ok: true, message: "Standard-Spritesheet wiederhergestellt." });
+  const defaultCount = DEFAULT_SLOT_COUNTS[category] || 0;
+  if (slotIndex < defaultCount) {
+    return res.status(400).json({ error: "Standard-Slots können nicht entfernt werden." });
+  }
+
+  const cfg = loadSheepConfig();
+  if (!cfg[category]) cfg[category] = {};
+  if (!cfg[category].customSlots) cfg[category].customSlots = [];
+
+  const csIdx = slotIndex - defaultCount;
+  if (csIdx < 0 || csIdx >= cfg[category].customSlots.length) {
+    return res.status(400).json({ error: "Slot existiert nicht." });
+  }
+
+  // Bild löschen
+  deleteSpriteFile(cfg[category].customSlots[csIdx].image);
+  cfg[category].customSlots.splice(csIdx, 1);
+
+  saveSheepConfig(cfg);
+  logAudit(req.session.userId, "SLOT_REMOVE", "settings", null, { category, slotIndex });
+  res.json({ ok: true, message: "Slot entfernt." });
+});
+
+// Custom-Image von Default-Slot entfernen (zurück zu Spritesheet)
+router.post("/admin/umkleide/remove-slot-sprite", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const validCats = ["spriteHat", "spriteGlasses", "spriteStache", "spriteBody", "spriteTail"];
+  const category = req.body.category;
+  const slotIndex = parseInt(req.body.slotIndex, 10);
+  if (!validCats.includes(category) || !Number.isInteger(slotIndex) || slotIndex < 0) {
+    return res.status(400).json({ error: "Ungültige Parameter." });
+  }
+
+  const defaultCount = DEFAULT_SLOT_COUNTS[category] || 0;
+  if (slotIndex >= defaultCount) {
+    return res.status(400).json({ error: "Nutze remove-slot für Custom-Slots." });
+  }
+
+  const cfg = loadSheepConfig();
+  if (cfg[category] && cfg[category].items && cfg[category].items[slotIndex]) {
+    deleteSpriteFile(cfg[category].items[slotIndex].customImage);
+    delete cfg[category].items[slotIndex].customImage;
+    saveSheepConfig(cfg);
+  }
+
+  logAudit(req.session.userId, "SLOT_SPRITE_REMOVE", "settings", null, { category, slotIndex });
+  res.json({ ok: true, message: "Standard-Sprite wiederhergestellt." });
 });
 
 // API: Kassenstand als JSON (Spieltag-bezogen)
@@ -428,6 +512,27 @@ router.get("/api/kassenstand", requireAuth, (req, res) => {
     return res.status(400).json({ error: "gamedayId fehlt." });
   }
   res.json(getKassenstandForGameday(gamedayId));
+});
+
+// Epic-Meilenstein-Config lesen
+router.get("/admin/umkleide/epic-milestones", requireAuth, requireAdmin, (req, res) => {
+  res.json(getEpicMilestonesConfig());
+});
+
+// Epic-Meilenstein-Config speichern
+router.post("/admin/umkleide/epic-milestones", requireAuth, requireAdmin, verifyCsrf, (req, res) => {
+  const milestones = req.body.milestones;
+  if (!Array.isArray(milestones)) {
+    return res.status(400).json({ error: "milestones muss ein Array sein." });
+  }
+  const validTypes = ["alle9", "kranz"];
+  const validRewards = ["body", "tail"];
+  const cleaned = milestones.filter(
+    (m) => validTypes.includes(m.type) && validRewards.includes(m.reward) && Number.isInteger(m.count) && m.count > 0
+  );
+  const value = JSON.stringify({ milestones: cleaned });
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('epic_milestones_config', ?)").run(value);
+  res.json({ ok: true });
 });
 
 module.exports = router;

@@ -330,6 +330,11 @@ Spieltag starten, um die Kladde zu bearbeiten.
                   </div>
                   <% const costPudel = hit.present ? pudel * 0.10 : 0; %>
                   <span class="marker-cost" data-cost-type="pudel"><%= costPudel > 0 ? formatEuro(costPudel) + ' €' : '' %></span>
+                  <%/* TBD: Pudelkönig — NICHT LÖSCHEN! Wird später für Epic Body-Sprites genutzt. */%>
+                  <label class="pudelkoenig-label" title="Pudelkönig">
+                    <input type="checkbox" name="pudelkoenig_<%= member.id %>" data-pudelkoenig <%= hit.pudelkoenig ? 'checked' : '' %> <%= canEdit ? '' : 'disabled' %> data-field />
+                    <span class="pudelkoenig-icon">👑</span>
+                  </label>
                 </td>
                 <%
                   const vaVal = Number(hit.va || 0);

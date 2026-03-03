@@ -14,6 +14,8 @@
     spriteHat:     { offsetY: -8, offsetX: 0, scale: 1.0, slotW: 9.85, slotH: 8.85, items: {} },
     spriteGlasses: { offsetY: 1.5, offsetX: 0, scale: 0.65, slotW: 16.975, slotH: 8.3375, cols: 4, items: {} },
     spriteStache:  { offsetY: -1, offsetX: 0, scale: 0.25, slotW: 40, slotH: 30, cols: 3, items: {} },
+    spriteBody:    { offsetY: 0, offsetX: 0, scale: 1, items: {} },
+    spriteTail:    { offsetY: 0, offsetX: 0, scale: 1, items: {} },
     cssAccessories: {
       tophat:{offsetY:0,offsetX:0,scale:1},partyhat:{offsetY:0,offsetX:0,scale:1},
       crown:{offsetY:0,offsetX:0,scale:1},beanie:{offsetY:0,offsetX:0,scale:1},
@@ -32,6 +34,8 @@
     }
   };
 
+  var DEFAULT_SLOT_COUNTS = { spriteHat: 16, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
+
   var CSS_ACC_NAMES = {
     tophat:'Zylinder',partyhat:'Partyhut',crown:'Krone',beanie:'M\u00fctze',
     glasses:'Brille',bowtie:'Fliege',bell:'Glocke',flower:'Blume',scarf:'Schal'
@@ -46,30 +50,21 @@
   var cfg = JSON.parse(JSON.stringify(DEFAULTS));
   var saved = window.__umkleideConfig || {};
   // Merge saved config
-  if (saved.spriteHat) {
-    if (saved.spriteHat.offsetY != null) cfg.spriteHat.offsetY = saved.spriteHat.offsetY;
-    if (saved.spriteHat.offsetX != null) cfg.spriteHat.offsetX = saved.spriteHat.offsetX;
-    if (saved.spriteHat.scale != null) cfg.spriteHat.scale = saved.spriteHat.scale;
-    if (saved.spriteHat.items) cfg.spriteHat.items = saved.spriteHat.items;
-    if (saved.spriteHat.customSheet) cfg.spriteHat.customSheet = saved.spriteHat.customSheet;
+  function mergeSpriteCategory(key) {
+    var s = saved[key];
+    if (!s) return;
+    if (s.offsetY != null) cfg[key].offsetY = s.offsetY;
+    if (s.offsetX != null) cfg[key].offsetX = s.offsetX;
+    if (s.scale != null) cfg[key].scale = s.scale;
+    if (s.items) cfg[key].items = s.items;
+    if (s.customSheet) cfg[key].customSheet = s.customSheet;
+    if (s.customSlots) cfg[key].customSlots = s.customSlots;
   }
-  if (saved.spriteGlasses) {
-    if (saved.spriteGlasses.offsetY != null) cfg.spriteGlasses.offsetY = saved.spriteGlasses.offsetY;
-    if (saved.spriteGlasses.offsetX != null) cfg.spriteGlasses.offsetX = saved.spriteGlasses.offsetX;
-    if (saved.spriteGlasses.scale != null) cfg.spriteGlasses.scale = saved.spriteGlasses.scale;
-    // slotW/slotH/cols sind fest ans Spritesheet-Format gebunden, nicht aus DB übernehmen
-    if (saved.spriteGlasses.items) cfg.spriteGlasses.items = saved.spriteGlasses.items;
-    if (saved.spriteGlasses.customSheet) cfg.spriteGlasses.customSheet = saved.spriteGlasses.customSheet;
-  }
-  if (saved.spriteStache) {
-    var sr = saved.spriteStache;
-    if (sr.offsetY != null) cfg.spriteStache.offsetY = sr.offsetY;
-    if (sr.offsetX != null) cfg.spriteStache.offsetX = sr.offsetX;
-    if (sr.scale != null) cfg.spriteStache.scale = sr.scale;
-    // slotW/slotH/cols sind fest ans Spritesheet-Format gebunden, nicht aus DB übernehmen
-    if (sr.items) cfg.spriteStache.items = sr.items;
-    if (sr.customSheet) cfg.spriteStache.customSheet = sr.customSheet;
-  }
+  mergeSpriteCategory('spriteHat');
+  mergeSpriteCategory('spriteGlasses');
+  mergeSpriteCategory('spriteStache');
+  mergeSpriteCategory('spriteBody');
+  mergeSpriteCategory('spriteTail');
   if (saved.cssAccessories) {
     for (var k in saved.cssAccessories) {
       if (cfg.cssAccessories[k]) Object.assign(cfg.cssAccessories[k], saved.cssAccessories[k]);
@@ -80,6 +75,8 @@
   var currentHat = 0;
   var currentGlasses = -1;
   var currentStache = -1;
+  var currentBody = -1;
+  var currentTail = -1;
   var currentCssAcc = null;
   var selectedCssKey = 'tophat';
 
@@ -125,7 +122,7 @@
       skinColor: body.isBlack ? '#2a2a2a' : body.skinColor,
       accColor: body.accColor,
       accessory: currentCssAcc,
-      spriteHat: currentHat, spriteGlasses: currentGlasses, spriteStache: currentStache,
+      spriteHat: currentHat, spriteGlasses: currentGlasses, spriteStache: currentStache, spriteBody: currentBody, spriteTail: currentTail,
       legs: [
         {lx:-3,ly:5.5},{lx:3,ly:5.5},{lx:-2,ly:6},{lx:2,ly:6}
       ],
@@ -284,20 +281,41 @@
     }
 
     /* Sprite-Overlays */
+    function applyPreviewSpriteOverlay(el, idx, catCfg, defaultCount, posYProp) {
+      var customSlots = catCfg.customSlots || [];
+      var item;
+      if (idx >= defaultCount && customSlots[idx - defaultCount]) {
+        var cs = customSlots[idx - defaultCount];
+        item = cs;
+        if (cs.image) { el.style.backgroundImage = 'url(' + cs.image + ')'; el.style.backgroundSize = 'contain'; el.style.backgroundPosition = 'center'; }
+      } else {
+        item = (catCfg.items && catCfg.items[idx]) || { dY: 0, dX: 0 };
+        if (item.customImage) {
+          el.style.backgroundImage = 'url(' + item.customImage + ')'; el.style.backgroundSize = 'contain'; el.style.backgroundPosition = 'center';
+          return item; // Skip default spritesheet positioning
+        }
+      }
+      return item || { dY: 0, dX: 0 };
+    }
+
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
-      if (tr.spriteHat >= 16) {
+      var hC = cfg.spriteHat;
+      var hCustomSlots = hC.customSlots || [];
+      if (tr.spriteHat >= 16 && tr.spriteHat < 16 + (hCustomSlots.length ? 0 : 999)) {
+        // Default wig range (index 16-24)
         hatEl.className = 's-sprite-wig';
         var wigIdx = tr.spriteHat - 16;
         var wc = wigIdx % 3, wr = (wigIdx / 3) | 0;
         hatEl.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
       } else {
         hatEl.className = 's-sprite-hat';
-        var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-        var hC = cfg.spriteHat;
-        var hItem = (hC.items && hC.items[tr.spriteHat]) || { dY: 0, dX: 0 };
-        if (hC.customSheet) hatEl.style.backgroundImage = 'url(' + hC.customSheet + ')';
-        hatEl.style.backgroundPosition = -(hatCol * hC.slotW) + 'px ' + -(hatRow * hC.slotH) + 'px';
+        var hItem = applyPreviewSpriteOverlay(hatEl, tr.spriteHat, hC, 16, 'top');
+        if (!hItem.customImage && !(tr.spriteHat >= 16)) {
+          var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
+          if (hC.customSheet) hatEl.style.backgroundImage = 'url(' + hC.customSheet + ')';
+          hatEl.style.backgroundPosition = -(hatCol * hC.slotW) + 'px ' + -(hatRow * hC.slotH) + 'px';
+        }
         hatEl.style.top = ((hC.offsetY || 0) + (hItem.dY || 0)) + 'px';
         var hTotalX = (hC.offsetX || 0) + (hItem.dX || 0);
         if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
@@ -309,10 +327,12 @@
     if (tr.spriteGlasses >= 0) {
       var glEl = document.createElement('div'); glEl.className = 's-sprite-glasses';
       var gC = cfg.spriteGlasses;
-      var gItem = (gC.items && gC.items[tr.spriteGlasses]) || { dY: 0, dX: 0 };
-      if (gC.customSheet) glEl.style.backgroundImage = 'url(' + gC.customSheet + ')';
-      var glCol = tr.spriteGlasses % (gC.cols || 4), glRow = (tr.spriteGlasses / (gC.cols || 4)) | 0;
-      glEl.style.backgroundPosition = -(glCol * (gC.slotW || 16.975)) + 'px ' + -(glRow * (gC.slotH || 8.3375)) + 'px';
+      var gItem = applyPreviewSpriteOverlay(glEl, tr.spriteGlasses, gC, 32, 'top');
+      if (!gItem.customImage && !gItem.image) {
+        if (gC.customSheet) glEl.style.backgroundImage = 'url(' + gC.customSheet + ')';
+        var glCol = tr.spriteGlasses % (gC.cols || 4), glRow = (tr.spriteGlasses / (gC.cols || 4)) | 0;
+        glEl.style.backgroundPosition = -(glCol * (gC.slotW || 16.975)) + 'px ' + -(glRow * (gC.slotH || 8.3375)) + 'px';
+      }
       glEl.style.top = ((gC.offsetY || 0) + (gItem.dY || 0)) + 'px';
       var gTotalX = (gC.offsetX || 0) + (gItem.dX || 0);
       if (gTotalX) glEl.style.left = 'calc(50% + ' + gTotalX + 'px)';
@@ -323,24 +343,121 @@
     if (tr.spriteStache >= 0) {
       var stEl = document.createElement('div'); stEl.className = 's-sprite-stache';
       var sC = cfg.spriteStache;
-      var sItem = (sC.items && sC.items[tr.spriteStache]) || { dY: 0, dX: 0 };
-      if (sC.customSheet) stEl.style.backgroundImage = 'url(' + sC.customSheet + ')';
-      var stCol = tr.spriteStache % (sC.cols || 3), stRow = (tr.spriteStache / (sC.cols || 3)) | 0;
-      stEl.style.backgroundPosition = -(stCol * (sC.slotW || 40)) + 'px ' + -(stRow * (sC.slotH || 30)) + 'px';
-      stEl.style.bottom = ((sC.offsetY || 0) + (sItem.dY || 0)) + 'px';
-      var sTotalX = (sC.offsetX || 0) + (sItem.dX || 0);
+      var sItem2 = applyPreviewSpriteOverlay(stEl, tr.spriteStache, sC, 12, 'bottom');
+      if (!sItem2.customImage && !sItem2.image) {
+        if (sC.customSheet) stEl.style.backgroundImage = 'url(' + sC.customSheet + ')';
+        var stCol = tr.spriteStache % (sC.cols || 3), stRow = (tr.spriteStache / (sC.cols || 3)) | 0;
+        stEl.style.backgroundPosition = -(stCol * (sC.slotW || 40)) + 'px ' + -(stRow * (sC.slotH || 30)) + 'px';
+      }
+      stEl.style.bottom = ((sC.offsetY || 0) + (sItem2.dY || 0)) + 'px';
+      var sTotalX = (sC.offsetX || 0) + (sItem2.dX || 0);
       if (sTotalX) stEl.style.left = 'calc(50% + ' + sTotalX + 'px)';
-      var sTotalS = (sC.scale || 1) * (sItem.dS || 1);
+      var sTotalS = (sC.scale || 1) * (sItem2.dS || 1);
       if (sTotalS !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sTotalS + ')';
       head.appendChild(stEl);
+    }
+    if (tr.spriteBody >= 0) {
+      var bdEl = document.createElement('div'); bdEl.className = 's-sprite-body';
+      var bdC = cfg.spriteBody;
+      var bdItem = applyPreviewSpriteOverlay(bdEl, tr.spriteBody, bdC, 0, 'top');
+      var bdPosY = (bdC.offsetY || 0) + (bdItem.dY || 0);
+      bdEl.style.top = bdPosY + 'px';
+      var bdTotalX = (bdC.offsetX || 0) + (bdItem.dX || 0);
+      if (bdTotalX) bdEl.style.left = bdTotalX + 'px';
+      var bdTotalS = (bdC.scale || 1) * (bdItem.dS || 1);
+      if (bdTotalS !== 1) bdEl.style.transform = 'scale(' + bdTotalS + ')';
+      torso.appendChild(bdEl);
+    }
+    if (tr.spriteTail >= 0) {
+      var tlEl = document.createElement('div'); tlEl.className = 's-sprite-tail';
+      var tlC = cfg.spriteTail;
+      var tlItem = applyPreviewSpriteOverlay(tlEl, tr.spriteTail, tlC, 0, 'top');
+      var tlPosY = (tlC.offsetY || 0) + (tlItem.dY || 0);
+      tlEl.style.top = tlPosY + 'px';
+      var tlTotalX = (tlC.offsetX || 0) + (tlItem.dX || 0);
+      if (tlTotalX) tlEl.style.left = tlTotalX + 'px';
+      var tlTotalS = (tlC.scale || 1) * (tlItem.dS || 1);
+      if (tlTotalS !== 1) tlEl.style.transform = 'scale(' + tlTotalS + ')';
+      tail.appendChild(tlEl);
     }
   }
 
   /* ═══ Sprite-Grid bauen ═══ */
-  function buildSpriteGrid(containerId, count, cols, spriteClass, current, onSelect) {
+
+  var SPRITE_SHEETS = {
+    's-sprite-hat': '/img/spritesheet_hats.png',
+    's-sprite-glasses': '/img/spritesheet_glasses.png',
+    's-sprite-stache': '/img/spritesheet_stuff.png'
+  };
+
+  var CATEGORY_FOR_CLASS = {
+    's-sprite-hat': 'spriteHat',
+    's-sprite-glasses': 'spriteGlasses',
+    's-sprite-stache': 'spriteStache',
+    's-sprite-body': 'spriteBody',
+    's-sprite-tail': 'spriteTail'
+  };
+
+  function getCustomImageForSlot(category, idx) {
+    var catCfg = cfg[category] || {};
+    var defaultCount = DEFAULT_SLOT_COUNTS[category] || 0;
+    if (idx < defaultCount) {
+      return (catCfg.items && catCfg.items[idx] && catCfg.items[idx].customImage) || null;
+    }
+    var customSlots = catCfg.customSlots || [];
+    var cs = customSlots[idx - defaultCount];
+    return cs ? cs.image : null;
+  }
+
+  function buildDefaultSpriteTile(spr, spriteClass, i) {
+    spr.style.cssText = 'position:relative;top:auto;left:auto;bottom:auto;right:auto;transform:scale(3);transform-origin:center center;pointer-events:none;z-index:11;background-repeat:no-repeat;image-rendering:auto;';
+    if (spriteClass === 's-sprite-hat') {
+      if (i >= 16) {
+        var wc = (i - 16) % 3, wr = ((i - 16) / 3) | 0;
+        spr.style.width = '11px'; spr.style.height = '15px';
+        spr.style.backgroundImage = 'url(/img/spritesheet_peruecken.png)';
+        spr.style.backgroundSize = '300% 300%';
+        spr.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
+        spr.style.transform = 'scale(2.5)';
+      } else {
+        var c = i % 4, r = (i / 4) | 0;
+        spr.style.width = '10px'; spr.style.height = '9px';
+        spr.style.backgroundImage = 'url(' + (cfg.spriteHat.customSheet || '/img/spritesheet_hats.png') + ')';
+        spr.style.backgroundSize = '40px 36px';
+        spr.style.backgroundPosition = -(c * cfg.spriteHat.slotW) + 'px ' + -(r * cfg.spriteHat.slotH) + 'px';
+      }
+    } else if (spriteClass === 's-sprite-glasses') {
+      var gc = i % (cfg.spriteGlasses.cols || 4), gr = (i / (cfg.spriteGlasses.cols || 4)) | 0;
+      spr.style.width = (cfg.spriteGlasses.slotW || 16.975) + 'px';
+      spr.style.height = (cfg.spriteGlasses.slotH || 8.3375) + 'px';
+      spr.style.transform = 'scale(2.7)';
+      spr.style.backgroundImage = 'url(' + (cfg.spriteGlasses.customSheet || '/img/spritesheet_glasses.png') + ')';
+      spr.style.backgroundSize = '67.9px 66.7px';
+      spr.style.backgroundPosition = -(gc * (cfg.spriteGlasses.slotW || 16.975)) + 'px ' + -(gr * (cfg.spriteGlasses.slotH || 8.3375)) + 'px';
+    } else if (spriteClass === 's-sprite-stache') {
+      var sc = i % (cfg.spriteStache.cols || 3), sr2 = (i / (cfg.spriteStache.cols || 3)) | 0;
+      spr.style.width = (cfg.spriteStache.slotW || 40) + 'px';
+      spr.style.height = (cfg.spriteStache.slotH || 30) + 'px';
+      spr.style.transform = 'scale(1.1)';
+      spr.style.backgroundImage = 'url(' + (cfg.spriteStache.customSheet || '/img/spritesheet_stuff.png') + ')';
+      spr.style.backgroundSize = '120px 120px';
+      spr.style.backgroundPosition = -(sc * (cfg.spriteStache.slotW || 40)) + 'px ' + -(sr2 * (cfg.spriteStache.slotH || 30)) + 'px';
+    }
+  }
+
+  function buildCustomImageTile(spr, url) {
+    spr.style.cssText = 'position:relative;width:36px;height:36px;pointer-events:none;z-index:11;background-repeat:no-repeat;background-size:contain;background-position:center;';
+    spr.style.backgroundImage = 'url(' + url + ')';
+  }
+
+  function buildSpriteGrid(containerId, defaultCount, cols, spriteClass, current, onSelect) {
     var grid = document.getElementById(containerId);
     if (!grid) return;
     grid.innerHTML = '';
+    var category = CATEGORY_FOR_CLASS[spriteClass];
+    var catCfg = cfg[category] || {};
+    var customSlots = catCfg.customSlots || [];
+    var totalCount = defaultCount + customSlots.length;
 
     // "Kein"-Button
     var none = document.createElement('div');
@@ -351,55 +468,80 @@
     none.addEventListener('click', function () { onSelect(-1); });
     grid.appendChild(none);
 
-    for (var i = 0; i < count; i++) {
+    for (var i = 0; i < totalCount; i++) {
       var tile = document.createElement('div');
       tile.className = 'umkleide-sprite-tile' + (i === current ? ' active' : '');
       tile.title = '#' + i;
+      var isCustomSlot = i >= defaultCount;
+
+      var customImage = getCustomImageForSlot(category, i);
       var spr = document.createElement('div');
 
-      // Override: kein position:absolute, stattdessen relativ im Tile zentriert
-      spr.style.cssText = 'position:relative;top:auto;left:auto;bottom:auto;right:auto;transform:scale(3);transform-origin:center center;pointer-events:none;z-index:11;background-repeat:no-repeat;image-rendering:auto;';
-
-      if (spriteClass === 's-sprite-hat') {
-        if (i >= 16) {
-          /* Perücke (Index 16-24 → Wig-Sheet 3×3, Prozent-Positionierung) */
-          var wc = (i - 16) % 3, wr = ((i - 16) / 3) | 0;
-          spr.style.width = '11px'; spr.style.height = '15px';
-          spr.style.backgroundImage = 'url(/img/spritesheet_peruecken.png)';
-          spr.style.backgroundSize = '300% 300%';
-          spr.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
-          spr.style.transform = 'scale(2.5)';
-        } else {
-          var c = i % 4, r = (i / 4) | 0;
-          spr.style.width = '10px'; spr.style.height = '9px';
-          spr.style.backgroundImage = 'url(' + (cfg.spriteHat.customSheet || '/img/spritesheet_hats.png') + ')';
-          spr.style.backgroundSize = '40px 36px';
-          spr.style.backgroundPosition = -(c * cfg.spriteHat.slotW) + 'px ' + -(r * cfg.spriteHat.slotH) + 'px';
-        }
-      } else if (spriteClass === 's-sprite-glasses') {
-        var gc = i % (cfg.spriteGlasses.cols || 4), gr = (i / (cfg.spriteGlasses.cols || 4)) | 0;
-        spr.style.width = (cfg.spriteGlasses.slotW || 16.975) + 'px';
-        spr.style.height = (cfg.spriteGlasses.slotH || 8.3375) + 'px';
-        spr.style.transform = 'scale(2.7)';
-        spr.style.backgroundImage = 'url(' + (cfg.spriteGlasses.customSheet || '/img/spritesheet_glasses.png') + ')';
-        spr.style.backgroundSize = '67.9px 66.7px';
-        spr.style.backgroundPosition = -(gc * (cfg.spriteGlasses.slotW || 16.975)) + 'px ' + -(gr * (cfg.spriteGlasses.slotH || 8.3375)) + 'px';
-      } else if (spriteClass === 's-sprite-stache') {
-        var sc = i % (cfg.spriteStache.cols || 3), sr = (i / (cfg.spriteStache.cols || 3)) | 0;
-        spr.style.width = (cfg.spriteStache.slotW || 40) + 'px';
-        spr.style.height = (cfg.spriteStache.slotH || 30) + 'px';
-        spr.style.transform = 'scale(1.1)';
-        spr.style.backgroundImage = 'url(' + (cfg.spriteStache.customSheet || '/img/spritesheet_stuff.png') + ')';
-        spr.style.backgroundSize = '120px 120px';
-        spr.style.backgroundPosition = -(sc * (cfg.spriteStache.slotW || 40)) + 'px ' + -(sr * (cfg.spriteStache.slotH || 30)) + 'px';
+      if (customImage) {
+        buildCustomImageTile(spr, customImage);
+      } else if (isCustomSlot) {
+        // Leerer Custom-Slot — Platzhalter
+        spr.style.cssText = 'position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;pointer-events:none;';
+        spr.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+      } else {
+        buildDefaultSpriteTile(spr, spriteClass, i);
       }
 
       tile.appendChild(spr);
+
+      // Upload-Overlay (Kamera-Icon) auf Hover
+      var overlay = document.createElement('div');
+      overlay.className = 'sprite-tile-upload-overlay';
+      overlay.title = customImage ? 'Bild ersetzen' : 'Eigenes Bild hochladen';
+      overlay.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+      (function (idx) {
+        overlay.addEventListener('click', function (e) {
+          e.stopPropagation();
+          triggerSlotUpload(category, idx);
+        });
+      })(i);
+      tile.appendChild(overlay);
+
+      // ✕-Button für Custom-Slots oder für Default-Slots mit customImage
+      if (isCustomSlot) {
+        var removeBtn = document.createElement('div');
+        removeBtn.className = 'sprite-tile-remove-btn';
+        removeBtn.title = 'Slot entfernen';
+        removeBtn.innerHTML = '&times;';
+        (function (idx) {
+          removeBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            removeCustomSlot(category, idx);
+          });
+        })(i);
+        tile.appendChild(removeBtn);
+      } else if (customImage) {
+        var resetBtn = document.createElement('div');
+        resetBtn.className = 'sprite-tile-remove-btn';
+        resetBtn.title = 'Eigenes Bild entfernen';
+        resetBtn.innerHTML = '&times;';
+        (function (idx) {
+          resetBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            removeSlotSprite(category, idx);
+          });
+        })(i);
+        tile.appendChild(resetBtn);
+      }
+
       (function (idx) {
         tile.addEventListener('click', function () { onSelect(idx); });
       })(i);
       grid.appendChild(tile);
     }
+
+    // "+" Tile zum Hinzufügen
+    var addTile = document.createElement('div');
+    addTile.className = 'umkleide-sprite-tile sprite-tile-add';
+    addTile.title = 'Neuen Slot hinzuf\u00fcgen';
+    addTile.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    addTile.addEventListener('click', function () { addCustomSlot(category); });
+    grid.appendChild(addTile);
   }
 
   function refreshGridActive(containerId, current) {
@@ -454,17 +596,26 @@
   }
 
   /* ═══ Per-Item-Offset Helpers ═══ */
-  function getItemOff(catCfg, idx) {
+  function getItemOff(catCfg, idx, categoryKey) {
+    var defaultCount = categoryKey ? (DEFAULT_SLOT_COUNTS[categoryKey] || 0) : 9999;
+    if (idx >= defaultCount) {
+      // Custom-Slot: offsets leben in customSlots-Array
+      if (!catCfg.customSlots) catCfg.customSlots = [];
+      var csIdx = idx - defaultCount;
+      if (!catCfg.customSlots[csIdx]) catCfg.customSlots[csIdx] = { image: null, dY: 0, dX: 0, dS: 1 };
+      if (catCfg.customSlots[csIdx].dS == null) catCfg.customSlots[csIdx].dS = 1;
+      return catCfg.customSlots[csIdx];
+    }
     if (!catCfg.items) catCfg.items = {};
     if (!catCfg.items[idx]) catCfg.items[idx] = { dY: 0, dX: 0, dS: 1 };
     if (catCfg.items[idx].dS == null) catCfg.items[idx].dS = 1;
     return catCfg.items[idx];
   }
 
-  function showItemSliders(panelId, labelId, idx, catCfg, idYId, idYVId, idXId, idXVId, idSId, idSVId) {
+  function showItemSliders(panelId, labelId, idx, catCfg, idYId, idYVId, idXId, idXVId, idSId, idSVId, categoryKey) {
     var panel = document.getElementById(panelId);
     if (idx < 0) { if (panel) panel.style.display = 'none'; return; }
-    var off = getItemOff(catCfg, idx);
+    var off = getItemOff(catCfg, idx, categoryKey);
     var label = document.getElementById(labelId);
     if (label) label.textContent = '#' + idx;
     setSlider(idYId, idYVId, off.dY);
@@ -477,19 +628,31 @@
   function selectHat(idx) {
     currentHat = idx;
     refreshGridActive('hatGrid', idx);
-    showItemSliders('hatItemSliders', 'hatItemLabel', idx, cfg.spriteHat, 'hatIdY', 'hatIdYV', 'hatIdX', 'hatIdXV', 'hatIdS', 'hatIdSV');
+    showItemSliders('hatItemSliders', 'hatItemLabel', idx, cfg.spriteHat, 'hatIdY', 'hatIdYV', 'hatIdX', 'hatIdXV', 'hatIdS', 'hatIdSV', 'spriteHat');
     rebuildPreview();
   }
   function selectGlasses(idx) {
     currentGlasses = idx;
     refreshGridActive('glassesGrid', idx);
-    showItemSliders('glItemSliders', 'glItemLabel', idx, cfg.spriteGlasses, 'glIdY', 'glIdYV', 'glIdX', 'glIdXV', 'glIdS', 'glIdSV');
+    showItemSliders('glItemSliders', 'glItemLabel', idx, cfg.spriteGlasses, 'glIdY', 'glIdYV', 'glIdX', 'glIdXV', 'glIdS', 'glIdSV', 'spriteGlasses');
     rebuildPreview();
   }
   function selectStache(idx) {
     currentStache = idx;
     refreshGridActive('stacheGrid', idx);
-    showItemSliders('stItemSliders', 'stItemLabel', idx, cfg.spriteStache, 'stIdY', 'stIdYV', 'stIdX', 'stIdXV', 'stIdS', 'stIdSV');
+    showItemSliders('stItemSliders', 'stItemLabel', idx, cfg.spriteStache, 'stIdY', 'stIdYV', 'stIdX', 'stIdXV', 'stIdS', 'stIdSV', 'spriteStache');
+    rebuildPreview();
+  }
+  function selectBody(idx) {
+    currentBody = idx;
+    refreshGridActive('bodyGrid', idx);
+    showItemSliders('bodyItemSliders', 'bodyItemLabel', idx, cfg.spriteBody, 'bodyIdY', 'bodyIdYV', 'bodyIdX', 'bodyIdXV', 'bodyIdS', 'bodyIdSV', 'spriteBody');
+    rebuildPreview();
+  }
+  function selectTail(idx) {
+    currentTail = idx;
+    refreshGridActive('tailGrid', idx);
+    showItemSliders('tailItemSliders', 'tailItemLabel', idx, cfg.spriteTail, 'tailIdY', 'tailIdYV', 'tailIdX', 'tailIdXV', 'tailIdS', 'tailIdSV', 'spriteTail');
     rebuildPreview();
   }
 
@@ -510,15 +673,31 @@
   bindSlider('stS', 'stSV', function (v) { cfg.spriteStache.scale = v; });
 
   // Per-Item-Offsets (Feinkorrektur pro Sprite-Item)
-  bindSlider('hatIdY', 'hatIdYV', function (v) { if (currentHat >= 0) getItemOff(cfg.spriteHat, currentHat).dY = v; });
-  bindSlider('hatIdX', 'hatIdXV', function (v) { if (currentHat >= 0) getItemOff(cfg.spriteHat, currentHat).dX = v; });
-  bindSlider('hatIdS', 'hatIdSV', function (v) { if (currentHat >= 0) getItemOff(cfg.spriteHat, currentHat).dS = v; });
-  bindSlider('glIdY', 'glIdYV', function (v) { if (currentGlasses >= 0) getItemOff(cfg.spriteGlasses, currentGlasses).dY = v; });
-  bindSlider('glIdX', 'glIdXV', function (v) { if (currentGlasses >= 0) getItemOff(cfg.spriteGlasses, currentGlasses).dX = v; });
-  bindSlider('glIdS', 'glIdSV', function (v) { if (currentGlasses >= 0) getItemOff(cfg.spriteGlasses, currentGlasses).dS = v; });
-  bindSlider('stIdY', 'stIdYV', function (v) { if (currentStache >= 0) getItemOff(cfg.spriteStache, currentStache).dY = v; });
-  bindSlider('stIdX', 'stIdXV', function (v) { if (currentStache >= 0) getItemOff(cfg.spriteStache, currentStache).dX = v; });
-  bindSlider('stIdS', 'stIdSV', function (v) { if (currentStache >= 0) getItemOff(cfg.spriteStache, currentStache).dS = v; });
+  bindSlider('hatIdY', 'hatIdYV', function (v) { if (currentHat >= 0) getItemOff(cfg.spriteHat, currentHat, 'spriteHat').dY = v; });
+  bindSlider('hatIdX', 'hatIdXV', function (v) { if (currentHat >= 0) getItemOff(cfg.spriteHat, currentHat, 'spriteHat').dX = v; });
+  bindSlider('hatIdS', 'hatIdSV', function (v) { if (currentHat >= 0) getItemOff(cfg.spriteHat, currentHat, 'spriteHat').dS = v; });
+  bindSlider('glIdY', 'glIdYV', function (v) { if (currentGlasses >= 0) getItemOff(cfg.spriteGlasses, currentGlasses, 'spriteGlasses').dY = v; });
+  bindSlider('glIdX', 'glIdXV', function (v) { if (currentGlasses >= 0) getItemOff(cfg.spriteGlasses, currentGlasses, 'spriteGlasses').dX = v; });
+  bindSlider('glIdS', 'glIdSV', function (v) { if (currentGlasses >= 0) getItemOff(cfg.spriteGlasses, currentGlasses, 'spriteGlasses').dS = v; });
+  bindSlider('stIdY', 'stIdYV', function (v) { if (currentStache >= 0) getItemOff(cfg.spriteStache, currentStache, 'spriteStache').dY = v; });
+  bindSlider('stIdX', 'stIdXV', function (v) { if (currentStache >= 0) getItemOff(cfg.spriteStache, currentStache, 'spriteStache').dX = v; });
+  bindSlider('stIdS', 'stIdSV', function (v) { if (currentStache >= 0) getItemOff(cfg.spriteStache, currentStache, 'spriteStache').dS = v; });
+
+  // Sprite Body
+  bindSlider('bodyY', 'bodyYV', function (v) { cfg.spriteBody.offsetY = v; });
+  bindSlider('bodyX', 'bodyXV', function (v) { cfg.spriteBody.offsetX = v; });
+  bindSlider('bodyS', 'bodySV', function (v) { cfg.spriteBody.scale = v; });
+  bindSlider('bodyIdY', 'bodyIdYV', function (v) { if (currentBody >= 0) getItemOff(cfg.spriteBody, currentBody, 'spriteBody').dY = v; });
+  bindSlider('bodyIdX', 'bodyIdXV', function (v) { if (currentBody >= 0) getItemOff(cfg.spriteBody, currentBody, 'spriteBody').dX = v; });
+  bindSlider('bodyIdS', 'bodyIdSV', function (v) { if (currentBody >= 0) getItemOff(cfg.spriteBody, currentBody, 'spriteBody').dS = v; });
+
+  // Sprite Tail
+  bindSlider('tailY', 'tailYV', function (v) { cfg.spriteTail.offsetY = v; });
+  bindSlider('tailX', 'tailXV', function (v) { cfg.spriteTail.offsetX = v; });
+  bindSlider('tailS', 'tailSV', function (v) { cfg.spriteTail.scale = v; });
+  bindSlider('tailIdY', 'tailIdYV', function (v) { if (currentTail >= 0) getItemOff(cfg.spriteTail, currentTail, 'spriteTail').dY = v; });
+  bindSlider('tailIdX', 'tailIdXV', function (v) { if (currentTail >= 0) getItemOff(cfg.spriteTail, currentTail, 'spriteTail').dX = v; });
+  bindSlider('tailIdS', 'tailIdSV', function (v) { if (currentTail >= 0) getItemOff(cfg.spriteTail, currentTail, 'spriteTail').dS = v; });
 
   // CSS Accessory
   bindSlider('cssY', 'cssYV', function (v) { if (!cfg.cssAccessories[selectedCssKey]) cfg.cssAccessories[selectedCssKey] = {offsetY:0,offsetX:0,scale:1}; cfg.cssAccessories[selectedCssKey].offsetY = v; });
@@ -656,11 +835,12 @@
         document.getElementById('glItemSliders').style.display = 'none';
         document.getElementById('stItemSliders').style.display = 'none';
         loadCssSliders();
-        updateAllUploadStatus();
         // Grids mit Standard-Sheets neu bauen
         buildSpriteGrid('hatGrid', 16, 4, 's-sprite-hat', currentHat, selectHat);
         buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses);
         buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache);
+        buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody);
+        buildSpriteGrid('tailGrid', 0, 4, 's-sprite-tail', currentTail, selectTail);
         rebuildPreview();
         if (typeof showToast === 'function') showToast(data.message, 'success');
         else alert(data.message);
@@ -669,94 +849,133 @@
     .catch(function () { alert('Netzwerkfehler.'); });
   });
 
-  /* ═══ Spritesheet-Upload ═══ */
-  function updateUploadStatus(category) {
-    var panel = document.querySelector('.umkleide-upload[data-category="' + category + '"]');
-    if (!panel) return;
-    var status = panel.querySelector('.umkleide-upload-status');
-    var resetBtn = panel.querySelector('.umkleide-upload-reset');
-    var url = cfg[category] && cfg[category].customSheet;
-    if (url) {
-      status.textContent = url.split('/').pop();
-      status.title = url;
-      resetBtn.style.display = '';
-    } else {
-      status.textContent = 'Standard';
-      status.title = '';
-      resetBtn.style.display = 'none';
-    }
-  }
-
-  function updateAllUploadStatus() {
-    updateUploadStatus('spriteHat');
-    updateUploadStatus('spriteGlasses');
-    updateUploadStatus('spriteStache');
-  }
+  /* ═══ Einzel-Sprite-Upload ═══ */
 
   var GRID_REBUILD = {
     spriteHat: function () { buildSpriteGrid('hatGrid', 16, 4, 's-sprite-hat', currentHat, selectHat); },
     spriteGlasses: function () { buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses); },
-    spriteStache: function () { buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache); }
+    spriteStache: function () { buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache); },
+    spriteBody: function () { buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody); },
+    spriteTail: function () { buildSpriteGrid('tailGrid', 0, 4, 's-sprite-tail', currentTail, selectTail); }
   };
 
-  document.querySelectorAll('.umkleide-upload').forEach(function (panel) {
-    var category = panel.dataset.category;
-    var fileInput = panel.querySelector('input[type="file"]');
-    var uploadBtn = panel.querySelector('.umkleide-upload-btn');
-    var resetBtn = panel.querySelector('.umkleide-upload-reset');
+  var slotFileInput = document.getElementById('slotSpriteFile');
+  var pendingUploadCategory = null;
+  var pendingUploadIndex = null;
 
-    uploadBtn.addEventListener('click', function () { fileInput.click(); });
+  function triggerSlotUpload(category, slotIndex) {
+    pendingUploadCategory = category;
+    pendingUploadIndex = slotIndex;
+    slotFileInput.value = '';
+    slotFileInput.click();
+  }
 
-    fileInput.addEventListener('change', function () {
-      if (!fileInput.files.length) return;
-      var fd = new FormData();
-      fd.append('spritesheet', fileInput.files[0]);
-      fd.append('category', category);
-      fd.append('csrfToken', csrfToken);
-      uploadBtn.disabled = true;
-      uploadBtn.textContent = 'Wird hochgeladen\u2026';
-      fetch('/admin/umkleide/upload-sprite', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: fd })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.ok) {
-            if (!cfg[category]) cfg[category] = {};
-            cfg[category].customSheet = data.url;
-            updateUploadStatus(category);
-            if (GRID_REBUILD[category]) GRID_REBUILD[category]();
-            rebuildPreview();
-            if (typeof showToast === 'function') showToast(data.message, 'success');
-          } else {
-            if (typeof showToast === 'function') showToast(data.error || 'Fehler', 'error');
-            else alert(data.error || 'Fehler');
-          }
-        })
-        .catch(function () { alert('Netzwerkfehler beim Upload.'); })
-        .finally(function () {
-          uploadBtn.disabled = false;
-          uploadBtn.textContent = 'Spritesheet hochladen';
-          fileInput.value = '';
-        });
-    });
-
-    resetBtn.addEventListener('click', function () {
-      fetch('/admin/umkleide/remove-sprite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ category: category })
-      })
+  slotFileInput.addEventListener('change', function () {
+    if (!slotFileInput.files.length || pendingUploadCategory == null) return;
+    var fd = new FormData();
+    fd.append('category', pendingUploadCategory);
+    fd.append('slotIndex', pendingUploadIndex);
+    fd.append('csrfToken', csrfToken);
+    fd.append('sprite', slotFileInput.files[0]);
+    fetch('/admin/umkleide/upload-slot-sprite', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: fd })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.ok) {
-          if (cfg[category]) delete cfg[category].customSheet;
-          updateUploadStatus(category);
-          if (GRID_REBUILD[category]) GRID_REBUILD[category]();
+          var cat = pendingUploadCategory;
+          var idx = pendingUploadIndex;
+          var defaultCount = DEFAULT_SLOT_COUNTS[cat] || 0;
+          if (!cfg[cat]) cfg[cat] = {};
+          if (idx < defaultCount) {
+            if (!cfg[cat].items) cfg[cat].items = {};
+            if (!cfg[cat].items[idx]) cfg[cat].items[idx] = { dY: 0, dX: 0, dS: 1 };
+            cfg[cat].items[idx].customImage = data.url;
+          } else {
+            if (!cfg[cat].customSlots) cfg[cat].customSlots = [];
+            var cs = cfg[cat].customSlots[idx - defaultCount];
+            if (cs) cs.image = data.url;
+          }
+          if (GRID_REBUILD[cat]) GRID_REBUILD[cat]();
           rebuildPreview();
           if (typeof showToast === 'function') showToast(data.message, 'success');
+        } else {
+          if (typeof showToast === 'function') showToast(data.error || 'Fehler', 'error');
+          else alert(data.error || 'Fehler');
         }
       })
-      .catch(function () { alert('Netzwerkfehler.'); });
-    });
+      .catch(function () { alert('Netzwerkfehler beim Upload.'); })
+      .finally(function () { slotFileInput.value = ''; pendingUploadCategory = null; pendingUploadIndex = null; });
   });
+
+  function addCustomSlot(category) {
+    fetch('/admin/umkleide/add-slot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ category: category })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        if (!cfg[category]) cfg[category] = {};
+        if (!cfg[category].customSlots) cfg[category].customSlots = [];
+        cfg[category].customSlots.push({ image: null, dY: 0, dX: 0, dS: 1 });
+        if (GRID_REBUILD[category]) GRID_REBUILD[category]();
+        if (typeof showToast === 'function') showToast(data.message, 'success');
+      }
+    })
+    .catch(function () { alert('Netzwerkfehler.'); });
+  }
+
+  function removeCustomSlot(category, slotIndex) {
+    fetch('/admin/umkleide/remove-slot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ category: category, slotIndex: slotIndex })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        var defaultCount = DEFAULT_SLOT_COUNTS[category] || 0;
+        if (cfg[category] && cfg[category].customSlots) {
+          cfg[category].customSlots.splice(slotIndex - defaultCount, 1);
+        }
+        // Selektion anpassen wenn nötig
+        var sel = category === 'spriteHat' ? currentHat : category === 'spriteGlasses' ? currentGlasses : currentStache;
+        if (sel === slotIndex) {
+          if (category === 'spriteHat') currentHat = -1;
+          else if (category === 'spriteGlasses') currentGlasses = -1;
+          else currentStache = -1;
+        } else if (sel > slotIndex) {
+          if (category === 'spriteHat') currentHat--;
+          else if (category === 'spriteGlasses') currentGlasses--;
+          else currentStache--;
+        }
+        if (GRID_REBUILD[category]) GRID_REBUILD[category]();
+        rebuildPreview();
+        if (typeof showToast === 'function') showToast(data.message, 'success');
+      }
+    })
+    .catch(function () { alert('Netzwerkfehler.'); });
+  }
+
+  function removeSlotSprite(category, slotIndex) {
+    fetch('/admin/umkleide/remove-slot-sprite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ category: category, slotIndex: slotIndex })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        if (cfg[category] && cfg[category].items && cfg[category].items[slotIndex]) {
+          delete cfg[category].items[slotIndex].customImage;
+        }
+        if (GRID_REBUILD[category]) GRID_REBUILD[category]();
+        rebuildPreview();
+        if (typeof showToast === 'function') showToast(data.message, 'success');
+      }
+    })
+    .catch(function () { alert('Netzwerkfehler.'); });
+  }
 
   /* ═══ Export / Import ═══ */
   document.getElementById('btnExport').addEventListener('click', function () {
@@ -813,6 +1032,12 @@
     setSlider('stY', 'stYV', cfg.spriteStache.offsetY);
     setSlider('stX', 'stXV', cfg.spriteStache.offsetX);
     setSlider('stS', 'stSV', cfg.spriteStache.scale);
+    setSlider('bodyY', 'bodyYV', cfg.spriteBody.offsetY);
+    setSlider('bodyX', 'bodyXV', cfg.spriteBody.offsetX);
+    setSlider('bodyS', 'bodySV', cfg.spriteBody.scale);
+    setSlider('tailY', 'tailYV', cfg.spriteTail.offsetY);
+    setSlider('tailX', 'tailXV', cfg.spriteTail.offsetX);
+    setSlider('tailS', 'tailSV', cfg.spriteTail.scale);
     setSlider('fEyeY', 'fEyeYV', cfg.face.eyeY);
     setSlider('fEyeLX', 'fEyeLXV', cfg.face.eyeLeftX);
     setSlider('fEyeRX', 'fEyeRXV', cfg.face.eyeRightX);
@@ -825,16 +1050,17 @@
     buildSpriteGrid('hatGrid', 16, 4, 's-sprite-hat', currentHat, selectHat);
     buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses);
     buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache);
+    buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody);
+    buildSpriteGrid('tailGrid', 0, 4, 's-sprite-tail', currentTail, selectTail);
     buildCssButtons();
     loadCssSliders();
 
     // Per-Item-Slider
-    if (currentHat >= 0) showItemSliders('hatItemSliders', 'hatItemLabel', currentHat, cfg.spriteHat, 'hatIdY', 'hatIdYV', 'hatIdX', 'hatIdXV', 'hatIdS', 'hatIdSV');
-    if (currentGlasses >= 0) showItemSliders('glItemSliders', 'glItemLabel', currentGlasses, cfg.spriteGlasses, 'glIdY', 'glIdYV', 'glIdX', 'glIdXV', 'glIdS', 'glIdSV');
-    if (currentStache >= 0) showItemSliders('stItemSliders', 'stItemLabel', currentStache, cfg.spriteStache, 'stIdY', 'stIdYV', 'stIdX', 'stIdXV', 'stIdS', 'stIdSV');
-
-    // Upload-Status
-    updateAllUploadStatus();
+    if (currentHat >= 0) showItemSliders('hatItemSliders', 'hatItemLabel', currentHat, cfg.spriteHat, 'hatIdY', 'hatIdYV', 'hatIdX', 'hatIdXV', 'hatIdS', 'hatIdSV', 'spriteHat');
+    if (currentGlasses >= 0) showItemSliders('glItemSliders', 'glItemLabel', currentGlasses, cfg.spriteGlasses, 'glIdY', 'glIdYV', 'glIdX', 'glIdXV', 'glIdS', 'glIdSV', 'spriteGlasses');
+    if (currentStache >= 0) showItemSliders('stItemSliders', 'stItemLabel', currentStache, cfg.spriteStache, 'stIdY', 'stIdYV', 'stIdX', 'stIdXV', 'stIdS', 'stIdSV', 'spriteStache');
+    if (currentBody >= 0) showItemSliders('bodyItemSliders', 'bodyItemLabel', currentBody, cfg.spriteBody, 'bodyIdY', 'bodyIdYV', 'bodyIdX', 'bodyIdXV', 'bodyIdS', 'bodyIdSV', 'spriteBody');
+    if (currentTail >= 0) showItemSliders('tailItemSliders', 'tailItemLabel', currentTail, cfg.spriteTail, 'tailIdY', 'tailIdYV', 'tailIdX', 'tailIdXV', 'tailIdS', 'tailIdSV', 'spriteTail');
 
     // Preview
     rebuildPreview();
@@ -842,5 +1068,24 @@
 
   // Initiale UI laden
   loadConfigIntoUI();
+
+  // Vorhängeschloss-Toggle für globale Slider
+  document.querySelectorAll('.umkleide-lock-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var wrapper = btn.closest('.umkleide-sliders');
+      var locked = wrapper.classList.contains('umkleide-global-locked');
+      if (locked) {
+        wrapper.classList.remove('umkleide-global-locked');
+        wrapper.classList.add('umkleide-global-unlocked');
+        btn.innerHTML = '&#128275;'; // 🔓
+        btn.title = 'Sperren um versehentliches Verstellen zu verhindern';
+      } else {
+        wrapper.classList.remove('umkleide-global-unlocked');
+        wrapper.classList.add('umkleide-global-locked');
+        btn.innerHTML = '&#128274;'; // 🔒
+        btn.title = 'Entsperren um globale Werte zu ändern';
+      }
+    });
+  });
 
 })();

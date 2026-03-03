@@ -346,16 +346,39 @@
       applySpriteOverlay(head, stEl, tr.spriteStache, cfg.spriteStache || {},
         { cols: 3, slotW: 40, slotH: 30, offsetY: -1, scale: 0.25, posYProp: 'bottom', defaultCount: 12 });
     }
+    var bodySprite = null;
     if (tr.spriteBody >= 0 && torso) {
-      var bdEl = document.createElement('div');
-      bdEl.className = 's-sprite-body epic-shimmer';
-      applyCustomSpriteOverlay(torso, bdEl, tr.spriteBody, cfg.spriteBody || {});
+      var bodyCfg = cfg.spriteBody || {};
+      var customSlots = bodyCfg.customSlots || [];
+      var cs = customSlots[tr.spriteBody];
+      if (cs) {
+        bodySprite = document.createElement('div');
+        bodySprite.className = 's-sprite-body epic-shimmer';
+        bodySprite.style.width = torso.style.width;
+        bodySprite.style.height = torso.style.height;
+        bodySprite.style.borderRadius = '50%';
+        if (cs.image) {
+          bodySprite.style.backgroundImage = 'url(' + cs.image + ')';
+          bodySprite.style.backgroundSize = 'contain';
+          bodySprite.style.backgroundPosition = 'center';
+        }
+        var bsY = (bodyCfg.offsetY || 0) + (cs.dY || 0);
+        var bsX = (bodyCfg.offsetX || 0) + (cs.dX || 0);
+        var bsS = (bodyCfg.scale != null ? bodyCfg.scale : 1) * (cs.dS || 1);
+        bodySprite.dataset.offsetY = String(bsY);
+        bodySprite.dataset.offsetX = String(bsX);
+        bodySprite.dataset.spriteScale = String(bsS);
+        torso.parentNode.appendChild(bodySprite);
+      }
     }
     if (tr.spriteTail >= 0 && tail) {
       var tlEl = document.createElement('div');
       tlEl.className = 's-sprite-tail epic-shimmer';
       applyCustomSpriteOverlay(tail, tlEl, tr.spriteTail, cfg.spriteTail || {});
+      tail.style.background = 'none';
+      tail.style.border = 'none';
     }
+    return bodySprite;
   }
 
   /* ═══ DOM-Factory ═══ */
@@ -413,7 +436,7 @@
 
     /* Accessoire + Sprite-Overlays */
     attachCssAccessory(head, torso, legEls, shinEls, tr, cfg);
-    attachSpriteOverlays(head, tr, cfg, torso, tail);
+    var bodySprite = attachSpriteOverlays(head, tr, cfg, torso, tail);
 
     /* Namens-Bubble: zeigt ownerName über dem Schaf (erste 10s + beim Draggen) */
     var nameEl = document.createElement('div');
@@ -430,7 +453,7 @@
       lfl: lfl, lfr: lfr, lbl: lbl, lbr: lbr, shinEls: shinEls,
       pole: prop.pole, hub: prop.hub, bwrap: prop.bwrap, blades: prop.blades,
       eyeL: face.eyeL, eyeR: face.eyeR, propSize: prop.propSize,
-      nameEl: nameEl, debugEl: debugEl
+      bodySprite: bodySprite, nameEl: nameEl, debugEl: debugEl
     };
   }
 
@@ -1387,6 +1410,12 @@
 
     var tx = 0, ty = bob;
     d.torso.style.transform = 'translate(' + (tx - sh.tw / 2) + 'px,' + (ty - sh.th / 2) + 'px) rotate(' + bankRad + 'rad)';
+    if (d.bodySprite) {
+      var bsOY = parseFloat(d.bodySprite.dataset.offsetY) || 0;
+      var bsOX = parseFloat(d.bodySprite.dataset.offsetX) || 0;
+      var bsS = d.bodySprite.dataset.spriteScale || '1';
+      d.bodySprite.style.transform = 'translate(' + (tx - sh.tw / 2) + 'px,' + (ty - sh.th / 2) + 'px) rotate(' + bankRad + 'rad) translate(' + bsOX + 'px,' + bsOY + 'px)' + (bsS !== '1' ? ' scale(' + bsS + ')' : '');
+    }
 
     var labelRotY = sh.tailSide * 65;
     var labelShiftX = -sh.tailSide * sh.tw * 0.3;
@@ -1398,7 +1427,8 @@
     var tailLocalY = 1;
     var tailPos = rot(tailLocalX, tailLocalY, bankRad);
     var tailX = tx + tailPos.x, tailY = ty + tailPos.y;
-    d.tail.style.transform = 'translate(' + (tailX - ts / 2) + 'px,' + (tailY - ts / 2) + 'px) rotate(' + ((tailWag + sh.tailSide * .4) * Math.PI) + 'rad)';
+    var tailFlip = (tr.spriteTail >= 0 && sh.tailSide < 0) ? ' scaleX(-1)' : '';
+    d.tail.style.transform = 'translate(' + (tailX - ts / 2) + 'px,' + (tailY - ts / 2) + 'px) rotate(' + ((tailWag + sh.tailSide * .4) * Math.PI) + 'rad)' + tailFlip;
 
     var headSideX = -sh.tailSide * (sh.tw * 0.38);
     var hOff = rot(headSideX, -5, bankRad);
@@ -2118,14 +2148,36 @@
 
       if (event.reward === 'body') {
         targetSheep.traits.spriteBody = event.slotIndex;
-        var bdEl = document.createElement('div');
-        bdEl.className = 's-sprite-body epic-shimmer';
-        applyCustomSpriteOverlay(targetSheep.dom.torso, bdEl, event.slotIndex, cfg.spriteBody || {});
+        var bodyCfg = cfg.spriteBody || {};
+        var bodySlots = bodyCfg.customSlots || [];
+        var bodyCs = bodySlots[event.slotIndex];
+        if (bodyCs) {
+          var bdEl = document.createElement('div');
+          bdEl.className = 's-sprite-body epic-shimmer';
+          bdEl.style.width = targetSheep.dom.torso.style.width;
+          bdEl.style.height = targetSheep.dom.torso.style.height;
+          bdEl.style.borderRadius = '50%';
+          if (bodyCs.image) {
+            bdEl.style.backgroundImage = 'url(' + bodyCs.image + ')';
+            bdEl.style.backgroundSize = 'contain';
+            bdEl.style.backgroundPosition = 'center';
+          }
+          var ebY = (bodyCfg.offsetY || 0) + (bodyCs.dY || 0);
+          var ebX = (bodyCfg.offsetX || 0) + (bodyCs.dX || 0);
+          var ebS = (bodyCfg.scale != null ? bodyCfg.scale : 1) * (bodyCs.dS || 1);
+          bdEl.dataset.offsetY = String(ebY);
+          bdEl.dataset.offsetX = String(ebX);
+          bdEl.dataset.spriteScale = String(ebS);
+          targetSheep.dom.wrap.appendChild(bdEl);
+          targetSheep.dom.bodySprite = bdEl;
+        }
       } else {
         targetSheep.traits.spriteTail = event.slotIndex;
         var tlEl = document.createElement('div');
         tlEl.className = 's-sprite-tail epic-shimmer';
         applyCustomSpriteOverlay(targetSheep.dom.tail, tlEl, event.slotIndex, cfg.spriteTail || {});
+        targetSheep.dom.tail.style.background = 'none';
+        targetSheep.dom.tail.style.border = 'none';
       }
 
       spawnPuff(targetSheep.x, targetSheep.y, 30);

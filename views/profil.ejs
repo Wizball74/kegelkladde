@@ -22,6 +22,7 @@
           <div class="profil-avatar-wrap">
             <% if (profile.avatar) { %>
               <img src="/uploads/avatars/<%= profile.avatar %>" alt="" class="profil-avatar-img" id="avatarPreview" />
+              <span style="font-size:4.8rem">?</span>
             <% } else { %>
               <div class="profil-avatar-initials" id="avatarPreview" style="opacity:0.5;">
                 <%= profile.first_name ? profile.first_name[0].toUpperCase() : '' %><%= profile.last_name ? profile.last_name[0].toUpperCase() : '' %>

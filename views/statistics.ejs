@@ -380,7 +380,10 @@
                   data-traits="<%= encodeURIComponent(JSON.stringify(traits)) %>"
                   data-size="<%= sheep.size_multiplier %>"
                   data-letter="<%= sheep.letter %>"
-                  data-sheep-id="<%= sheep.id %>">
+                  data-sheep-id="<%= sheep.id %>"
+                  data-age-ms="<%= sheep.age_ms %>"
+                  data-died-at="<%= sheep.died_at %>"
+                  data-death-cause="<%= sheep.death_cause %>">
                   <% if (canDelete) { %>
                     <button type="button" class="stall-sheep-delete" data-delete-sheep="<%= sheep.id %>" title="Schaf löschen">&times;</button>
                   <% } %>

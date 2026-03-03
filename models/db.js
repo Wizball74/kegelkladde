@@ -369,6 +369,10 @@ if (!attColumns.includes("random_avatar")) {
 if (!attColumns.includes("spiel_2550")) {
   db.exec("ALTER TABLE attendance ADD COLUMN spiel_2550 REAL DEFAULT 0");
 }
+// TBD: Pudelkönig — NICHT LÖSCHEN! Wird später für Epic Body-Sprites genutzt.
+if (!attColumns.includes("pudelkoenig")) {
+  db.exec("ALTER TABLE attendance ADD COLUMN pudelkoenig INTEGER NOT NULL DEFAULT 0");
+}
 
 // Migration: game-Spalte auf records
 const recordColumns = db.prepare("PRAGMA table_info(records)").all().map((c) => c.name);
@@ -849,6 +853,52 @@ function deleteDeadSheepByDate(dateStr) {
   return db.prepare("DELETE FROM sheep_graveyard WHERE date(died_at) = date(?)").run(dateStr);
 }
 
+/* ═══ Epic Milestones ═══ */
+
+function getEpicMilestonesConfig() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'epic_milestones_config'").get();
+  if (row) try { return JSON.parse(row.value); } catch (e) { /* ignore */ }
+  return {
+    milestones: [
+      { type: "alle9", count: 10, reward: "body" },
+      { type: "alle9", count: 25, reward: "body" },
+      { type: "alle9", count: 50, reward: "tail" },
+      { type: "kranz", count: 10, reward: "tail" },
+      { type: "kranz", count: 25, reward: "body" },
+      { type: "kranz", count: 50, reward: "tail" },
+    ],
+  };
+}
+
+function getCumulativeCount(memberId, field) {
+  if (field !== "alle9" && field !== "kranz") return 0;
+  const initial = db.prepare(
+    `SELECT initial_${field} as val FROM member_initial_values WHERE user_id = ?`
+  ).get(memberId);
+  const sum = db.prepare(
+    `SELECT COALESCE(SUM(${field}), 0) as val FROM attendance WHERE user_id = ?`
+  ).get(memberId);
+  return (initial?.val || 0) + (sum?.val || 0);
+}
+
+function checkEpicMilestone(memberId, field, oldCount, newCount) {
+  const cfg = getEpicMilestonesConfig();
+  const sheepRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_config'").get();
+  const sheepCfg = sheepRow ? JSON.parse(sheepRow.value) : {};
+
+  for (const ms of cfg.milestones) {
+    if (ms.type !== field) continue;
+    if (oldCount < ms.count && newCount >= ms.count) {
+      const cat = ms.reward === "body" ? "spriteBody" : "spriteTail";
+      const slots = (sheepCfg[cat] && sheepCfg[cat].customSlots) || [];
+      if (slots.length === 0) continue;
+      const slotIndex = Math.floor(Math.random() * slots.length);
+      return { reward: ms.reward, slotIndex, milestone: { type: field, count: ms.count } };
+    }
+  }
+  return null;
+}
+
 module.exports = {
   db,
   encrypt,
@@ -875,5 +925,8 @@ module.exports = {
   getDeadSheepById,
   deleteDeadSheep,
   deleteDeadSheepByDate,
-  getGraveyardStats
+  getGraveyardStats,
+  getEpicMilestonesConfig,
+  getCumulativeCount,
+  checkEpicMilestone
 };

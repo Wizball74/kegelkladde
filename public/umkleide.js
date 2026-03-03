@@ -34,7 +34,7 @@
     }
   };
 
-  var DEFAULT_SLOT_COUNTS = { spriteHat: 16, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
+  var DEFAULT_SLOT_COUNTS = { spriteHat: 25, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
 
   var CSS_ACC_NAMES = {
     tophat:'Zylinder',partyhat:'Partyhut',crown:'Krone',beanie:'M\u00fctze',
@@ -301,17 +301,16 @@
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
       var hC = cfg.spriteHat;
-      var hCustomSlots = hC.customSlots || [];
-      if (tr.spriteHat >= 16 && tr.spriteHat < 16 + (hCustomSlots.length ? 0 : 999)) {
-        // Default wig range (index 16-24)
+      if (tr.spriteHat >= 16 && tr.spriteHat < 25) {
+        // Perücken (index 16-24)
         hatEl.className = 's-sprite-wig';
         var wigIdx = tr.spriteHat - 16;
         var wc = wigIdx % 3, wr = (wigIdx / 3) | 0;
         hatEl.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
       } else {
         hatEl.className = 's-sprite-hat';
-        var hItem = applyPreviewSpriteOverlay(hatEl, tr.spriteHat, hC, 16, 'top');
-        if (!hItem.customImage && !(tr.spriteHat >= 16)) {
+        var hItem = applyPreviewSpriteOverlay(hatEl, tr.spriteHat, hC, 25, 'top');
+        if (!hItem.customImage && tr.spriteHat < 16) {
           var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
           if (hC.customSheet) hatEl.style.backgroundImage = 'url(' + hC.customSheet + ')';
           hatEl.style.backgroundPosition = -(hatCol * hC.slotW) + 'px ' + -(hatRow * hC.slotH) + 'px';
@@ -412,7 +411,7 @@
   function buildDefaultSpriteTile(spr, spriteClass, i) {
     spr.style.cssText = 'position:relative;top:auto;left:auto;bottom:auto;right:auto;transform:scale(3);transform-origin:center center;pointer-events:none;z-index:11;background-repeat:no-repeat;image-rendering:auto;';
     if (spriteClass === 's-sprite-hat') {
-      if (i >= 16) {
+      if (i >= 16 && i < 25) {
         var wc = (i - 16) % 3, wr = ((i - 16) / 3) | 0;
         spr.style.width = '11px'; spr.style.height = '15px';
         spr.style.backgroundImage = 'url(/img/spritesheet_peruecken.png)';
@@ -836,7 +835,7 @@
         document.getElementById('stItemSliders').style.display = 'none';
         loadCssSliders();
         // Grids mit Standard-Sheets neu bauen
-        buildSpriteGrid('hatGrid', 16, 4, 's-sprite-hat', currentHat, selectHat);
+        buildSpriteGrid('hatGrid', 25, 5, 's-sprite-hat', currentHat, selectHat);
         buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses);
         buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache);
         buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody);
@@ -852,7 +851,7 @@
   /* ═══ Einzel-Sprite-Upload ═══ */
 
   var GRID_REBUILD = {
-    spriteHat: function () { buildSpriteGrid('hatGrid', 16, 4, 's-sprite-hat', currentHat, selectHat); },
+    spriteHat: function () { buildSpriteGrid('hatGrid', 25, 5, 's-sprite-hat', currentHat, selectHat); },
     spriteGlasses: function () { buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses); },
     spriteStache: function () { buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache); },
     spriteBody: function () { buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody); },
@@ -1101,7 +1100,7 @@
     setSlider('fMouthY', 'fMouthYV', cfg.face.mouthY);
 
     // Grids neu bauen
-    buildSpriteGrid('hatGrid', 16, 4, 's-sprite-hat', currentHat, selectHat);
+    buildSpriteGrid('hatGrid', 25, 5, 's-sprite-hat', currentHat, selectHat);
     buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses);
     buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache);
     buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody);

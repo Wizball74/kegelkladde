@@ -113,7 +113,7 @@
     var accColors = ['#e44', '#44e', '#4a4', '#e4e', '#fa0', '#0cd', '#f80', '#c44'];
     var accColor = accColors[Math.random() * accColors.length | 0];
     var sCfg = sheepCfg();
-    var hatCount = 16 + ((sCfg.spriteHat && sCfg.spriteHat.customSlots) || []).length;
+    var hatCount = 25 + ((sCfg.spriteHat && sCfg.spriteHat.customSlots) || []).length;
     var glCount = 32 + ((sCfg.spriteGlasses && sCfg.spriteGlasses.customSlots) || []).length;
     var stCount = 12 + ((sCfg.spriteStache && sCfg.spriteStache.customSlots) || []).length;
     var spriteHat = Math.random() < 0.55 ? (Math.random() * hatCount | 0) : -1;
@@ -322,7 +322,7 @@
   function attachSpriteOverlays(head, tr, cfg, torso, tail) {
     if (tr.spriteHat >= 0) {
       var hatEl = document.createElement('div');
-      if (tr.spriteHat >= 16) {
+      if (tr.spriteHat >= 16 && tr.spriteHat < 25) {
         hatEl.className = 's-sprite-wig';
         var wigIdx = tr.spriteHat - 16;
         var wigCol = wigIdx % 3, wigRow = (wigIdx / 3) | 0;
@@ -331,7 +331,7 @@
       } else {
         hatEl.className = 's-sprite-hat';
         applySpriteOverlay(head, hatEl, tr.spriteHat, cfg.spriteHat || {},
-          { cols: 4, slotW: 9.85, slotH: 8.85, offsetY: -8, scale: 1, defaultCount: 16 });
+          { cols: 4, slotW: 9.85, slotH: 8.85, offsetY: -8, scale: 1, defaultCount: 25 });
       }
     }
     if (tr.spriteGlasses >= 0) {

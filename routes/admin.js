@@ -339,7 +339,7 @@ router.post("/admin/umkleide/reset", requireAuth, requireAdmin, verifyCsrf, (req
 
 // ═══ Einzel-Sprite-Upload ═══
 
-const DEFAULT_SLOT_COUNTS = { spriteHat: 16, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
+const DEFAULT_SLOT_COUNTS = { spriteHat: 25, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
 
 const spriteSlotDir = path.join(__dirname, "..", "data", "uploads", "sprites");
 if (!fs.existsSync(spriteSlotDir)) {

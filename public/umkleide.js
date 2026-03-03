@@ -358,6 +358,7 @@
     }
     if (tr.spriteBody >= 0) {
       var bdEl = document.createElement('div'); bdEl.className = 's-sprite-body';
+      bdEl.style.width = '100%'; bdEl.style.height = '100%'; bdEl.style.borderRadius = '50%';
       var bdC = cfg.spriteBody;
       var bdItem = applyPreviewSpriteOverlay(bdEl, tr.spriteBody, bdC, 0, 'top');
       var bdPosY = (bdC.offsetY || 0) + (bdItem.dY || 0);

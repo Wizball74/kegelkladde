@@ -8016,48 +8016,6 @@ function initMemberDragDrop() {
       blades.appendChild(bl);
     }
 
-    // CSS Accessoires
-    var cssAccCfg = sheepCfg.cssAccessories || {};
-    var cssAccDefY = {tophat:-9,partyhat:-12,crown:-7,beanie:-5,glasses:2.5,bowtie:-3,bell:0,flower:-1,scarf:-2.5,shoes:0};
-    function applyCssAccOff(el, type) {
-      var c = cssAccCfg[type]; if (!c) return;
-      if (c.offsetY) { var defY = cssAccDefY[type] || 0; el.style.top = (defY + c.offsetY) + 'px'; }
-      if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
-      if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
-    }
-
-    if (tr.accessory === 'tophat') {
-      var h = document.createElement('div'); h.className = 's-acc s-tophat'; h.style.background = tr.isBlack ? '#555' : '#222';
-      head.appendChild(h); applyCssAccOff(h, 'tophat');
-    } else if (tr.accessory === 'partyhat') {
-      var h = document.createElement('div'); h.className = 's-acc s-partyhat'; h.style.borderBottomColor = tr.accColor; h.style.borderBottomWidth = '10px';
-      head.appendChild(h); applyCssAccOff(h, 'partyhat');
-    } else if (tr.accessory === 'crown') {
-      var h = document.createElement('div'); h.className = 's-acc s-crown';
-      head.appendChild(h); applyCssAccOff(h, 'crown');
-    } else if (tr.accessory === 'beanie') {
-      var h = document.createElement('div'); h.className = 's-acc s-beanie'; h.style.background = tr.accColor;
-      head.appendChild(h); applyCssAccOff(h, 'beanie');
-    } else if (tr.accessory === 'glasses') {
-      var g = document.createElement('div'); g.className = 's-acc s-glasses';
-      g.innerHTML = '<span class="s-lens"></span><span class="s-lens"></span><span class="s-bridge"></span>';
-      head.appendChild(g); applyCssAccOff(g, 'glasses');
-    } else if (tr.accessory === 'bowtie') {
-      var bt = document.createElement('div'); bt.className = 's-acc s-bowtie'; bt.style.borderLeftColor = bt.style.borderRightColor = tr.accColor; bt.style.borderLeftWidth = bt.style.borderRightWidth = '3.5px';
-      torso.appendChild(bt); applyCssAccOff(bt, 'bowtie');
-    } else if (tr.accessory === 'bell') {
-      var b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b); applyCssAccOff(b, 'bell');
-    } else if (tr.accessory === 'flower') {
-      var f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f); applyCssAccOff(f, 'flower');
-    } else if (tr.accessory === 'scarf') {
-      var sc = document.createElement('div'); sc.className = 's-acc s-scarf'; sc.style.background = tr.accColor;
-      head.appendChild(sc); applyCssAccOff(sc, 'scarf');
-    } else if (tr.accessory === 'shoes') {
-      for (var si = 0; si < legEls.length; si++) {
-        var sh = document.createElement('div'); sh.className = 's-shoe'; sh.style.background = tr.accColor; legEls[si].appendChild(sh);
-      }
-    }
-
     // Sprite-Overlays (mit Config)
     var hCfg = sheepCfg.spriteHat || {};
     var gCfg = sheepCfg.spriteGlasses || {};

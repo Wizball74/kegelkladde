@@ -8132,16 +8132,6 @@ td.ast-col-active::after {
   filter: none;
 }
 
-.umkleide-css-btns {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem;
-}
-.umkleide-css-btns button {
-  padding: .35rem .7rem; font-size: .82rem; border: 2px solid var(--line);
-  border-radius: var(--radius-sm); background: var(--panel); color: var(--text); cursor: pointer;
-  transition: border-color .15s, background .15s, color .15s;
-}
-.umkleide-css-btns button:hover { border-color: var(--accent); }
-.umkleide-css-btns button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .umkleide-actions {
   display: flex; gap: .75rem; margin-top: 1.5rem;
   padding-top: 1.5rem; border-top: 2px solid var(--line);

@@ -110,8 +110,6 @@
     var woolColor = isBlack ? '#3a3a3a' : woolColors[Math.random() * woolColors.length | 0];
     var borderColor = isBlack ? '#1a1a1a' : '#444';
     var skinColor = isBlack ? '#2a2a2a' : '#444';
-    var accColors = ['#e44', '#44e', '#4a4', '#e4e', '#fa0', '#0cd', '#f80', '#c44'];
-    var accColor = accColors[Math.random() * accColors.length | 0];
     var sCfg = sheepCfg();
     var hatCount = 25 + ((sCfg.spriteHat && sCfg.spriteHat.customSlots) || []).length;
     var glCount = 32 + ((sCfg.spriteGlasses && sCfg.spriteGlasses.customSlots) || []).length;
@@ -121,12 +119,6 @@
     var spriteStache = Math.random() < 0.35 ? (Math.random() * stCount | 0) : -1;
     var spriteBody = -1;  // nur via Epic-Meilenstein
     var spriteTail = -1;  // nur via Epic-Meilenstein
-    /* Accessoire-Pool: nur kompatible Typen einfügen */
-    var accPool = ['bowtie', 'bell', 'flower', 'scarf', 'shoes'];
-    if (spriteHat < 0) accPool.push('tophat', 'partyhat', 'crown', 'beanie');
-    if (spriteGlasses < 0) accPool.push('glasses');
-    var accChance = 0.50 + accPool.length * 0.03;
-    var accessory = Math.random() < accChance ? accPool[Math.random() * accPool.length | 0] : null;
     var legSpread = 3 + Math.random() * 5;
     var legYBase = 4.5 + Math.random() * 3;
     var legBackOff = 0.5 + Math.random() * 1.5;
@@ -162,7 +154,7 @@
     var propSize = +(0.7 + Math.random() * 0.6).toFixed(2);
     var propShapes = ['standard', 'standard', 'standard', 'round', 'slim', 'teardrop'];
     var propShape = propShapes[Math.random() * propShapes.length | 0];
-    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, accessory: accessory, accColor: accColor, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, spriteBody: spriteBody, spriteTail: spriteTail, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees, propBladeCount: propBladeCount, propBladeColor: propBladeColor, propHubColor: propHubColor, propSize: propSize, propShape: propShape };
+    return { scale: scale, chub: chub, legMul: legMul, headMul: headMul, woolColor: woolColor, borderColor: borderColor, skinColor: skinColor, isBlack: isBlack, legs: legs, legPhases: legPhases, legRestAngles: legRestAngles, tailSize: tailSize, spriteHat: spriteHat, spriteGlasses: spriteGlasses, spriteStache: spriteStache, spriteBody: spriteBody, spriteTail: spriteTail, energy: energy, curiosity: curiosity, sociability: sociability, hasKnees: hasKnees, propBladeCount: propBladeCount, propBladeColor: propBladeColor, propHubColor: propHubColor, propSize: propSize, propShape: propShape };
   }
 
   /* ═══ DOM-Factory: Sub-Funktionen ═══ */
@@ -214,49 +206,6 @@
       blades.appendChild(bl);
     }
     return { pole: pole, hub: hub, bwrap: bwrap, blades: blades, propSize: pSz };
-  }
-
-  var cssAccDefY = {tophat:-9,partyhat:-12,crown:-7,beanie:-5,glasses:2.5,bowtie:-3,bell:-2,flower:-1,scarf:-2.5,shoes:-2};
-
-  function applyCssAccOff(el, type, cssAccCfg) {
-    var c = cssAccCfg[type]; if (!c) return;
-    if (c.offsetY) el.style.top = ((cssAccDefY[type] || 0) + c.offsetY) + 'px';
-    if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
-    if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
-  }
-
-  function attachCssAccessory(head, torso, legEls, shinEls, tr, cfg) {
-    var cssAccCfg = cfg.cssAccessories || {};
-    var acc = tr.accessory;
-    if (!acc) return;
-    if (acc === 'shoes') {
-      for (var si = 0; si < legEls.length; si++) {
-        var shoe = document.createElement('div'); shoe.className = 's-shoe'; shoe.style.background = tr.accColor;
-        /* Bei Kniegelenken: Schuh ans Schienbein, nicht an den Oberschenkel */
-        var target = (shinEls && shinEls[si]) ? shinEls[si] : legEls[si];
-        target.appendChild(shoe);
-      }
-      return;
-    }
-    var el = document.createElement('div');
-    var parent = head;
-    if (acc === 'tophat') { el.className = 's-acc s-tophat'; el.style.background = tr.isBlack ? '#555' : '#222'; }
-    else if (acc === 'partyhat') { el.className = 's-acc s-partyhat'; el.style.borderBottomColor = tr.accColor; el.style.borderBottomWidth = '10px'; }
-    else if (acc === 'crown') { el.className = 's-acc s-crown'; }
-    else if (acc === 'beanie') { el.className = 's-acc s-beanie'; el.style.background = tr.accColor; }
-    else if (acc === 'glasses') {
-      el.className = 's-acc s-glasses';
-      var lens1 = document.createElement('span'); lens1.className = 's-lens';
-      var lens2 = document.createElement('span'); lens2.className = 's-lens';
-      var bridge = document.createElement('span'); bridge.className = 's-bridge';
-      el.appendChild(lens1); el.appendChild(lens2); el.appendChild(bridge);
-    }
-    else if (acc === 'bowtie') { el.className = 's-acc s-bowtie'; el.style.borderLeftColor = el.style.borderRightColor = tr.accColor; el.style.borderLeftWidth = el.style.borderRightWidth = '3.5px'; parent = torso; }
-    else if (acc === 'bell') { el.className = 's-acc s-bell'; }
-    else if (acc === 'flower') { el.className = 's-acc s-flower'; el.style.background = tr.accColor; }
-    else if (acc === 'scarf') { el.className = 's-acc s-scarf'; el.style.background = tr.accColor; }
-    parent.appendChild(el);
-    applyCssAccOff(el, acc, cssAccCfg);
   }
 
   function applySpriteOverlay(head, el, idx, spriteCfg, defaults) {
@@ -436,8 +385,7 @@
     /* Propeller */
     var prop = createPropeller(wrap, mk, tr);
 
-    /* Accessoire + Sprite-Overlays */
-    attachCssAccessory(head, torso, legEls, shinEls, tr, cfg);
+    /* Sprite-Overlays */
     var bodySprite = attachSpriteOverlays(head, tr, cfg, torso, tail);
 
     /* Namens-Bubble: zeigt ownerName über dem Schaf (erste 10s + beim Draggen) */
@@ -1538,6 +1486,8 @@
         var soloTag = sh.solo ? 'S' : 'H';
         var sec = (sh.stDur > 0 ? Math.round((sh.stDur - sh.stTimer) / 1000) : 0);
         d.debugEl.textContent = sh.state + ' ' + soloTag + ' ' + sec + 's';
+        var dbgScale = 1 / (tr.scale * sh.sizeMultiplier);
+        d.debugEl.style.transform = 'translateX(-50%) scale(' + dbgScale + ')';
       } else if (d.debugEl.style.display !== 'none') {
         d.debugEl.style.display = 'none';
         d.debugEl.textContent = '';
@@ -2077,7 +2027,6 @@
       /* Vanilla-Modus: Schaf ohne jedes Accessoire, Standard-Propeller */
       if (opts.vanilla) {
         var tr = generateTraits();
-        tr.accessory = null;
         tr.spriteHat = -1;
         tr.spriteGlasses = -1;
         tr.spriteStache = -1;

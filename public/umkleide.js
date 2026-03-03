@@ -16,13 +16,6 @@
     spriteStache:  { offsetY: -1, offsetX: 0, scale: 0.25, slotW: 40, slotH: 30, cols: 3, items: {} },
     spriteBody:    { offsetY: 0, offsetX: 0, scale: 1, items: {} },
     spriteTail:    { offsetY: 0, offsetX: 0, scale: 1, items: {} },
-    cssAccessories: {
-      tophat:{offsetY:0,offsetX:0,scale:1},partyhat:{offsetY:0,offsetX:0,scale:1},
-      crown:{offsetY:0,offsetX:0,scale:1},beanie:{offsetY:0,offsetX:0,scale:1},
-      glasses:{offsetY:0,offsetX:0,scale:1},bowtie:{offsetY:0,offsetX:0,scale:1},
-      bell:{offsetY:0,offsetX:0,scale:1},flower:{offsetY:0,offsetX:0,scale:1},
-      scarf:{offsetY:0,offsetX:0,scale:1}
-    },
     face: {
       eyeY: 3.5,       // CSS default: top 3.5px
       eyeLeftX: 2,      // CSS default: left 2px
@@ -35,12 +28,6 @@
   };
 
   var DEFAULT_SLOT_COUNTS = { spriteHat: 25, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
-
-  var CSS_ACC_NAMES = {
-    tophat:'Zylinder',partyhat:'Partyhut',crown:'Krone',beanie:'M\u00fctze',
-    glasses:'Brille',bowtie:'Fliege',bell:'Glocke',flower:'Blume',scarf:'Schal'
-  };
-  var CSS_ACC_KEYS = Object.keys(CSS_ACC_NAMES);
 
   /* ═══ Body-Konstanten (aus flyingsheep.js) ═══ */
   var HEAD_W = 12, HEAD_H = 12, TORSO_W = 17, TORSO_H = 14, LEG_W = 2, LEG_H = 8;
@@ -65,11 +52,6 @@
   mergeSpriteCategory('spriteStache');
   mergeSpriteCategory('spriteBody');
   mergeSpriteCategory('spriteTail');
-  if (saved.cssAccessories) {
-    for (var k in saved.cssAccessories) {
-      if (cfg.cssAccessories[k]) Object.assign(cfg.cssAccessories[k], saved.cssAccessories[k]);
-    }
-  }
   if (saved.face) Object.assign(cfg.face, saved.face);
 
   var currentHat = 0;
@@ -77,8 +59,6 @@
   var currentStache = -1;
   var currentBody = -1;
   var currentTail = -1;
-  var currentCssAcc = null;
-  var selectedCssKey = 'tophat';
 
   /* Body-Traits (nur Vorschau) */
   var body = { scale: 1.0, chub: 1.0, headMul: 1.0, legMul: 1.2, tailSize: 4, isBlack: false, woolColor: 'white', borderColor: '#444', skinColor: '#444', accColor: '#e44', showPropeller: true, propBladeCount: 2, propBladeColor: '#ffd740', propHubColor: '#666666', propSize: 1.0, propShape: 'standard' };
@@ -121,7 +101,6 @@
       borderColor: body.isBlack ? '#1a1a1a' : body.borderColor,
       skinColor: body.isBlack ? '#2a2a2a' : body.skinColor,
       accColor: body.accColor,
-      accessory: currentCssAcc,
       spriteHat: currentHat, spriteGlasses: currentGlasses, spriteStache: currentStache, spriteBody: currentBody, spriteTail: currentTail,
       legs: [
         {lx:-3,ly:5.5},{lx:3,ly:5.5},{lx:-2,ly:6},{lx:2,ly:6}
@@ -236,47 +215,6 @@
         else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
         else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
         blades.appendChild(bl);
-      }
-    }
-
-    /* CSS-Accessoire */
-    var accCfg = cfg.cssAccessories || {};
-    function applyCssOff(el, type) {
-      var c = accCfg[type]; if (!c) return;
-      if (c.offsetY) el.style.top = (parseFloat(el.style.top) || 0) + c.offsetY + 'px';
-      if (c.offsetX) el.style.marginLeft = c.offsetX + 'px';
-      if (c.scale && c.scale !== 1) { var t = el.style.transform || ''; el.style.transform = t + ' scale(' + c.scale + ')'; }
-    }
-
-    if (tr.accessory === 'tophat') {
-      var h = document.createElement('div'); h.className = 's-acc s-tophat'; h.style.background = tr.isBlack ? '#555' : '#222';
-      head.appendChild(h); applyCssOff(h, 'tophat');
-    } else if (tr.accessory === 'partyhat') {
-      var h = document.createElement('div'); h.className = 's-acc s-partyhat'; h.style.borderBottomColor = tr.accColor; h.style.borderBottomWidth = '10px';
-      head.appendChild(h); applyCssOff(h, 'partyhat');
-    } else if (tr.accessory === 'crown') {
-      var h = document.createElement('div'); h.className = 's-acc s-crown';
-      head.appendChild(h); applyCssOff(h, 'crown');
-    } else if (tr.accessory === 'beanie') {
-      var h = document.createElement('div'); h.className = 's-acc s-beanie'; h.style.background = tr.accColor;
-      head.appendChild(h); applyCssOff(h, 'beanie');
-    } else if (tr.accessory === 'glasses') {
-      var g = document.createElement('div'); g.className = 's-acc s-glasses';
-      g.innerHTML = '<span class="s-lens"></span><span class="s-lens"></span><span class="s-bridge"></span>';
-      head.appendChild(g); applyCssOff(g, 'glasses');
-    } else if (tr.accessory === 'bowtie') {
-      var bt = document.createElement('div'); bt.className = 's-acc s-bowtie'; bt.style.borderLeftColor = bt.style.borderRightColor = tr.accColor; bt.style.borderLeftWidth = bt.style.borderRightWidth = '3.5px';
-      torso.appendChild(bt); applyCssOff(bt, 'bowtie');
-    } else if (tr.accessory === 'bell') {
-      var b = document.createElement('div'); b.className = 's-acc s-bell'; head.appendChild(b); applyCssOff(b, 'bell');
-    } else if (tr.accessory === 'flower') {
-      var f = document.createElement('div'); f.className = 's-acc s-flower'; f.style.background = tr.accColor; head.appendChild(f); applyCssOff(f, 'flower');
-    } else if (tr.accessory === 'scarf') {
-      var s = document.createElement('div'); s.className = 's-acc s-scarf'; s.style.background = tr.accColor;
-      head.appendChild(s); applyCssOff(s, 'scarf');
-    } else if (tr.accessory === 'shoes') {
-      for (var si = 0; si < legEls.length; si++) {
-        var sh = document.createElement('div'); sh.className = 's-shoe'; sh.style.background = tr.accColor; legEls[si].appendChild(sh);
       }
     }
 
@@ -554,48 +492,6 @@
     }
   }
 
-  /* ═══ CSS-Acc Buttons ═══ */
-  function buildCssButtons() {
-    var container = document.getElementById('cssBtns');
-    if (!container) return;
-    container.innerHTML = '';
-
-    // "Kein"-Button
-    var none = document.createElement('button');
-    none.type = 'button';
-    none.textContent = 'Kein';
-    none.className = (!currentCssAcc ? 'active' : '');
-    none.addEventListener('click', function () { selectCssAcc(null); });
-    container.appendChild(none);
-
-    for (var i = 0; i < CSS_ACC_KEYS.length; i++) {
-      var key = CSS_ACC_KEYS[i];
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = CSS_ACC_NAMES[key];
-      btn.className = (key === currentCssAcc ? 'active' : '');
-      (function (k) {
-        btn.addEventListener('click', function () { selectCssAcc(k); });
-      })(key);
-      container.appendChild(btn);
-    }
-  }
-
-  function selectCssAcc(key) {
-    currentCssAcc = key;
-    selectedCssKey = key || 'tophat';
-    buildCssButtons();
-    loadCssSliders();
-    rebuildPreview();
-  }
-
-  function loadCssSliders() {
-    var c = cfg.cssAccessories[selectedCssKey] || {offsetY:0,offsetX:0,scale:1};
-    setSlider('cssY', 'cssYV', c.offsetY);
-    setSlider('cssX', 'cssXV', c.offsetX);
-    setSlider('cssS', 'cssSV', c.scale);
-  }
-
   /* ═══ Per-Item-Offset Helpers ═══ */
   function getItemOff(catCfg, idx, categoryKey) {
     var defaultCount = categoryKey ? (DEFAULT_SLOT_COUNTS[categoryKey] || 0) : 9999;
@@ -699,11 +595,6 @@
   bindSlider('tailIdY', 'tailIdYV', function (v) { if (currentTail >= 0) getItemOff(cfg.spriteTail, currentTail, 'spriteTail').dY = v; });
   bindSlider('tailIdX', 'tailIdXV', function (v) { if (currentTail >= 0) getItemOff(cfg.spriteTail, currentTail, 'spriteTail').dX = v; });
   bindSlider('tailIdS', 'tailIdSV', function (v) { if (currentTail >= 0) getItemOff(cfg.spriteTail, currentTail, 'spriteTail').dS = v; });
-
-  // CSS Accessory
-  bindSlider('cssY', 'cssYV', function (v) { if (!cfg.cssAccessories[selectedCssKey]) cfg.cssAccessories[selectedCssKey] = {offsetY:0,offsetX:0,scale:1}; cfg.cssAccessories[selectedCssKey].offsetY = v; });
-  bindSlider('cssX', 'cssXV', function (v) { if (!cfg.cssAccessories[selectedCssKey]) cfg.cssAccessories[selectedCssKey] = {offsetY:0,offsetX:0,scale:1}; cfg.cssAccessories[selectedCssKey].offsetX = v; });
-  bindSlider('cssS', 'cssSV', function (v) { if (!cfg.cssAccessories[selectedCssKey]) cfg.cssAccessories[selectedCssKey] = {offsetY:0,offsetX:0,scale:1}; cfg.cssAccessories[selectedCssKey].scale = v; });
 
   // Gesicht (wird gespeichert)
   bindSlider('fEyeY', 'fEyeYV', function (v) { cfg.face.eyeY = v; });
@@ -835,7 +726,6 @@
         document.getElementById('hatItemSliders').style.display = 'none';
         document.getElementById('glItemSliders').style.display = 'none';
         document.getElementById('stItemSliders').style.display = 'none';
-        loadCssSliders();
         // Grids mit Standard-Sheets neu bauen
         buildSpriteGrid('hatGrid', 25, 5, 's-sprite-hat', currentHat, selectHat);
         buildSpriteGrid('glassesGrid', 32, 4, 's-sprite-glasses', currentGlasses, selectGlasses);
@@ -1058,11 +948,6 @@
             Object.assign(cfg[cat], imported[cat]);
           }
         });
-        if (imported.cssAccessories) {
-          for (var k in imported.cssAccessories) {
-            if (cfg.cssAccessories[k]) Object.assign(cfg.cssAccessories[k], imported.cssAccessories[k]);
-          }
-        }
         if (imported.face) Object.assign(cfg.face, imported.face);
         loadConfigIntoUI();
         if (typeof showToast === 'function') showToast('Config importiert \u2014 zum \u00dcbernehmen "Konfiguration speichern" klicken.', 'success');
@@ -1107,8 +992,6 @@
     buildSpriteGrid('stacheGrid', 12, 3, 's-sprite-stache', currentStache, selectStache);
     buildSpriteGrid('bodyGrid', 0, 4, 's-sprite-body', currentBody, selectBody);
     buildSpriteGrid('tailGrid', 0, 4, 's-sprite-tail', currentTail, selectTail);
-    buildCssButtons();
-    loadCssSliders();
 
     // Per-Item-Slider
     if (currentHat >= 0) showItemSliders('hatItemSliders', 'hatItemLabel', currentHat, cfg.spriteHat, 'hatIdY', 'hatIdYV', 'hatIdX', 'hatIdXV', 'hatIdS', 'hatIdSV', 'spriteHat');

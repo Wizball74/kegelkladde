@@ -883,7 +883,7 @@ function getCumulativeCount(memberId, field) {
 
 function checkEpicMilestone(memberId, field, oldCount, newCount) {
   const cfg = getEpicMilestonesConfig();
-  const sheepRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_config'").get();
+  const sheepRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
   const sheepCfg = sheepRow ? JSON.parse(sheepRow.value) : {};
 
   for (const ms of cfg.milestones) {

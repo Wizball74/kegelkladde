@@ -151,10 +151,9 @@
   background-size: 120px 120px;
   background-repeat: no-repeat;
   image-rendering: auto;
-  mix-blend-mode: multiply;
 }
 .s-sprite-body {
-  position: absolute; pointer-events: none; z-index: 5;
+  position: absolute; pointer-events: none; z-index: 4;
   top: 0; left: 0;
   background-size: contain;
   background-position: center;

@@ -29,9 +29,7 @@
 
   var DEFAULT_SLOT_COUNTS = { spriteHat: 25, spriteGlasses: 32, spriteStache: 12, spriteBody: 0, spriteTail: 0 };
 
-  /* ═══ Body-Konstanten (aus flyingsheep.js) ═══ */
-  var HEAD_W = 12, HEAD_H = 12, TORSO_W = 17, TORSO_H = 14, LEG_W = 2, LEG_H = 8;
-  var POLE_H = 3, HUB_SZ = 4;
+  /* Body-Konstanten entfernt — Vorschau nutzt jetzt die echte flyingsheep-Engine */
 
   /* ═══ State ═══ */
   var cfg = JSON.parse(JSON.stringify(DEFAULTS));
@@ -88,237 +86,38 @@
     if (vEl) vEl.textContent = v;
   }
 
-  /* ═══ Preview-Renderer ═══ */
+  /* ═══ Preview-Renderer (nutzt echte flyingsheep-Engine) ═══ */
   var PREVIEW_SCALE = 5;
+  var previewCtrl = null;
 
   function rebuildPreview() {
-    preview.innerHTML = '';
+    if (previewCtrl) { previewCtrl.destroy(); previewCtrl = null; }
 
-    var tr = {
+    if (!window.flyingSheep || !window.flyingSheep.preview) {
+      preview.innerHTML = '<div style="padding:2rem;text-align:center;color:#999;font-size:.8rem;">Vorschau nicht verfügbar</div>';
+      return;
+    }
+
+    /* Lokale Umkleide-Config → __sheepConfig synchronisieren,
+       damit createSheepDOM/attachSpriteOverlays die aktuellen Werte liest */
+    window.__sheepConfig = cfg;
+
+    var traits = {
       scale: body.scale, chub: body.chub, headMul: body.headMul, legMul: body.legMul,
       tailSize: body.tailSize, isBlack: body.isBlack,
       woolColor: body.isBlack ? '#3a3a3a' : body.woolColor,
       borderColor: body.isBlack ? '#1a1a1a' : body.borderColor,
       skinColor: body.isBlack ? '#2a2a2a' : body.skinColor,
-      accColor: body.accColor,
-      spriteHat: currentHat, spriteGlasses: currentGlasses, spriteStache: currentStache, spriteBody: currentBody, spriteTail: currentTail,
-      legs: [
-        {lx:-3,ly:5.5},{lx:3,ly:5.5},{lx:-2,ly:6},{lx:2,ly:6}
-      ],
-      legPhases:[0,Math.PI,0.5,Math.PI+0.5], legRestAngles:[0,0,0,0]
+      spriteHat: currentHat, spriteGlasses: currentGlasses, spriteStache: currentStache,
+      spriteBody: currentBody, spriteTail: currentTail,
+      propBladeCount: body.propBladeCount, propBladeColor: body.propBladeColor,
+      propHubColor: body.propHubColor, propSize: body.propSize, propShape: body.propShape,
     };
 
-    var tw = TORSO_W * tr.chub, th = TORSO_H;
-    var hw = HEAD_W * tr.headMul, hh = HEAD_H * tr.headMul;
-    var lh = LEG_H * tr.legMul;
-
-    // Das echte Rendering nutzt ein Nullpunkt-System (0,0) = Torso-Mitte.
-    // Kopf, Beine, Schwanz werden relativ dazu positioniert.
-    // Wir berechnen alles relativ zum Ursprung und verschieben dann in die Preview-Mitte.
-
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative;width:0;height:0;';
-
-    var totalScale = PREVIEW_SCALE * body.scale;
-    var container = document.createElement('div');
-    container.style.cssText = 'position:absolute;top:55%;left:50%;transform:translate(-50%,-50%) scale(' + totalScale + ');';
-    preview.appendChild(container);
-    container.appendChild(wrap);
-
-    function mk(cls) { var el = document.createElement('div'); el.className = cls; el.style.position = 'absolute'; wrap.appendChild(el); return el; }
-
-    // Wie im echten render(): Torso bei (0,0), alles relativ dazu.
-    // tx=0, ty=0 (kein bob im Preview)
-    var tx = 0, ty = 0;
-    var hr = HEAD_W / 2 * tr.headMul; // Kopfradius
-
-    // Kopfposition: wie render() Zeile 1003-1006 (tailSide=1, kein bank)
-    var headSideX = 0; // zentriert (kein tailSide-Offset)
-    var hx = tx + headSideX, hy = ty - 5; // -5 = Kopf 5px über Torso-Mitte
-
-    // Beine (hinter Torso zuerst, dann vorne)
-    var legEls = [];
-    var legDefs = [
-      {cls:'s-leg bk',l:tr.legs[2]},{cls:'s-leg bk',l:tr.legs[3]},
-      {cls:'s-leg fr',l:tr.legs[0]},{cls:'s-leg fr',l:tr.legs[1]}
-    ];
-    for (var li = 0; li < legDefs.length; li++) {
-      var ld = legDefs[li];
-      var leg = mk(ld.cls);
-      // Bein-Hüfte relativ zu Torso-Mitte
-      var hipX = tx + ld.l.lx, hipY = ty + ld.l.ly;
-      leg.style.cssText += 'left:' + (hipX - LEG_W/2) + 'px;top:' + hipY + 'px;width:' + LEG_W + 'px;height:' + lh + 'px;background:' + tr.skinColor + ';border-radius:1px;transform-origin:1px 0;';
-      legEls.push(leg);
-    }
-
-    // Schwanz (rechts vom Torso)
-    var tail = mk('s-tail');
-    var tailX = tx + tw/2 + tr.tailSize * 0.3, tailY = ty + 1;
-    tail.style.cssText += 'width:' + tr.tailSize + 'px;height:' + tr.tailSize + 'px;background:' + tr.woolColor + ';border:1px solid ' + tr.borderColor + ';left:' + (tailX - tr.tailSize/2) + 'px;top:' + (tailY - tr.tailSize/2) + 'px;';
-
-    // Torso (zentriert um 0,0 wie im echten render)
-    var torso = mk('s-torso');
-    torso.style.cssText += 'width:' + tw + 'px;height:' + th + 'px;background:' + tr.woolColor + ';border-color:' + tr.borderColor + ';left:' + (tx - tw/2) + 'px;top:' + (ty - th/2) + 'px;';
-
-    // Kopf (zentriert um hx,hy)
-    var head = mk('s-head');
-    head.style.cssText += 'width:' + hw + 'px;height:' + hh + 'px;background:' + tr.woolColor + ';border-color:' + tr.borderColor + ';left:' + (hx - hw/2) + 'px;top:' + (hy - hh/2) + 'px;';
-    head.style.setProperty('--wool', tr.woolColor);
-    head.style.setProperty('--bdr', tr.borderColor);
-
-    // Ohren (mit Config)
-    var fc = cfg.face;
-    var earColor = tr.isBlack ? '#2a2a2a' : '#f4c7b0';
-    var earL = document.createElement('div'); earL.className = 's-ear l'; earL.style.background = earColor; earL.style.border = '.8px solid ' + tr.borderColor;
-    earL.style.top = fc.earY + 'px'; earL.style.left = fc.earLeftX + 'px';
-    head.appendChild(earL);
-    var earR = document.createElement('div'); earR.className = 's-ear r'; earR.style.background = earColor; earR.style.border = '.8px solid ' + tr.borderColor;
-    earR.style.top = fc.earY + 'px'; earR.style.right = fc.earRightX + 'px';
-    head.appendChild(earR);
-
-    // Augen + Mund (mit Config)
-    var eyeL = document.createElement('div'); eyeL.className = 's-eye l';
-    eyeL.style.top = fc.eyeY + 'px'; eyeL.style.left = fc.eyeLeftX + 'px';
-    head.appendChild(eyeL);
-    var eyeR = document.createElement('div'); eyeR.className = 's-eye r';
-    eyeR.style.top = fc.eyeY + 'px'; eyeR.style.right = fc.eyeRightX + 'px';
-    head.appendChild(eyeR);
-    var mouth = document.createElement('div'); mouth.className = 's-mouth';
-    mouth.style.bottom = fc.mouthY + 'px';
-    head.appendChild(mouth);
-    if (tr.isBlack) { eyeL.style.background = eyeR.style.background = '#eee'; mouth.style.borderColor = tr.borderColor; }
-
-    // Propeller (statisch, ausblendbar)
-    if (body.showPropeller) {
-      var pSz = body.propSize, pColor = body.propBladeColor, pHubC = body.propHubColor;
-      var pBC = body.propBladeCount, pShape = body.propShape;
-      var scaledPoleH = POLE_H * pSz, scaledHubSz = HUB_SZ * pSz, halfBw = 14 * pSz;
-      var topPX = hx, topPY = hy - hr - 1;
-      var hubPY = topPY - scaledPoleH;
-      var pole = mk('p s-pole');
-      pole.style.cssText += 'height:' + scaledPoleH + 'px;left:' + (topPX - 0.75) + 'px;top:' + topPY + 'px;';
-      var hub = mk('p s-hub');
-      hub.style.cssText += 'width:' + scaledHubSz + 'px;height:' + scaledHubSz + 'px;left:' + (topPX - scaledHubSz/2) + 'px;top:' + (hubPY - scaledHubSz/2) + 'px;';
-      hub.style.setProperty('--hub-color', pHubC);
-      var bwrapSz = Math.round(28 * pSz);
-      var bwrap = mk('p s-bwrap');
-      bwrap.style.cssText += 'width:' + bwrapSz + 'px;height:' + bwrapSz + 'px;left:' + (topPX - halfBw) + 'px;top:' + (hubPY - halfBw) + 'px;';
-      var blades = document.createElement('div'); blades.className = 's-blades';
-      blades.style.transform = 'rotateX(60deg) rotate(25deg)';
-      blades.style.setProperty('--bl-dark', darkenColor(pColor));
-      blades.style.setProperty('--bl-light', pColor);
-      bwrap.appendChild(blades);
-      var shapeClass = pShape !== 'standard' ? ' s-bl--' + pShape : '';
-      for (var bi = 0; bi < pBC; bi++) {
-        var bl = document.createElement('div'); bl.className = 's-bl' + shapeClass;
-        if (pSz !== 1 && bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg) scale(' + pSz + ')';
-        else if (pSz !== 1 && bi === 0) bl.style.transform = 'scale(' + pSz + ')';
-        else if (bi > 0) bl.style.transform = 'rotate(' + (bi * (360 / pBC)) + 'deg)';
-        blades.appendChild(bl);
-      }
-    }
-
-    /* Sprite-Overlays */
-    function applyPreviewSpriteOverlay(el, idx, catCfg, defaultCount, posYProp) {
-      var customSlots = catCfg.customSlots || [];
-      var item;
-      if (idx >= defaultCount && customSlots[idx - defaultCount]) {
-        var cs = customSlots[idx - defaultCount];
-        item = cs;
-        if (cs.image) { el.style.backgroundImage = 'url(' + cs.image + ')'; el.style.backgroundSize = 'contain'; el.style.backgroundPosition = 'center'; }
-      } else {
-        item = (catCfg.items && catCfg.items[idx]) || { dY: 0, dX: 0 };
-        if (item.customImage) {
-          el.style.backgroundImage = 'url(' + item.customImage + ')'; el.style.backgroundSize = 'contain'; el.style.backgroundPosition = 'center';
-          return item; // Skip default spritesheet positioning
-        }
-      }
-      return item || { dY: 0, dX: 0 };
-    }
-
-    if (tr.spriteHat >= 0) {
-      var hatEl = document.createElement('div');
-      var hC = cfg.spriteHat;
-      var wigCustom = tr.spriteHat >= 16 && tr.spriteHat < 25 && hC.items && hC.items[tr.spriteHat] && hC.items[tr.spriteHat].customImage;
-      if (tr.spriteHat >= 16 && tr.spriteHat < 25 && !wigCustom) {
-        // Perücken (index 16-24) — Standard-Spritesheet
-        hatEl.className = 's-sprite-wig';
-        var wigIdx = tr.spriteHat - 16;
-        var wc = wigIdx % 3, wr = (wigIdx / 3) | 0;
-        hatEl.style.backgroundPosition = (wc * 50) + '% ' + (wr * 50) + '%';
-      } else {
-        hatEl.className = 's-sprite-hat';
-        var hItem = applyPreviewSpriteOverlay(hatEl, tr.spriteHat, hC, 25, 'top');
-        if (!hItem.customImage && tr.spriteHat < 16) {
-          var hatCol = tr.spriteHat % 4, hatRow = (tr.spriteHat / 4) | 0;
-          if (hC.customSheet) hatEl.style.backgroundImage = 'url(' + hC.customSheet + ')';
-          hatEl.style.backgroundPosition = -(hatCol * hC.slotW) + 'px ' + -(hatRow * hC.slotH) + 'px';
-        }
-        hatEl.style.top = ((hC.offsetY || 0) + (hItem.dY || 0)) + 'px';
-        var hTotalX = (hC.offsetX || 0) + (hItem.dX || 0);
-        if (hTotalX) hatEl.style.left = 'calc(50% + ' + hTotalX + 'px)';
-        var hTotalS = (hC.scale || 1) * (hItem.dS || 1);
-        if (hTotalS !== 1) hatEl.style.transform = 'translateX(-50%) scale(' + hTotalS + ')';
-      }
-      head.appendChild(hatEl);
-    }
-    if (tr.spriteGlasses >= 0) {
-      var glEl = document.createElement('div'); glEl.className = 's-sprite-glasses';
-      var gC = cfg.spriteGlasses;
-      var gItem = applyPreviewSpriteOverlay(glEl, tr.spriteGlasses, gC, 32, 'top');
-      if (!gItem.customImage && !gItem.image) {
-        if (gC.customSheet) glEl.style.backgroundImage = 'url(' + gC.customSheet + ')';
-        var glCol = tr.spriteGlasses % (gC.cols || 4), glRow = (tr.spriteGlasses / (gC.cols || 4)) | 0;
-        glEl.style.backgroundPosition = -(glCol * (gC.slotW || 16.975)) + 'px ' + -(glRow * (gC.slotH || 8.3375)) + 'px';
-      }
-      glEl.style.top = ((gC.offsetY || 0) + (gItem.dY || 0)) + 'px';
-      var gTotalX = (gC.offsetX || 0) + (gItem.dX || 0);
-      if (gTotalX) glEl.style.left = 'calc(50% + ' + gTotalX + 'px)';
-      var gTotalS = (gC.scale || 1) * (gItem.dS || 1);
-      if (gTotalS !== 1) glEl.style.transform = 'translateX(-50%) scale(' + gTotalS + ')';
-      head.appendChild(glEl);
-    }
-    if (tr.spriteStache >= 0) {
-      var stEl = document.createElement('div'); stEl.className = 's-sprite-stache';
-      var sC = cfg.spriteStache;
-      var sItem2 = applyPreviewSpriteOverlay(stEl, tr.spriteStache, sC, 12, 'bottom');
-      if (!sItem2.customImage && !sItem2.image) {
-        if (sC.customSheet) stEl.style.backgroundImage = 'url(' + sC.customSheet + ')';
-        var stCol = tr.spriteStache % (sC.cols || 3), stRow = (tr.spriteStache / (sC.cols || 3)) | 0;
-        stEl.style.backgroundPosition = -(stCol * (sC.slotW || 40)) + 'px ' + -(stRow * (sC.slotH || 30)) + 'px';
-      }
-      stEl.style.bottom = ((sC.offsetY || 0) + (sItem2.dY || 0)) + 'px';
-      var sTotalX = (sC.offsetX || 0) + (sItem2.dX || 0);
-      if (sTotalX) stEl.style.left = 'calc(50% + ' + sTotalX + 'px)';
-      var sTotalS = (sC.scale || 1) * (sItem2.dS || 1);
-      if (sTotalS !== 1) stEl.style.transform = 'translateX(-50%) scale(' + sTotalS + ')';
-      head.appendChild(stEl);
-    }
-    if (tr.spriteBody >= 0) {
-      var bdEl = document.createElement('div'); bdEl.className = 's-sprite-body';
-      bdEl.style.width = '100%'; bdEl.style.height = '100%'; bdEl.style.borderRadius = '50%';
-      var bdC = cfg.spriteBody;
-      var bdItem = applyPreviewSpriteOverlay(bdEl, tr.spriteBody, bdC, 0, 'top');
-      var bdPosY = (bdC.offsetY || 0) + (bdItem.dY || 0);
-      bdEl.style.top = bdPosY + 'px';
-      var bdTotalX = (bdC.offsetX || 0) + (bdItem.dX || 0);
-      if (bdTotalX) bdEl.style.left = bdTotalX + 'px';
-      var bdTotalS = (bdC.scale || 1) * (bdItem.dS || 1);
-      if (bdTotalS !== 1) bdEl.style.transform = 'scale(' + bdTotalS + ')';
-      torso.appendChild(bdEl);
-    }
-    if (tr.spriteTail >= 0) {
-      var tlEl = document.createElement('div'); tlEl.className = 's-sprite-tail';
-      var tlC = cfg.spriteTail;
-      var tlItem = applyPreviewSpriteOverlay(tlEl, tr.spriteTail, tlC, 0, 'top');
-      var tlPosY = (tlC.offsetY || 0) + (tlItem.dY || 0);
-      tlEl.style.top = tlPosY + 'px';
-      var tlTotalX = (tlC.offsetX || 0) + (tlItem.dX || 0);
-      if (tlTotalX) tlEl.style.left = tlTotalX + 'px';
-      var tlTotalS = (tlC.scale || 1) * (tlItem.dS || 1);
-      if (tlTotalS !== 1) tlEl.style.transform = 'scale(' + tlTotalS + ')';
-      tail.appendChild(tlEl);
-    }
+    previewCtrl = window.flyingSheep.preview(preview, traits, {
+      previewScale: PREVIEW_SCALE,
+      hidePropeller: !body.showPropeller,
+    });
   }
 
   /* ═══ Sprite-Grid bauen ═══ */

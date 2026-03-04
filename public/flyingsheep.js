@@ -1492,7 +1492,9 @@
       var bsOY = parseFloat(d.bodySprite.dataset.offsetY) || 0;
       var bsOX = parseFloat(d.bodySprite.dataset.offsetX) || 0;
       var bsS = d.bodySprite.dataset.spriteScale || '1';
-      d.bodySprite.style.transform = 'translate(' + (tx - sh.tw / 2) + 'px,' + (ty - sh.th / 2) + 'px) rotate(' + bankRad + 'rad) translate(' + bsOX + 'px,' + bsOY + 'px)' + (bsS !== '1' ? ' scale(' + bsS + ')' : '');
+      /* Gleiche tailSide-Verschiebung wie das Label auf der Brust */
+      var bsShiftX = -sh.tailSide * sh.tw * 0.3;
+      d.bodySprite.style.transform = 'translate(' + (tx - sh.tw / 2) + 'px,' + (ty - sh.th / 2) + 'px) rotate(' + bankRad + 'rad) translate(' + (bsOX + bsShiftX) + 'px,' + bsOY + 'px) scaleX(' + (Math.abs(sh.tailSide) || 0.01) + ')' + (bsS !== '1' ? ' scale(' + bsS + ')' : '');
     }
 
     var labelRotY = sh.tailSide * 65;
@@ -1506,15 +1508,13 @@
     var tailPos = rot(tailLocalX, tailLocalY, bankRad);
     var tailX = tx + tailPos.x, tailY = ty + tailPos.y;
     if (tr.spriteTail >= 0) {
-      /* Sprite-Schwanz: Mitte des Elements = Körperkante (Ansatzpunkt)
-         Alle Transforms auf dem Parent → ein einziger transform-origin */
-      var absSide = Math.min(Math.abs(sh.tailSide), 1);
-      var sideSign = sh.tailSide >= 0 ? 1 : -1;
-      var stLocalX = sideSign * (sh.tw / 2);
+      /* Sprite-Schwanz: Ansatzpunkt gleitet kontinuierlich mit tailSide
+         über den Rücken (kein Snap bei Seitenwechsel) */
+      var stLocalX = sh.tailSide * (sh.tw / 2);
       var stPos = rot(stLocalX, 1, bankRad);
       var stX = tx + stPos.x, stY = ty + stPos.y;
       var spriteRot = tailWag * Math.PI;
-      var flipX = sh.tailSide >= 0 ? absSide : -absSide;
+      var flipX = sh.tailSide;   // ±1→voll sichtbar, 0→Kante (edge-on)
       d.tail.style.transformOrigin = '50% 50%';
       /* Scale aus data-Attribut (vom Kind hierher verschoben) */
       var sprScale = d.tail.dataset.spriteScale || '';
@@ -2488,6 +2488,119 @@
       if (x == null || x < 10 || x > W - 10) x = 10 + Math.random() * (W - 20);
       if (y == null || y < 10 || y > H - 10) y = 10 + Math.random() * (H - 20);
       return spawnCritter(x, y);
+    },
+
+    /* ═══ Preview-API: echtes Schaf im Vorschau-Container ═══ */
+    preview: function (container, inputTraits, opts) {
+      opts = opts || {};
+      var previewScale = opts.previewScale || 5;
+
+      /* Traits mit Defaults auffüllen (Umkleide liefert nicht alles) */
+      var traits = {};
+      for (var k in inputTraits) traits[k] = inputTraits[k];
+      if (!traits.legs) traits.legs = [
+        { lx: -3, ly: 5.5 }, { lx: 3, ly: 5.5 },
+        { lx: -2, ly: 6 },   { lx: 2, ly: 6 }
+      ];
+      if (!traits.legPhases) traits.legPhases = [0, Math.PI, 0.5, Math.PI + 0.5];
+      if (!traits.legRestAngles) traits.legRestAngles = [0, 0, 0, 0];
+      if (traits.hasKnees == null) traits.hasKnees = false;
+      if (traits.propBladeCount == null) traits.propBladeCount = 2;
+      if (traits.propBladeColor == null) traits.propBladeColor = '#ffd740';
+      if (traits.propHubColor == null) traits.propHubColor = '#666';
+      if (traits.propSize == null) traits.propSize = 1.0;
+      if (traits.propShape == null) traits.propShape = 'standard';
+
+      /* DOM erzeugen (skipMount=true → nicht ins Overlay hängen) */
+      var dom = createSheepDOM(traits, '', true);
+      container.innerHTML = '';
+
+      /* Zentrierungs-Wrapper */
+      var center = document.createElement('div');
+      center.style.cssText = 'position:absolute;top:55%;left:50%;width:0;height:0;';
+      container.appendChild(center);
+      center.appendChild(dom.wrap);
+
+      /* Propeller optional verstecken */
+      if (opts.hidePropeller) {
+        dom.pole.style.display = 'none';
+        dom.hub.style.display = 'none';
+        dom.bwrap.style.display = 'none';
+      }
+
+      /* Synthetisches Schaf-Objekt (ruhiger Hover-State) */
+      var tailSideTarget = 1;          // +1 = rechts, -1 = links
+      var sh = {
+        dom: dom, traits: traits,
+        tw: TORSO_W * traits.chub, th: TORSO_H,
+        hw: HEAD_W * traits.headMul, hh: HEAD_H * traits.headMul,
+        hr: HEAD_R * traits.headMul,
+        x: 0, y: 0, vx: 0, vy: 0,
+        bank: 0, headAngle: 0, headTarget: 0,
+        propSpeed: PROP_BASE + 3,
+        propAngle: Math.random() * 360,
+        bobPhase: Math.random() * 9999,
+        legPhase: Math.random() * 9999,
+        eyeX: 0, eyeY: 0, wobble: 0, wobbleV: 0,
+        state: 'hover', stTimer: 0, stDur: 999999,
+        tailSide: 1,
+        legDragX: 0, legDragY: 0,
+        isBlinking: false, blinkTimer: 2000 + Math.random() * 3000,
+        blinkDur: 0, wideEyes: 0,
+        sizeMultiplier: previewScale,
+        kickLeg: -1, kickTimer: 0,
+        showNameTimer: 0, ownerName: '',
+        scoreCounts: { alle9: 0, kranz: 0 },
+      };
+
+      /* Klick dreht das Schaf */
+      function onClick() { tailSideTarget *= -1; }
+      container.style.cursor = 'pointer';
+      container.addEventListener('click', onClick);
+
+      var animId = null, lastTp = 0;
+      function tick(t) {
+        if (!lastTp) { lastTp = t; animId = requestAnimationFrame(tick); return; }
+        var dt = Math.min(t - lastTp, 50);
+        lastTp = t;
+
+        /* Sanftes Kopfpendeln (gedämpft: ±12° statt ±35°) */
+        sh.headTarget = Math.sin(sh.stTimer * .003) * 12;
+        sh.stTimer += dt;
+
+        /* tailSide sanft zum Ziel interpolieren */
+        sh.tailSide += (tailSideTarget - sh.tailSide) * 0.04;
+
+        sh.headAngle += (sh.headTarget - sh.headAngle) * 0.06;
+
+        sh.propSpeed = Math.max(PROP_BASE, sh.propSpeed * .995);
+        sh.propAngle += sh.propSpeed * dt * .07;
+        sh.bobPhase += dt * 0.4;   // Bob verlangsamt
+        sh.legPhase += dt * 0.4;
+
+        /* Blinzeln */
+        if (sh.isBlinking) {
+          sh.blinkDur -= dt;
+          if (sh.blinkDur <= 0) { sh.isBlinking = false; sh.blinkTimer = 1500 + Math.random() * 3500; }
+        } else {
+          sh.blinkTimer -= dt;
+          if (sh.blinkTimer <= 0) { sh.isBlinking = true; sh.blinkDur = 100 + Math.random() * 60; }
+        }
+
+        render(sh);
+        animId = requestAnimationFrame(tick);
+      }
+      animId = requestAnimationFrame(tick);
+
+      return {
+        sheep: sh,
+        destroy: function () {
+          if (animId) { cancelAnimationFrame(animId); animId = null; }
+          container.removeEventListener('click', onClick);
+          container.style.cursor = '';
+          if (center.parentNode) center.remove();
+        }
+      };
     },
   };
 

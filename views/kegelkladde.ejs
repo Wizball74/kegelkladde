@@ -490,7 +490,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
               <button type="button" class="btn-secondary btn-sm" id="btnPenaltyDetails" data-gameday-id="<%= selectedGameday.id %>">Strafen-Berechnung</button>
             <% } %>
             <% if (status > 0) { %>
-              <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurücksetzen?">
+              <form method="post" action="/kegelkladde/revert-status" data-confirm="Status wirklich zurück auf &quot;<%= statusLabels[status - 1] %>&quot; setzen?">
                 <input type="hidden" name="csrfToken" value="<%= csrfToken %>" />
                 <input type="hidden" name="gamedayId" value="<%= selectedGameday.id %>" />
                 <button type="submit" class="btn-secondary btn-sm">&laquo; Zurück</button>

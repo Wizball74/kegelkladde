@@ -3745,6 +3745,8 @@ function initMemberDragDrop() {
       this._removeKeyHandler();
       this._keyHandler = function(e) {
         if (self.mode !== "volle") return;
+        var ae = document.activeElement;
+        if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
         if (e.key >= "0" && e.key <= "9") {
           e.preventDefault();
           var btn;
@@ -3792,7 +3794,7 @@ function initMemberDragDrop() {
     abraeumenThrows: [],      // [{fallen: [pinIds], count: n}, ...]
     standingPins: [1,2,3,4,5,6,7,8,9],
     results: {},              // {playerId: {volle, abraeumen, total}}
-    directEntry: false        // toggle for shortcut mode
+    throwHistory: {}          // {playerId: {volleThrows, abraeumenThrows}}
   };
 
   // Aussteigen state
@@ -3865,7 +3867,6 @@ function initMemberDragDrop() {
         abraeumenThrows: vaState.abraeumenThrows.slice(),
         standingPins: vaState.standingPins.slice(),
         results: JSON.parse(JSON.stringify(vaState.results)),
-        directEntry: vaState.directEntry,
         throwHistory: JSON.parse(JSON.stringify(vaState.throwHistory || {}))
       };
     } else if (game.type === "aussteigen") {
@@ -3962,7 +3963,6 @@ function initMemberDragDrop() {
         abraeumenThrows: state.vaState.abraeumenThrows,
         standingPins: state.vaState.standingPins,
         results: state.vaState.results,
-        directEntry: state.vaState.directEntry,
         throwHistory: state.vaState.throwHistory || {}
       };
     } else if (game.type === "aussteigen" && state.aussteigenState) {
@@ -4598,8 +4598,10 @@ function initMemberDragDrop() {
     return a;
   }
 
+  var isShuffling = false;
+
   function renderShufflePhase(game, onReady) {
-    gameOrder = [];
+    gameOrder = players.slice();
 
     // Build initial list + buttons layout
     var html = '<div class="shuffle-layout">';
@@ -4615,15 +4617,16 @@ function initMemberDragDrop() {
         html += '<span class="shuffle-card-avatar shuffle-card-initials" style="background:' + color + '">' + escHtml(initials) + '</span>';
       }
       html += '<span class="shuffle-name">' + escHtml(p.name) + '</span>';
+      html += '<span class="shuffle-drag-handle">⠿</span>';
       html += '</div>';
     });
     html += '</div></div>';
     html += '<div class="shuffle-btn-col">';
+    html += '<button type="button" class="shuffle-go-btn" id="shuffleGoBtn">Los geht\'s &#9654;</button>';
     html += '<button type="button" class="shuffle-start-btn" id="shuffleStartBtn">';
     html += '<img src="/img/start.png" alt="Mischen" class="shuffle-start-img" />';
     html += '</button>';
     html += '<div class="shuffle-start-label">Mischen!</div>';
-    html += '<button type="button" class="shuffle-go-btn" id="shuffleGoBtn" style="display:none">Los geht\'s &#9654;</button>';
     html += '</div></div>';
 
     shuffleArea.innerHTML = html;
@@ -4721,10 +4724,10 @@ function initMemberDragDrop() {
     function doShuffle() {
       if (hasShuffled && !confirm("Wirklich erneut mischen?")) return;
       hasShuffled = true;
+      isShuffling = true;
       gameOrder = (game.type === "monte") ? sortByMonteStandings(players) : fisherYatesShuffle(players);
       shuffleBtn.disabled = true;
       shuffleBtn.classList.add("shuffle-spinning");
-      goBtn.style.display = "none";
 
       // Measure item height + gap
       var items = listEl.querySelectorAll('.shuffle-list-item');
@@ -4796,8 +4799,25 @@ function initMemberDragDrop() {
               setTimeout(function() {
                 shuffleBtn.disabled = false;
                 shuffleBtn.classList.remove("shuffle-spinning");
-                goBtn.style.display = "";
                 goBtn.classList.add("shuffle-go-animate");
+
+                // Exit physics mode so drag & drop works again
+                listEl.classList.remove('shuffle-physics');
+                listEl.style.height = '';
+                gameOrder.forEach(function(p) {
+                  var el = itemEls[p.id];
+                  el.style.position = '';
+                  el.style.left = '';
+                  el.style.right = '';
+                  el.style.top = '';
+                  el.style.transition = '';
+                  el.style.transform = '';
+                });
+                // Re-order DOM to match gameOrder
+                gameOrder.forEach(function(p) {
+                  listEl.appendChild(itemEls[p.id]);
+                });
+                isShuffling = false;
 
                 // For pair games (6-Tage): show team pairings visually
                 if (game.type === "sechs_tage") {
@@ -4811,6 +4831,143 @@ function initMemberDragDrop() {
 
       setTimeout(runRound, 150);
     }
+
+    // --- Drag & Drop ---
+    initShuffleDragDrop(listEl, itemEls);
+  }
+
+  function initShuffleDragDrop(listEl, itemEls) {
+    var dragItem = null;
+    var ghost = null;
+    var startY = 0;
+    var offsetY = 0;
+    var dragIndex = -1;
+    var itemH = 0;
+    var items = [];
+
+    function getItems() {
+      return Array.from(listEl.querySelectorAll('.shuffle-list-item'));
+    }
+
+    function getItemIndex(el) {
+      return getItems().indexOf(el);
+    }
+
+    listEl.addEventListener('pointerdown', function(e) {
+      if (isShuffling) return;
+      var item = e.target.closest('.shuffle-list-item');
+      if (!item || listEl.classList.contains('shuffle-physics')) return;
+
+      e.preventDefault();
+      dragItem = item;
+      items = getItems();
+      dragIndex = items.indexOf(item);
+      var rect = item.getBoundingClientRect();
+      itemH = rect.height + (parseFloat(getComputedStyle(listEl).gap) || 5);
+      offsetY = e.clientY - rect.top;
+      startY = e.clientY;
+
+      // Create ghost
+      ghost = item.cloneNode(true);
+      ghost.classList.add('shuffle-drag-ghost');
+      ghost.style.width = rect.width + 'px';
+      ghost.style.height = rect.height + 'px';
+      ghost.style.left = rect.left + 'px';
+      ghost.style.top = rect.top + 'px';
+      document.body.appendChild(ghost);
+
+      item.classList.add('shuffle-dragging');
+      item.setPointerCapture(e.pointerId);
+    });
+
+    listEl.addEventListener('pointermove', function(e) {
+      if (!dragItem || !ghost) return;
+      e.preventDefault();
+
+      // Move ghost
+      ghost.style.top = (e.clientY - offsetY) + 'px';
+
+      // Calculate target index
+      var listRect = listEl.getBoundingClientRect();
+      var relY = e.clientY - listRect.top;
+      var targetIdx = Math.round(relY / itemH);
+      targetIdx = Math.max(0, Math.min(items.length - 1, targetIdx));
+
+      // Shift items with CSS transforms
+      items.forEach(function(el, i) {
+        if (el === dragItem) return;
+        var curIdx = i;
+        var shift = 0;
+        if (dragIndex < targetIdx) {
+          // Dragging down: items between old and new pos shift up
+          if (curIdx > dragIndex && curIdx <= targetIdx) shift = -1;
+        } else if (dragIndex > targetIdx) {
+          // Dragging up: items between new and old pos shift down
+          if (curIdx >= targetIdx && curIdx < dragIndex) shift = 1;
+        }
+        el.style.transform = shift !== 0 ? 'translateY(' + (shift * itemH) + 'px)' : '';
+      });
+    });
+
+    listEl.addEventListener('pointerup', function(e) {
+      if (!dragItem || !ghost) return;
+      e.preventDefault();
+
+      // Calculate final target index
+      var listRect = listEl.getBoundingClientRect();
+      var relY = e.clientY - listRect.top;
+      var targetIdx = Math.round(relY / itemH);
+      targetIdx = Math.max(0, Math.min(items.length - 1, targetIdx));
+
+      // Remove ghost
+      ghost.remove();
+      ghost = null;
+
+      // Reset transforms
+      items.forEach(function(el) {
+        el.style.transform = '';
+        el.style.transition = '';
+      });
+      dragItem.classList.remove('shuffle-dragging');
+
+      // Move DOM element to new position
+      if (targetIdx !== dragIndex) {
+        var refItems = getItems();
+        // Remove drag item from current position
+        listEl.removeChild(dragItem);
+        var newItems = Array.from(listEl.querySelectorAll('.shuffle-list-item'));
+        if (targetIdx >= newItems.length) {
+          listEl.appendChild(dragItem);
+        } else {
+          listEl.insertBefore(dragItem, newItems[targetIdx]);
+        }
+
+        // Update gameOrder from new DOM order
+        var finalItems = getItems();
+        gameOrder = finalItems.map(function(el) {
+          var pid = el.getAttribute('data-player-id');
+          return players.find(function(p) { return String(p.id) === pid; });
+        }).filter(Boolean);
+      }
+
+      dragItem = null;
+      dragIndex = -1;
+      items = [];
+    });
+
+    // Cancel on pointer leave / cancel
+    listEl.addEventListener('pointercancel', function() {
+      if (!dragItem) return;
+      if (ghost) { ghost.remove(); ghost = null; }
+      items.forEach(function(el) {
+        el.style.transform = '';
+        el.style.transition = '';
+      });
+      if (dragItem) dragItem.classList.remove('shuffle-dragging');
+      dragItem = null;
+      dragIndex = -1;
+      items = [];
+    });
   }
 
   function showShuffleTeamPairs(order, itemEls, itemH, gap, listEl) {
@@ -4832,7 +4989,7 @@ function initMemberDragDrop() {
         // Add team bracket
         var bracket = document.createElement("div");
         bracket.className = "shuffle-team-bracket";
-        var topPos = parseFloat(el1.style.top) || (i * itemH);
+        var topPos = el1.offsetTop;
         bracket.style.top = topPos + "px";
         bracket.style.height = (itemH * 2 - gap) + "px";
         listEl.appendChild(bracket);
@@ -5058,7 +5215,6 @@ function initMemberDragDrop() {
       abraeumenThrows: [],
       standingPins: [1,2,3,4,5,6,7,8,9],
       results: {},
-      directEntry: false,
       throwHistory: {}          // {playerId: {volleThrows, abraeumenThrows}}
     };
 
@@ -5263,7 +5419,6 @@ function initMemberDragDrop() {
     var player = gameOrder[currentTurnIdx];
     vaState.phase = vaState.round;
     vaState.currentThrow = 0;
-    vaState.directEntry = false;
 
     if (vaState.round === "volle") {
       vaState.volleThrows = [];
@@ -5302,14 +5457,7 @@ function initMemberDragDrop() {
     // Player heading always on main side (LEFT)
     mainHtml += '<div class="va-player-heading">' + escHtml(player.name) + '</div>';
 
-    if (vaState.directEntry) {
-      mainHtml += renderVADirectEntry(player);
-      mainHtml += buildShuffleSidebarHtml();
-      gameContent.innerHTML = mainHtml;
-      liveControls.clear();
-      attachVADirectEntryHandlers();
-    } else if (vaState.phase === "volle") {
-      mainHtml += '<button type="button" class="va-direct-btn" id="vaDirectBtn">Direkt eingeben \u270F\uFE0F</button>';
+    if (vaState.phase === "volle") {
       mainHtml += buildShuffleSidebarHtml();
       gameContent.innerHTML = mainHtml;
       liveControls.renderVolle({
@@ -5319,7 +5467,6 @@ function initMemberDragDrop() {
         headerHtml: renderVAVolleMain(player)
       });
     } else if (vaState.phase === "abraeumen") {
-      mainHtml += '<button type="button" class="va-direct-btn" id="vaDirectBtn">Direkt eingeben \u270F\uFE0F</button>';
       mainHtml += buildShuffleSidebarHtml();
       gameContent.innerHTML = mainHtml;
       liveControls.renderAbraeumen({
@@ -5331,15 +5478,6 @@ function initMemberDragDrop() {
         fallenCount: 0,
         throwNum: vaState.abraeumenThrows.length + 1,
         headerHtml: renderVAAbraeumenMain(player)
-      });
-    }
-
-    // "Direkt eingeben" handler (now on LEFT side)
-    var directBtn = document.getElementById("vaDirectBtn");
-    if (directBtn) {
-      directBtn.addEventListener("click", function() {
-        vaState.directEntry = true;
-        renderVAPlayerUI();
       });
     }
 
@@ -5467,15 +5605,9 @@ function initMemberDragDrop() {
       var hist = vaState.throwHistory[prevPlayer.id];
       if (hist && hist.volleThrows && hist.volleThrows.length > 0) {
         vaState.volleThrows = hist.volleThrows.slice();
-        if (vaState.volleThrows[0] && vaState.volleThrows[0].direct) {
-          vaState.directEntry = true;
-          vaState.volleThrows = [];
-          vaState.currentThrow = 0;
-        } else {
-          var lastEntry = vaState.volleThrows.pop();
-          vaState.currentThrow = vaState.volleThrows.length;
-          if (lastEntry.marker) triggerAutoMarker(prevPlayer, lastEntry.marker, -1);
-        }
+        var lastEntry = vaState.volleThrows.pop();
+        vaState.currentThrow = vaState.volleThrows.length;
+        if (lastEntry && lastEntry.marker) triggerAutoMarker(prevPlayer, lastEntry.marker, -1);
         vaState.results[prevPlayer.id].volle = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
       } else {
         vaState.volleThrows = [];
@@ -5612,71 +5744,6 @@ function initMemberDragDrop() {
     html += '<button type="button" class="va-picker-btn va-picker-kranz" data-va-pick="kranz">12</button>';
     html += '</div>';
     return html;
-  }
-
-  function renderVADirectEntry(player) {
-    var html = '<div class="va-direct-container">';
-    if (vaState.round === "volle") {
-      var volleSum = vaState.results[player.id] ? vaState.results[player.id].volle : 0;
-      if (vaState.volleThrows.length > 0) {
-        volleSum = vaState.volleThrows.reduce(function(a,b) { return a + b.val; }, 0);
-      }
-      html += '<h3 class="va-direct-title">Volle direkt eingeben</h3>';
-      html += '<div class="va-direct-fields">';
-      html += '<div class="va-direct-field">';
-      html += '<label>Volle</label>';
-      html += '<input type="number" min="0" max="999" step="1" id="vaDirectVolle" value="' + volleSum + '" class="va-direct-input" autofocus />';
-      html += '</div>';
-      html += '</div>';
-    } else {
-      var abraeumenSum = vaState.results[player.id] ? vaState.results[player.id].abraeumen : 0;
-      html += '<h3 class="va-direct-title">Abr\u00e4umen direkt eingeben</h3>';
-      html += '<div class="va-direct-fields">';
-      html += '<div class="va-direct-field">';
-      html += '<label>Abr\u00e4umen</label>';
-      html += '<input type="number" min="0" max="999" step="1" id="vaDirectAbraeumen" value="' + abraeumenSum + '" class="va-direct-input" autofocus />';
-      html += '</div>';
-      html += '</div>';
-    }
-    html += '<div class="va-direct-actions">';
-    html += '<button type="button" class="va-direct-save" id="vaDirectSave">\u00dcbernehmen \u2713</button>';
-    html += '<button type="button" class="va-direct-back" id="vaDirectBack">Wurf f\u00fcr Wurf \u25B6</button>';
-    html += '</div>';
-    html += '</div>';
-    return html;
-  }
-
-  function attachVADirectEntryHandlers() {
-    // Direct entry back to throw-by-throw
-    var backBtn = document.getElementById("vaDirectBack");
-    if (backBtn) {
-      backBtn.addEventListener("click", function() {
-        vaState.directEntry = false;
-        renderVAPlayerUI();
-      });
-    }
-
-    // Direct entry save
-    var saveBtn = document.getElementById("vaDirectSave");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", function() {
-        var player = gameOrder[currentTurnIdx];
-        vaState.throwHistory[player.id] = vaState.throwHistory[player.id] || {};
-        if (vaState.round === "volle") {
-          var volleVal = Number(document.getElementById("vaDirectVolle").value) || 0;
-          vaState.results[player.id].volle = volleVal;
-          vaState.throwHistory[player.id].volleThrows = [{ val: volleVal, marker: null, direct: true }];
-        } else {
-          var abraeumenVal = Number(document.getElementById("vaDirectAbraeumen").value) || 0;
-          vaState.results[player.id].abraeumen = abraeumenVal;
-          vaState.results[player.id].total = vaState.results[player.id].volle + abraeumenVal;
-          syncVAPlayerToKladde(player, vaState.results[player.id].total);
-          vaState.throwHistory[player.id].abraeumenThrows = [{ fallen: [], count: abraeumenVal, direct: true }];
-        }
-        currentTurnIdx++;
-        renderVATurn();
-      });
-    }
   }
 
   function updateFallenCount() {

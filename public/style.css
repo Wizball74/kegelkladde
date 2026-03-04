@@ -5320,7 +5320,6 @@ tr.row-locked td.name-col {
 .turn-avatar,
 .turn-avatar-sm,
 .va-sb-avatar,
-.va-direct-avatar,
 .live-simple-avatar,
 .monte-avatar,
 .aussteigen-edit-avatar {
@@ -6088,6 +6087,7 @@ tr.row-locked td.name-col {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  position: relative;
 }
 
 .shuffle-list-item {
@@ -6100,6 +6100,34 @@ tr.row-locked td.name-col {
   border: 1px solid rgba(47, 143, 109, 0.1);
   /*box-shadow: 0 2px 5px rgba(0,0,0,0.15);*/
   box-shadow: inset 0.1em 0.1em 0.1em 0 rgba(255,255,255,0.5), inset -0.1em -0.1em 0.1em rgba(0,0,0,0.5), 1px 3px 5px rgba(0,0,0,0.2);
+  cursor: grab;
+  touch-action: none;
+  transition: transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.shuffle-list-item:active { cursor: grabbing; }
+
+.shuffle-list-item.shuffle-dragging {
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+
+.shuffle-drag-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.92;
+  transform: scale(1.04);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+  border-radius: 18px 8px 8px 18px;
+}
+
+.shuffle-drag-handle {
+  margin-left: auto;
+  opacity: 0.3;
+  font-size: 1rem;
+  user-select: none;
+  cursor: grab;
 }
 
 /* Physics-based shuffle: items use absolute positioning + transitions */
@@ -7001,84 +7029,6 @@ tr.row-locked td.name-col {
 
 .va-direct-btn:hover {
   color: var(--accent-strong);
-}
-
-/* Direct entry form */
-.va-direct-container {
-  max-width: 400px;
-}
-
-.va-direct-title {
-  margin: 0 0 1rem;
-  font-size: 1.1rem;
-}
-
-.va-direct-fields {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.va-direct-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.va-direct-field label {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.va-direct-input {
-  padding: 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-size: 1.2rem;
-  font-weight: 700;
-  text-align: center;
-  width: 100%;
-}
-
-.va-direct-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(47, 143, 109, 0.2);
-}
-
-.va-direct-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.va-direct-save {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 0.5rem 1.2rem;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.va-direct-save:hover {
-  background: var(--accent-strong);
-}
-
-.va-direct-back {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 0.5rem 1.2rem;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--ink);
-}
-
-.va-direct-back:hover {
-  border-color: var(--accent);
 }
 
 /* V+A Results */

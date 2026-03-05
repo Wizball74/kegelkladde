@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/style.css?v=<%= v %>" />
   <% if (sheepEnabled) { %><link rel="stylesheet" href="/flyingsheep.css?v=<%= v %>" />
   <% if (sheepConfig) { %><script>window.__sheepConfig=<%- typeof sheepConfig === 'string' ? sheepConfig : JSON.stringify(sheepConfig) %>;</script><% } %>
+  <% if (sheepItemCounts) { %><script>window.__sheepItemCounts=<%- JSON.stringify(sheepItemCounts) %>;</script><% } %>
   <script defer src="/flyingsheep.js?v=<%= v %>"></script><% } %>
   <script defer src="/app.js?v=<%= v %>"></script>
 </head>

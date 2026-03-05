@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { db } = require("../models/db");
+const { db, getSheepItemCounts } = require("../models/db");
 const appVersion = require("../package.json").version;
 
 function ensureSessionCsrf(req) {
@@ -62,6 +62,7 @@ function setLocals(req, res, next) {
   res.locals.sheepEnabled = sheepRow ? sheepRow.value === "1" : true;
   const sheepCfgRow = db.prepare("SELECT value FROM settings WHERE key = 'sheep_accessory_config'").get();
   res.locals.sheepConfig = sheepCfgRow ? sheepCfgRow.value : null;
+  res.locals.sheepItemCounts = res.locals.sheepEnabled ? getSheepItemCounts() : null;
 
   res.locals.renderAvatar = function(user, cssClass, attendance) {
     const mode = user.avatar_mode || user.avatarMode || 'sheep';

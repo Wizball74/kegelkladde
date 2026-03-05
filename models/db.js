@@ -853,6 +853,23 @@ function deleteDeadSheepByDate(dateStr) {
   return db.prepare("DELETE FROM sheep_graveyard WHERE date(died_at) = date(?)").run(dateStr);
 }
 
+function getSheepItemCounts() {
+  const rows = db.prepare("SELECT traits_json FROM sheep_graveyard").all();
+  const cats = { spriteHat: {}, spriteGlasses: {}, spriteStache: {}, spriteBody: {}, spriteTail: {} };
+  for (const row of rows) {
+    try {
+      const t = JSON.parse(row.traits_json);
+      for (const cat of Object.keys(cats)) {
+        const idx = t[cat];
+        if (idx != null && idx >= 0) {
+          cats[cat][idx] = (cats[cat][idx] || 0) + 1;
+        }
+      }
+    } catch (e) { /* skip */ }
+  }
+  return cats;
+}
+
 /* ═══ Epic Milestones ═══ */
 
 function getEpicMilestonesConfig() {
@@ -926,6 +943,7 @@ module.exports = {
   deleteDeadSheep,
   deleteDeadSheepByDate,
   getGraveyardStats,
+  getSheepItemCounts,
   getEpicMilestonesConfig,
   getCumulativeCount,
   checkEpicMilestone

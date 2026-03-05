@@ -948,8 +948,8 @@
     });
     var a = available[0], b = available[1];
     if (!a || !b) return;
-    var dur = 10000 + Math.random() * 10000;
-    var data = { type: 'cuddle', pair: [a, b] };
+    var dur = 5000 + Math.random() * 3000;
+    var data = { type: 'cuddle', pair: [a, b], phase: 0, heartTimer: 0 };
     a.state = 'cuddle'; a.stTimer = 0; a.stDur = dur; a.groupData = data; a.cuddlePartner = b;
     b.state = 'cuddle'; b.stTimer = 0; b.stDur = dur; b.groupData = data; b.cuddlePartner = a;
   }
@@ -957,20 +957,13 @@
   function startRace(available) {
     var n = Math.min(available.length, 3);
     var participants = available.slice(0, n);
-    /* Ziel: zufälliger Critter (wenn vorhanden), sonst Zufallspunkt */
-    var target = null;
-    if (critters.length) {
-      var liveCritters = [];
-      for (var ci = 0; ci < critters.length; ci++) { if (!critters[ci].launched) liveCritters.push(critters[ci]); }
-      if (liveCritters.length) target = liveCritters[Math.random() * liveCritters.length | 0];
-    }
-    var fixedTarget = target ? null : { x: MARGIN + Math.random() * (W - MARGIN * 2), y: MARGIN + Math.random() * (H - MARGIN * 2) };
+    var fixedTarget = { x: MARGIN + Math.random() * (W - MARGIN * 2), y: MARGIN + Math.random() * (H - MARGIN * 2) };
     var dur = 15000;
-    var data = { type: 'race', critterTarget: target, fixedTarget: fixedTarget, participants: participants, winner: null, endTimer: 0 };
+    var data = { type: 'race', fixedTarget: fixedTarget, participants: participants, winner: null, endTimer: 0 };
     for (var i = 0; i < participants.length; i++) {
       var sh = participants[i];
       sh.state = 'race'; sh.stTimer = 0; sh.stDur = dur;
-      sh.groupData = data; sh.raceTarget = target || fixedTarget;
+      sh.groupData = data; sh.raceTarget = fixedTarget;
     }
   }
 
@@ -1061,29 +1054,30 @@
   /* Critter-Jagd: Schaf lenkt auf nahen Critter zu */
   function chaseCritter(sh, S) {
     if (!critters.length) return false;
-    if (sh.critterPause > 0) return false;   // nach Kick kurz Abstand halten
-    /* Gezieltes Target (nach eigenem Kick oder vorbeifliegender Ball) */
+    if (sh.critterPause > 0) return false;
+    /* Gezieltes Target */
     if (sh.chasingCritter) {
       var cc = sh.chasingCritter;
-      if (cc.launched || critters.indexOf(cc) === -1) { sh.chasingCritter = null; }
-      else {
-        var cd = Math.hypot(cc.x - sh.x, cc.y - sh.y);
-        if (cd > 500 * sh.sizeMultiplier) { sh.chasingCritter = null; } // sehr weit, aufgeben
-        /* Nah dran aber Kick-CD aktiv → 90 % loslassen, 10 % "Kuschelkick" */
-        else if (cd < 25 * sh.sizeMultiplier && cc.kickCD[flock.indexOf(sh)] > 0) {
-          if (Math.random() < 0.9) { sh.chasingCritter = null; sh.critterPause = 600; }
-          else return true;  // Bug-Feature: ineinander kleben bleiben
-        }
-        else {
-          var cdx = cc.x - sh.x, cdy = cc.y - sh.y, cdd = cd || 1;
-          /* Stärker beschleunigen je weiter weg (Spurt-Effekt) */
-          var urgency = Math.min(cd / 80, 2.5);
-          sh.vx += (cdx / cdd) * S * (3 + urgency); sh.vy += (cdy / cdd) * S * (3 + urgency);
-          sh.headTarget = Math.max(-30, Math.min(30, cdx * 0.4));
-          sh.propSpeed = Math.min(sh.propSpeed + 2, PROP_MAX);
-          return true;
-        }
+      if (cc.launched || critters.indexOf(cc) === -1) { sh.chasingCritter = null; return false; }
+      var cd = Math.hypot(cc.x - sh.x, cc.y - sh.y);
+      /* Nah dran aber Kick-CD aktiv → warten (nicht loslassen) */
+      if (cd < 25 * sh.sizeMultiplier && cc.kickCD[flock.indexOf(sh)] > 0) {
+        sh.vx *= 0.9; sh.vy *= 0.9;
+        return true;
       }
+      var cdx = cc.x - sh.x, cdy = cc.y - sh.y, cdd = cd || 1;
+      var urgency = Math.min(cd / 60, 3);
+      sh.vx += (cdx / cdd) * S * (3.5 + urgency); sh.vy += (cdy / cdd) * S * (3.5 + urgency);
+      sh.headTarget = Math.max(-30, Math.min(30, cdx * 0.4));
+      sh.propSpeed = Math.min(sh.propSpeed + 2.5, PROP_MAX);
+      /* Gelegentlich aussteigen: alle 2-3s eine 10%-Chance */
+      if (!sh._critterQuitTimer) sh._critterQuitTimer = 2000 + Math.random() * 1000;
+      sh._critterQuitTimer -= (S / BASE_STEER) * 16;
+      if (sh._critterQuitTimer <= 0) {
+        sh._critterQuitTimer = 2000 + Math.random() * 1000;
+        if (Math.random() < 0.10) { sh.chasingCritter = null; sh.critterPause = 400; return false; }
+      }
+      return true;
     }
     /* Opportunistisch: nächsten Critter in Reichweite jagen */
     var best = null, bestD = 150 * sh.sizeMultiplier;
@@ -1095,9 +1089,9 @@
     }
     if (!best) return false;
     var dx = best.x - sh.x, dy = best.y - sh.y, d = bestD || 1;
-    sh.vx += (dx / d) * S * 3; sh.vy += (dy / d) * S * 3;
+    sh.vx += (dx / d) * S * 3.5; sh.vy += (dy / d) * S * 3.5;
     sh.headTarget = Math.max(-30, Math.min(30, dx * 0.4));
-    sh.propSpeed = Math.min(sh.propSpeed + 1, PROP_MAX * 0.8);
+    sh.propSpeed = Math.min(sh.propSpeed + 1.5, PROP_MAX);
     return true;
   }
 
@@ -1568,41 +1562,80 @@
   }
 
   /* ═══ Cuddle ═══ */
+  function spawnHeart(x, y) {
+    var el = document.createElement('div');
+    el.textContent = '\u2764\uFE0F';
+    el.style.cssText = 'position:absolute;pointer-events:none;z-index:31;font-size:' + (10 + Math.random() * 6) + 'px;left:' + (x + (Math.random() - 0.5) * 10) + 'px;top:' + (y - 8) + 'px;opacity:1;transition:all 1.2s ease-out;';
+    overlay.appendChild(el);
+    el.offsetHeight;
+    el.style.top = (y - 30 - Math.random() * 15) + 'px';
+    el.style.opacity = '0';
+    setTimeout(function() { el.remove(); }, 1300);
+  }
   function behaveCuddle(sh, dt, t, S) {
     if (!sh.cuddlePartner || flock.indexOf(sh.cuddlePartner) === -1 || sh.cuddlePartner.state !== 'cuddle') {
       endGroupAction(sh); return;
     }
     var partner = sh.cuddlePartner;
+    var gd = sh.groupData;
+    /* Phase 0: Aufeinander zufliegen */
     var mx = (sh.x + partner.x) / 2, my = (sh.y + partner.y) / 2;
-    var d = steerTo(sh, mx, my, S * 0.8);
-    if (d < 8) {
-      /* Gentle bob, Augen zu */
-      sh.napSleeping = true;
-      sh.vx *= 0.9; sh.vy *= 0.9;
-      sh.vy += Math.sin(t * 0.002 + sh.bobPhase) * 0.01;
-      sh.propSpeed = Math.max(PROP_BASE + 3, sh.propSpeed * 0.99);
-    } else {
-      sh.napSleeping = false;
+    var d = Math.hypot(sh.x - partner.x, sh.y - partner.y);
+    var cuddleDist = 10 * (sh.sizeMultiplier + partner.sizeMultiplier) * 0.5;
+    if (gd.phase === 0) {
+      steerTo(sh, mx, my, S * 0.7);
       sh.propSpeed = Math.min(sh.propSpeed + 0.5, PROP_MAX * 0.5);
+      if (d < cuddleDist + 5) {
+        gd.phase = 1;
+        /* Kurzes Zusammenzucken + Sterne */
+        sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 8;
+        partner.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 8;
+        spawnStars(mx, my, 3);
+      }
+    } else {
+      /* Phase 1: Eng aneinander kuscheln */
+      /* Sanft zur Mitte steuern, aber sehr nah bleiben */
+      var targetD = cuddleDist * 0.6;
+      var dx = partner.x - sh.x, dy = partner.y - sh.y;
+      var nd = Math.hypot(dx, dy) || 1;
+      /* Ziel: targetD Abstand halten */
+      var idealX = partner.x - (dx / nd) * targetD;
+      var idealY = partner.y - (dy / nd) * targetD;
+      sh.vx += (idealX - sh.x) * 0.008;
+      sh.vy += (idealY - sh.y) * 0.008;
+      sh.vx *= 0.92; sh.vy *= 0.92;
+      /* Gemeinsames sanftes Wiegen */
+      var sway = Math.sin(t * 0.0025) * 0.3;
+      sh.vx += sway * 0.02;
+      sh.vy += Math.sin(t * 0.002 + 1.5) * 0.015;
+      /* Kopf zum Partner neigen */
+      sh.headTarget = Math.max(-25, Math.min(25, (partner.x - sh.x) * 0.5));
+      /* Propeller langsam runterfahren */
+      sh.propSpeed = Math.max(PROP_BASE + 2, sh.propSpeed * 0.98);
+      /* Herzen spawnen (nur das "erste" Schaf im Paar, um Dopplung zu vermeiden) */
+      gd.heartTimer = (gd.heartTimer || 0) + dt;
+      if (gd.pair[0] === sh && gd.heartTimer > 1200 + Math.random() * 800) {
+        gd.heartTimer = 0;
+        spawnHeart(mx, my - 10);
+      }
     }
-    sh.headTarget = Math.max(-20, Math.min(20, (partner.x - sh.x) * 0.3));
-    if (sh.stTimer > sh.stDur) endGroupAction(sh);
+    if (sh.stTimer > sh.stDur) {
+      /* Sanftes Ende: kurzer Wobble + auseinanderdriften */
+      sh.wobbleV += (Math.random() - 0.5) * 6;
+      endGroupAction(sh);
+    }
   }
 
   /* ═══ Race ═══ */
   function behaveRace(sh, dt, t, S) {
     if (!sh.groupData) { endGroupAction(sh); return; }
     var gd = sh.groupData;
-    /* Zielposition bestimmen (Critter wird live getracked) */
+    /* Zielposition bestimmen */
     var tx, ty;
-    if (gd.critterTarget && !gd.critterTarget.launched && critters.indexOf(gd.critterTarget) !== -1) {
-      tx = gd.critterTarget.x; ty = gd.critterTarget.y;
-    } else if (gd.fixedTarget) {
+    if (gd.fixedTarget) {
       tx = gd.fixedTarget.x; ty = gd.fixedTarget.y;
     } else {
-      /* Critter verschwunden → festes Ziel setzen */
       gd.fixedTarget = { x: MARGIN + Math.random() * (W - MARGIN * 2), y: MARGIN + Math.random() * (H - MARGIN * 2) };
-      gd.critterTarget = null;
       tx = gd.fixedTarget.x; ty = gd.fixedTarget.y;
     }
     if (gd.winner) {
@@ -1630,14 +1663,6 @@
       spawnStars(sh.x, sh.y, 5 + (Math.random() * 3 | 0));
       sh.wobbleV += (Math.random() - 0.5) * 15;
       sh.showNameTimer = 3000;
-      /* Critter-Ziel → Critter wird getreten */
-      if (gd.critterTarget && !gd.critterTarget.launched && critters.indexOf(gd.critterTarget) !== -1) {
-        var cr = gd.critterTarget;
-        var nx = (cr.x - sh.x) / (d || 1), ny = (cr.y - sh.y) / (d || 1);
-        cr.vx += nx * 5; cr.vy += ny * 5 - 3;
-        cr.wobbleV += (Math.random() - 0.5) * 20;
-        sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 300;
-      }
     }
     if (sh.stTimer > sh.stDur) endGroupAction(sh);
   }
@@ -2163,7 +2188,7 @@
     else if (sh.state === 'greet' && sh.greetTarget) { etx = (sh.greetTarget.x - headVX) * .04; ety = (sh.greetTarget.y - headVY) * .04; }
     else if (sh.state === 'dance' && sh.groupData) { var dps = sh.groupData.partner, dp = null, dpD = Infinity; for (var di = 0; di < dps.length; di++) { if (dps[di] !== sh) { var dd = Math.hypot(dps[di].x - sh.x, dps[di].y - sh.y); if (dd < dpD) { dpD = dd; dp = dps[di]; } } } if (dp) { etx = (dp.x - headVX) * .04; ety = (dp.y - headVY) * .04; } else { etx = 0; ety = 0; } }
     else if (sh.state === 'wakeUp' && sh.wakeUpTarget) { etx = (sh.wakeUpTarget.x - headVX) * .04; ety = (sh.wakeUpTarget.y - headVY) * .04; }
-    else if (sh.state === 'race' && sh.groupData) { var rt = sh.groupData.critterTarget || sh.groupData.fixedTarget; if (rt) { var rtx = rt.x != null ? rt.x : rt.x; var rty = rt.y != null ? rt.y : rt.y; etx = (rtx - headVX) * .03; ety = (rty - headVY) * .03; } else { etx = sh.vx * 3; ety = sh.vy * 2; } }
+    else if (sh.state === 'race' && sh.groupData) { var rt = sh.groupData.fixedTarget; if (rt) { etx = (rt.x - headVX) * .03; ety = (rt.y - headVY) * .03; } else { etx = sh.vx * 3; ety = sh.vy * 2; } }
     else if (sh.state === 'cuddle' && sh.cuddlePartner) { etx = (sh.cuddlePartner.x - headVX) * .04; ety = (sh.cuddlePartner.y - headVY) * .04; }
     else if (sh.state === 'argument' && sh.argumentPartner) { etx = (sh.argumentPartner.x - headVX) * .04; ety = (sh.argumentPartner.y - headVY) * .04; }
     else if (sh.state === 'keepaway' && sh.groupData) { var ka = sh.groupData; if (sh.keepawayRole === 'chaser') { var kbt = null, kbd = Infinity; for (var ki = 0; ki < ka.participants.length; ki++) { var kr = ka.participants[ki]; if (kr !== sh && kr.keepawayRole === 'runner') { var kd = Math.hypot(kr.x - sh.x, kr.y - sh.y); if (kd < kbd) { kbd = kd; kbt = kr; } } } if (kbt) { etx = (kbt.x - headVX) * .04; ety = (kbt.y - headVY) * .04; } else { etx = sh.vx * 3; ety = sh.vy * 2; } } else { var kch = ka.chaser; if (kch) { etx = (kch.x - headVX) * .03; ety = (kch.y - headVY) * .03; } else { etx = sh.vx * 3; ety = sh.vy * 2; } } }
@@ -2909,8 +2934,8 @@
     /* ── Critter-Loop: Physik, Kicks, Render, Cleanup ── */
     for (var ci = critters.length - 1; ci >= 0; ci--) {
       var cr = critters[ci];
-      /* Off-screen → entfernen (launched ODER nach oben rausgeschleudert) */
-      if (cr.x < -80 || cr.x > W + 80 || cr.y < -80 || cr.y > H + 80) {
+      /* Off-screen → entfernen (nur seitlich weit raus, oben kommt Schwerkraft) */
+      if (cr.x < -200 || cr.x > W + 200 || cr.y > H + 200 || (cr.y < -400 && !cr.launched)) {
         cr.dom.wrap.remove(); critters.splice(ci, 1); continue;
       }
       if (cr.launched) {
@@ -2927,26 +2952,42 @@
         if (dc < 20 * sh.sizeMultiplier && dc > 0) {
           cr.kicksLeft--;
           var nx = dxc / dc, ny = dyc / dc;
+          /* Kick-Animation: 70% Bein (Schuss), 30% Kopf (Kopfball) */
+          if (Math.random() < 0.7) {
+            sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 300;
+          } else {
+            /* Kopfball: starker Kopfnick + Wobble */
+            sh.headTarget = (nx > 0 ? 1 : -1) * 35;
+            sh.wobbleV += (Math.random() > 0.5 ? 1 : -1) * 14;
+          }
+          spawnStars(cr.x, cr.y, 2 + (Math.random() * 2 | 0));
           if (cr.kicksLeft <= 0) {
-            /* ══ DEATH KICK — ab geht die Post! ══ */
-            cr.launched = true;
-            var launchForce = 8 + Math.hypot(sh.vx, sh.vy) * 2;
-            cr.vx = nx * launchForce * 0.4;
-            cr.vy = -Math.abs(launchForce);  // immer nach oben raus
-            cr.wobbleV = (Math.random() - .5) * 60;
-            /* Konfetti-Kanone in Abflugrichtung */
-            spawnStars(cr.x, cr.y, 6);
-            spawnPuff(cr.x, cr.y, 20);
-            /* Kicker-Schaf: extra Kick-Anim + Pause */
-            sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 400;
-            sh.critterPause = 1200;
+            /* ══ FINALE — Death Kick oder Platzen ══ */
+            if (Math.random() < 0.5) {
+              /* Death Kick: ab geht die Post! */
+              cr.launched = true;
+              var launchForce = 8 + Math.hypot(sh.vx, sh.vy) * 2;
+              cr.vx = nx * launchForce * 0.4;
+              cr.vy = -Math.abs(launchForce);
+              cr.wobbleV = (Math.random() - .5) * 60;
+            } else {
+              /* Platzen! Critter explodiert an Ort und Stelle */
+              cr.launched = true;
+              cr.vx = 0; cr.vy = 0;
+              if (cr.dom && cr.dom.wrap) cr.dom.wrap.style.display = 'none';
+            }
+            spawnStars(cr.x, cr.y, 8);
+            spawnPuff(cr.x, cr.y, 25);
+            /* Kicker-Schaf: extra Power */
+            sh.critterPause = 400;
             sh.wobbleV += (Math.random() > .5 ? 1 : -1) * 12;
-            /* Alle Schafe applaudieren */
+            /* Alle Schafe jubeln */
             for (var ai = 0; ai < flock.length; ai++) {
               var applSh = flock[ai];
               if (applSh.state === 'departing' || applSh.state === 'scared') continue;
+              applSh.chasingCritter = null;
               applSh.wideEyes = 1500;
-              applSh.wobbleV += (Math.random() - .5) * 8;
+              applSh.wobbleV += (Math.random() - .5) * 10;
               applSh.kickLeg = Math.random() * 4 | 0;
               applSh.kickTimer = 300 + Math.random() * 200;
               applSh.propSpeed = Math.min(applSh.propSpeed + 15, PROP_MAX);
@@ -2956,34 +2997,34 @@
             var kickForce = 5 + Math.hypot(sh.vx, sh.vy) * 1.5;
             cr.vx = nx * kickForce; cr.vy = ny * kickForce;
             cr.wobbleV += (Math.random() - .5) * 25;
-            sh.kickLeg = Math.random() * 4 | 0; sh.kickTimer = 250;
-            /* 50 % Chance: dem Ball hinterherjagen, sonst Pause */
+            /* 50 % Chance: dem Ball hinterherjagen */
             if (Math.random() < 0.5) {
               sh.chasingCritter = cr;
-              sh.critterPause = 250;   // nur Kick-Anim abwarten
+              sh.critterPause = 200;
             } else {
-              sh.critterPause = 800 + Math.random() * 400;
+              sh.critterPause = 400;
             }
-            spawnStars(cr.x, cr.y, 2);
+            /* Ansteckung: nahe Schafe machen mit */
+            var chasers = 1;
+            for (var ji = 0; ji < flock.length; ji++) {
+              var jsh = flock[ji];
+              if (jsh === sh || jsh.chasingCritter) continue;
+              if (jsh.state === 'departing' || jsh.state === 'scared' || isGroupState(jsh.state)) continue;
+              var jd = Math.hypot(cr.x - jsh.x, cr.y - jsh.y);
+              if (jd < 150 * jsh.sizeMultiplier) {
+                var joinChance = 0.40 + chasers * 0.10;
+                if (Math.random() < joinChance) {
+                  jsh.chasingCritter = cr;
+                  jsh.propSpeed = Math.min(jsh.propSpeed + 10, PROP_MAX);
+                  chasers++;
+                }
+              }
+            }
           }
           cr.kickCD[si] = CRITTER_KICK_CD;
           /* Schlafendes Schaf grummelig aufwecken */
           if (sh.state === 'nap' && sh.napSleeping) { napGrumpy(sh); }
           break; // max 1 Kick pro Frame
-        }
-      }
-      /* Vorbeifliegender Ball: 20 % Chance, dass Schafe hinterherjagen */
-      var crSpd = Math.hypot(cr.vx, cr.vy);
-      if (crSpd > 2) {
-        for (var bi = 0; bi < flock.length; bi++) {
-          var bsh = flock[bi];
-          if (bsh.chasingCritter) continue;                 // jagt schon
-          if (bsh.critterPause > 0) continue;               // Kick-Pause
-          if (bsh.state !== 'explore' && bsh.state !== 'dart' && bsh.state !== 'zigzag') continue;
-          var bd = Math.hypot(cr.x - bsh.x, cr.y - bsh.y);
-          if (bd < 120 * bsh.sizeMultiplier && Math.random() < 0.005) {  // ~20 % über Durchflug
-            bsh.chasingCritter = cr;
-          }
         }
       }
       critterPhysics(cr, dt);
@@ -3053,9 +3094,9 @@
   var CRITTER_FRICTION = 0.995;
   var CRITTER_BOUNCE = 0.5;
   var CRITTER_SPEED = 0.3;
-  var CRITTER_KICK_CD = 10000;
-  var CRITTER_MIN_KICKS = 8;
-  var CRITTER_MAX_KICKS = 25;
+  var CRITTER_KICK_CD = 200;
+  var CRITTER_MIN_KICKS = 5;
+  var CRITTER_MAX_KICKS = 10;
 
   var CRITTER_COLORS = ['#2a2a2a', '#3a3a3a', '#4a3a2e', '#2e3a4a', '#3a2a3a', '#3e3e2e', '#1e2e3e'];
   var CRITTER_EAR_COLORS = ['#2a2a2a', '#3a2020', '#20302a', '#2a2040', '#403020'];
@@ -3144,9 +3185,23 @@
 
   function critterPhysics(cr, dt) {
     if (cr.launched) {
-      /* Launched: nur Position updaten, kein Bouncing, kein Drift-Reset */
+      /* Launched: Schwerkraft zieht zurück, Wände bouncen */
+      cr.vy += 0.015 * dt;  // Gravitation
+      cr.vx *= 0.999; cr.vy *= 0.999;
       cr.x += cr.vx * dt * DT_SCALE; cr.y += cr.vy * dt * DT_SCALE;
+      /* Seitenwände + Boden bouncen */
+      if (cr.x < 10) { cr.x = 10; cr.vx = Math.abs(cr.vx) * 0.6; }
+      if (cr.x > W - 10) { cr.x = W - 10; cr.vx = -Math.abs(cr.vx) * 0.6; }
+      if (cr.y > H - 10) { cr.y = H - 10; cr.vy = -Math.abs(cr.vy) * 0.5; cr.vx *= 0.8; }
       cr.wobbleV -= cr.wobble * 0.2; cr.wobbleV *= 0.9; cr.wobble += cr.wobbleV * dt * DT_SCALE;
+      /* Zur Ruhe gekommen → wieder kickbar */
+      if (Math.hypot(cr.vx, cr.vy) < 0.3 && cr.y > H - 20) {
+        cr.launched = false;
+        cr.kicksLeft = CRITTER_MIN_KICKS + (Math.random() * (CRITTER_MAX_KICKS - CRITTER_MIN_KICKS) | 0);
+        cr.kickCD = {};
+        cr.vx = (Math.random() - 0.5) * CRITTER_SPEED;
+        cr.vy = (Math.random() - 0.5) * CRITTER_SPEED;
+      }
       return;
     }
     cr.vx *= CRITTER_FRICTION; cr.vy *= CRITTER_FRICTION;

@@ -99,7 +99,7 @@
             <th class="game-col"><span class="head-label">Monte</span></th>
             <th class="game-col"><span class="head-label">Aussteigen</span></th>
             <th class="game-col"><span class="head-label">6-Tage</span></th>
-            <th class="game-col"><span class="head-label">25, 50</span></th>
+            <th class="game-col"><span class="head-label">25 / 50</span></th>
             <th class="topay-th"><span class="head-label">Zu zahlen</span></th>
           </tr>
         </thead>
@@ -177,7 +177,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
             <col style="width: 56px;" /><!-- Monte (+ Radio) -->
             <col style="width: 44px;" /><!-- Aussteigen -->
             <col style="width: 44px;" /><!-- 6-Tage -->
-            <col style="width: 44px;" /><!-- 25, 50 -->
+            <col style="width: 44px;" /><!-- 25 / 50 -->
             <% customGames.forEach(() => { %>
             <col style="width: 44px;" />
             <% }) %>
@@ -214,7 +214,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                 <% if (isAdmin && status === 1) { %>
                   <button type="button" class="live-game-btn" data-live-start="spiel_2550" title="Live: 25, 50"><img src="/img/notlive.png" alt="Live" /></button>
                 <% } %>
-                <span class="head-label">25, 50</span>
+                <span class="head-label">25 / 50</span>
               </th>
               <% customGames.forEach((cg) => { %>
               <% if (status <= 1) { %>
@@ -347,7 +347,7 @@ Spieltag starten, um die Kladde zu bearbeiten.
                 <td class="game-col<%= struck.aussteigen ? ' cell-struck' : '' %>" data-label="Aussteigen" data-game-key="aussteigen"><span class="money-inline"><input type="number" min="0" max="999" step="1" value="<%= Math.round(aussteigenVal * 10) %>" name="aussteigen_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field /></span><input type="hidden" name="aussteigen_tiebreak_<%= member.id %>" value="<%= Number(hit.aussteigen_tiebreak || 0) %>" data-tiebreak="aussteigen" /></td>
                 <td class="game-col<%= struck.sechs_tage ? ' cell-struck' : '' %>" data-label="6-Tage" data-game-key="sechs_tage"><span class="money-inline"><input type="number" min="0" max="999" step="1" value="<%= Math.round(sechsTageVal * 10) %>" name="sechs_tage_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field /></span></td>
                 <% const spiel2550Val = Number(hit.spiel_2550 || 0); %>
-                <td class="game-col" data-label="25, 50" data-game-key="spiel_2550"><span class="money-inline"><input type="number" min="0" max="999" step="1" value="<%= Math.round(spiel2550Val * 10) %>" name="spiel_2550_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field /></span></td>
+                <td class="game-col" data-label="25 / 50" data-game-key="spiel_2550"><span class="money-inline"><input type="number" min="0" max="999" step="1" value="<%= Math.round(spiel2550Val * 10) %>" name="spiel_2550_<%= member.id %>" class="mini-number no-spin game-col-input" <%= canEdit ? "" : "disabled" %> data-field data-game-field /></span></td>
                 <% customGames.forEach((cg) => {
                   const cgVal = Number(customGameValues.get(member.id + '_' + cg.id) || 0);
                   const cgKey = 'cg_' + cg.id;

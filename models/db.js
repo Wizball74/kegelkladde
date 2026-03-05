@@ -300,7 +300,7 @@ db.exec(`
   );
 `);
 
-// Tabelle für "25, 50"-Spielstand
+// Tabelle für "25 / 50"-Spielstand
 db.exec(`
   CREATE TABLE IF NOT EXISTS game_2550 (
     gameday_id INTEGER PRIMARY KEY,

@@ -82,6 +82,73 @@
   var flockDirty = false;
   function markDirty() { flockDirty = true; }
 
+  /* ═══ Schaf-Gatter (Pen) ═══ */
+  var penEl = document.getElementById('sheep-pen');
+  var penned = [];  // Schafe im Gatter
+  function initPen() {
+    if (!penEl) return;
+    var label = document.createElement('span');
+    label.className = 'pen-label';
+    label.textContent = 'Gatter';
+    penEl.appendChild(label);
+  }
+  initPen();
+  function updatePenVisibility() {
+    if (!penEl) return;
+    var hasSheep = penned.length > 0;
+    penEl.classList.toggle('pen-has-sheep', hasSheep);
+    penEl.classList.toggle('pen-visible', hasSheep || !!dragSheep);
+  }
+  function renderPenPose(sh) {
+    /* Neutrale Ruhepose: kein Bank, kein Bob, kein Wobble */
+    var saved = { bank: sh.bank, wobble: sh.wobble, bobPhase: sh.bobPhase, headAngle: sh.headAngle, wideEyes: sh.wideEyes, tailSide: sh.tailSide, showNameTimer: sh.showNameTimer };
+    sh.bank = 0; sh.wobble = 0; sh.bobPhase = 0; sh.headAngle = 0;
+    sh.wideEyes = 0; sh.tailSide = 0; sh.showNameTimer = 0;
+    render(sh);
+    /* Werte wiederherstellen (für unpen) */
+    sh.bank = saved.bank; sh.wobble = saved.wobble; sh.bobPhase = saved.bobPhase;
+    sh.headAngle = saved.headAngle; sh.wideEyes = saved.wideEyes;
+    sh.tailSide = saved.tailSide; sh.showNameTimer = saved.showNameTimer;
+  }
+  function penSheep(sh) {
+    if (penned.indexOf(sh) !== -1) return;
+    var fi = flock.indexOf(sh);
+    if (fi !== -1) flock.splice(fi, 1);
+    penned.push(sh);
+    sh.state = 'penned';
+    sh.vx = 0; sh.vy = 0;
+    sh.propSpeed = 0;
+    sh.wideEyes = 0;
+    /* Neutrale Pose rendern, dann DOM ins Gatter verschieben */
+    if (sh.dom && sh.dom.wrap && penEl) {
+      renderPenPose(sh);
+      var penScale = 0.75 * Math.min(sh.sizeMultiplier, 1.5);
+      sh.dom.wrap.style.transform = 'translate(16px, 18px) scale(' + penScale + ')';
+      penEl.appendChild(sh.dom.wrap);
+    }
+    /* Name-Bubble ausblenden */
+    if (sh.dom && sh.dom.nameEl) sh.dom.nameEl.style.display = 'none';
+    updatePenVisibility();
+    markDirty();
+  }
+  function unpenSheep(sh, x, y) {
+    var pi = penned.indexOf(sh);
+    if (pi !== -1) penned.splice(pi, 1);
+    flock.push(sh);
+    sh.state = 'hover';
+    sh.x = x; sh.y = y;
+    sh.propSpeed = PROP_MAX * 0.5;
+    sh.age = 0;
+    sh.throwBoost = 2000; sh.resumeDelay = 800;
+    /* DOM zurück ins Overlay */
+    if (sh.dom && sh.dom.wrap && overlay) {
+      sh.dom.wrap.style.transform = '';
+      overlay.appendChild(sh.dom.wrap);
+    }
+    updatePenVisibility();
+    markDirty();
+  }
+
   /* ═══ Aging helpers ═══ */
   function getAgeFactor(sh) {
     if (sh.age < AGE_START) return 0;
@@ -2448,8 +2515,30 @@
     return best;
   }
 
+  /* Penned sheep: click auf wrap im Gatter erkennen */
+  function findPennedSheep(e) {
+    for (var i = 0; i < penned.length; i++) {
+      var sh = penned[i];
+      if (sh.dom && sh.dom.wrap && sh.dom.wrap.contains(e.target)) return sh;
+    }
+    return null;
+  }
+
   /* Capture-phase: intercept clicks near sheep/critters before page elements get them */
   document.addEventListener('pointerdown', function (e) {
+    /* Penned sheep zuerst prüfen */
+    var pSh = findPennedSheep(e);
+    if (pSh) {
+      e.preventDefault(); e.stopPropagation();
+      unpenSheep(pSh, e.clientX, e.clientY);
+      dragSheep = pSh;
+      dragOX = 0; dragOY = 0;
+      dragLX = e.clientX; dragLY = e.clientY; dragLT = performance.now();
+      velBuf.length = 0; dragShakeScore = 0; dragPrevVX = 0; dragPrevVY = 0;
+      dragWasNapping = false;
+      updatePenVisibility();
+      return;
+    }
     /* Critter zuerst prüfen (kleiner, sonst nie greifbar) */
     var cr = findNearestCritter(e.clientX, e.clientY);
     if (cr) {
@@ -2491,6 +2580,7 @@
         o.stTimer = 0; o.stDur = 3000 + Math.random() * 3000;
       }
     }
+    updatePenVisibility();
   }, true);
 
   document.addEventListener('pointermove', function (e) {
@@ -2524,6 +2614,12 @@
     dragShakeScore *= 0.993;
     dragLX = e.clientX; dragLY = e.clientY; dragLT = now;
     dragSheep.propSpeed = Math.min(dragSheep.propSpeed + .5, PROP_MAX);
+    /* Pen-Hover Highlight */
+    if (penEl) {
+      var penR = penEl.getBoundingClientRect();
+      var overPen = e.clientX >= penR.left && e.clientX <= penR.right && e.clientY >= penR.top && e.clientY <= penR.bottom;
+      penEl.classList.toggle('pen-hover', overPen);
+    }
   });
 
   document.addEventListener('pointerup', function () {
@@ -2536,6 +2632,19 @@
       return;
     }
     if (!dragSheep) return;
+    /* Ins Gatter fallen gelassen? */
+    if (penEl) {
+      penEl.classList.remove('pen-hover');
+      var penR = penEl.getBoundingClientRect();
+      var sx = dragSheep.x, sy = dragSheep.y;
+      if (sx >= penR.left && sx <= penR.right && sy >= penR.top && sy <= penR.bottom) {
+        penSheep(dragSheep);
+        velBuf.length = 0; dragShakeScore = 0; dragWasNapping = false; dragSheep = null;
+        updatePenVisibility();
+        saveFlock(true);
+        return;
+      }
+    }
     var ax = 0, ay = 0;
     if (velBuf.length) { for (var vi = 0; vi < velBuf.length; vi++) { ax += velBuf[vi].vx; ay += velBuf[vi].vy; } ax /= velBuf.length; ay /= velBuf.length; }
     dragSheep.vx = ax * .8; dragSheep.vy = ay * .8;
@@ -2557,6 +2666,7 @@
       dragSheep.throwBoost = 2500; dragSheep.resumeDelay = 1200;
     }
     velBuf.length = 0; dragShakeScore = 0; dragWasNapping = false; dragSheep = null;
+    updatePenVisibility();
   });
 
   /* ═══ Persistence ═══ */
@@ -2583,7 +2693,17 @@
         traits: cr.traits
       });
     }
-    return { version: 1, timestamp: Date.now(), sheep: sheep, critters: crs };
+    var pen = [];
+    for (var pi = 0; pi < penned.length; pi++) {
+      var psh = penned[pi];
+      pen.push({
+        traits: psh.traits,
+        ownerId: psh.ownerId, ownerName: psh.ownerName, letter: psh.letter,
+        sizeMultiplier: psh.sizeMultiplier, age: psh.age, scoreCounts: psh.scoreCounts || { alle9: 0, kranz: 0 },
+        tailSide: psh.tailSide, solo: psh.solo,
+      });
+    }
+    return { version: 1, timestamp: Date.now(), sheep: sheep, critters: crs, penned: pen };
   }
 
   function saveFlock(force) {
@@ -2653,6 +2773,24 @@
         critters.push(cr);
       }
     }
+    /* Penned sheep wiederherstellen */
+    if (Array.isArray(data.penned)) {
+      for (var pi = 0; pi < data.penned.length; pi++) {
+        var ps = data.penned[pi];
+        var psh = createSheep(W / 2, H / 2, ps.ownerId, ps.letter, {
+          ownerName: ps.ownerName || '',
+          traits: ps.traits,
+          sizeMultiplier: ps.sizeMultiplier || 1,
+          age: ps.age || 0,
+          scoreCounts: ps.scoreCounts || { alle9: 0, kranz: 0 },
+          tailSide: ps.tailSide || 0,
+          solo: ps.solo,
+          _skipMount: true,
+        });
+        penSheep(psh);
+      }
+    }
+    updatePenVisibility();
   }
 
   /* Auto-save every 3s */
@@ -3077,8 +3215,20 @@
       /* Ungültige Koordinaten → zufällige sichere Position */
       if (x == null || x < MARGIN || x > W - MARGIN) x = MARGIN + Math.random() * (W - MARGIN * 2);
       if (y == null || y < MARGIN || y > H - MARGIN) y = MARGIN + Math.random() * (H - MARGIN * 2);
-      /* Existiert schon ein Schaf mit dieser ownerId? → wachsen + Herde begruessen */
+      /* Existiert schon ein Schaf mit dieser ownerId (auch im Gatter)? → wachsen */
       if (ownerId) {
+        for (var pi = 0; pi < penned.length; pi++) {
+          if (penned[pi].ownerId === String(ownerId)) {
+            var psh = penned[pi];
+            psh.sizeMultiplier = Math.min(2.5, psh.sizeMultiplier + 0.25);
+            if (!psh.scoreCounts) psh.scoreCounts = { alle9: 0, kranz: 0 };
+            if (opts.scoreType === 'kranz') psh.scoreCounts.kranz++;
+            else psh.scoreCounts.alle9++;
+            if (ownerName && !psh.ownerName) psh.ownerName = ownerName;
+            saveFlock(true);
+            return psh;
+          }
+        }
         for (var i = 0; i < flock.length; i++) {
           if (flock[i].ownerId === String(ownerId)) {
             var sh = flock[i];
@@ -3168,10 +3318,18 @@
         sh.state = 'dart'; sh.target = { x: sh.x + sh.vx * 40, y: sh.y + sh.vy * 40 }; sh.stTimer = 0; sh.stDur = 800;
       }
     },
-    count: function () { return flock.length; },
+    count: function () { return flock.length + penned.length; },
     save: saveFlock,
     dismiss: function (tx, ty) {
       dismissed = true;
+      /* Penned sheep entfernen */
+      for (var pi = penned.length - 1; pi >= 0; pi--) {
+        var psh = penned[pi];
+        logSheepDeath(psh, 'dismissed');
+        if (psh.dom && psh.dom.wrap) psh.dom.wrap.remove();
+      }
+      penned.length = 0;
+      updatePenVisibility();
       for (var fi = 0; fi < flock.length; fi++) {
         var sh = flock[fi];
         logSheepDeath(sh, 'dismissed');

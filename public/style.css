@@ -1213,6 +1213,7 @@ td.col-active.cell-empty:not(.marker-cell) > * {
 .kladde-table.kladde-settled td.has-compact:hover input.mini-number { visibility: hidden; }
 .kladde-table.kladde-settled td.has-compact:hover .field-display { display: block; }
 .kladde-table.kladde-settled td:hover .marker-controls .mark-btn { opacity: 0; pointer-events: none; }
+.kladde-table.kladde-settled td:hover .marker-controls .marker-strip[style*="hidden"] { visibility: hidden !important; }
 .kladde-table.kladde-settled td.cell-empty:hover > * { opacity: 0; pointer-events: none; }
 .kladde-table.kladde-settled tbody tr:hover { background: transparent; }
 .kladde-table.kladde-settled tbody tr:nth-child(even):hover { background: #dddddd; }
@@ -1332,7 +1333,7 @@ td.col-active.cell-empty:not(.marker-cell) > * {
 }
 
 .mini-number.no-spin {
-  width: 36px;
+  width: 30px;
   -moz-appearance: textfield;
   appearance: textfield;
 }

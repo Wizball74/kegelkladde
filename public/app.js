@@ -1890,7 +1890,7 @@ function initMobileByGame() {
     { prefix: "monte", label: "Monte", isGame: true },
     { prefix: "aussteigen", label: "Aussteigen", isGame: true },
     { prefix: "sechs_tage", label: "6-Tage", isGame: true },
-    { prefix: "spiel_2550", label: "25, 50", isGame: true }
+    { prefix: "spiel_2550", label: "25 / 50", isGame: true }
   ].forEach(({ prefix, label, isGame }) => {
     const { card, body } = makeCard(label);
     let any = false;
@@ -4103,7 +4103,7 @@ function initMemberDragDrop() {
       { key: "monte", label: "Monte", type: "monte" },
       { key: "aussteigen", label: "Aussteigen", type: "aussteigen" },
       { key: "sechs_tage", label: "6-Tage-Rennen", type: "sechs_tage" },
-      { key: "spiel_2550", label: "25, 50", type: "spiel_2550" }
+      { key: "spiel_2550", label: "25 / 50", type: "spiel_2550" }
     ];
     // Custom games
     const table = document.querySelector(".kladde-table:not(.kladde-preview)");

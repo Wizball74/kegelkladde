@@ -170,6 +170,51 @@
   image-rendering: auto;
 }
 
+/* ═══ Schaf-Gatter (Pen) ═══ */
+.sheep-pen {
+  display: none;
+  align-items: center;
+  height: 36px;
+  min-width: 48px;
+  padding: 2px 6px;
+  border: 1.5px dashed #999;
+  border-radius: 8px;
+  background: rgba(200, 220, 200, 0.25);
+  gap: 0;
+  cursor: default;
+  transition: background 0.2s, border-color 0.2s, min-width 0.2s;
+  overflow: hidden;
+  z-index: 101;
+  position: relative;
+}
+.sheep-pen.pen-visible {
+  display: flex;
+}
+.sheep-pen.pen-hover {
+  border-color: var(--accent, #2f8f6d);
+  background: rgba(47, 143, 109, 0.15);
+  box-shadow: 0 0 6px rgba(47, 143, 109, 0.3);
+}
+.sheep-pen .pen-label {
+  font-size: 0.6rem;
+  color: #999;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+.sheep-pen.pen-has-sheep .pen-label { display: none; }
+.sheep-pen .s-wrap {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  width: 32px !important;
+  height: 32px !important;
+  flex-shrink: 0;
+  pointer-events: auto;
+  cursor: grab;
+  overflow: visible;
+}
+
 .star {
   position: absolute; pointer-events: none; z-index: 30;
   animation: pop 400ms ease-out forwards;

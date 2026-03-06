@@ -184,88 +184,6 @@ router.get("/statistik", requireAuth, (req, res) => {
   // throw_log Daten vorhanden?
   const hasThrowLogData = db.prepare("SELECT COUNT(*) as count FROM throw_log").get().count > 0;
 
-  // Wurf-Analyse Daten (nur wenn throw_log Daten vorhanden)
-  let totalPinsPerPlayer = [];
-  let pinDistribution = [];
-  let throwAvgByGameday = [];
-
-  if (hasThrowLogData) {
-    // Gesamt gefallene Pins pro Spieler
-    totalPinsPerPlayer = db.prepare(`
-      SELECT tl.user_id, u.first_name, u.last_name,
-        SUM(tl.throw_value) as total_pins,
-        COUNT(tl.id) as total_throws,
-        ROUND(AVG(tl.throw_value * 1.0), 2) as avg_throw
-      FROM throw_log tl
-      JOIN users u ON tl.user_id = u.id
-      GROUP BY tl.user_id
-      ORDER BY total_pins DESC
-    `).all();
-
-    // Pin-Verteilung (Wurfwerte 0-9) pro Spieler
-    const rawPinDist = db.prepare(`
-      SELECT tl.user_id, u.first_name, u.last_name, tl.throw_value, COUNT(*) as count
-      FROM throw_log tl
-      JOIN users u ON tl.user_id = u.id
-      GROUP BY tl.user_id, tl.throw_value
-      ORDER BY tl.user_id, tl.throw_value
-    `).all();
-
-    // Gruppieren nach Spieler
-    const pinMap = new Map();
-    for (const row of rawPinDist) {
-      if (!pinMap.has(row.user_id)) {
-        pinMap.set(row.user_id, {
-          user_id: row.user_id,
-          first_name: row.first_name,
-          last_name: row.last_name,
-          distribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          totalThrows: 0
-        });
-      }
-      const entry = pinMap.get(row.user_id);
-      if (row.throw_value >= 0 && row.throw_value <= 9) {
-        entry.distribution[row.throw_value] = row.count;
-        entry.totalThrows += row.count;
-      }
-    }
-    pinDistribution = Array.from(pinMap.values())
-      .sort((a, b) => b.totalThrows - a.totalThrows);
-
-    // Wurf-Schnitt pro Spieltag
-    const rawThrowAvg = db.prepare(`
-      SELECT tl.gameday_id, g.match_date, tl.user_id, u.first_name, u.last_name,
-        ROUND(AVG(tl.throw_value * 1.0), 2) as avg_throw,
-        COUNT(tl.id) as throw_count,
-        SUM(tl.throw_value) as total_pins
-      FROM throw_log tl
-      JOIN users u ON tl.user_id = u.id
-      JOIN gamedays g ON tl.gameday_id = g.id
-      GROUP BY tl.gameday_id, tl.user_id
-      ORDER BY g.match_date DESC, avg_throw DESC
-    `).all();
-
-    // Gruppieren nach Spieltag
-    const gdMap = new Map();
-    for (const row of rawThrowAvg) {
-      if (!gdMap.has(row.gameday_id)) {
-        gdMap.set(row.gameday_id, {
-          gameday_id: row.gameday_id,
-          match_date: row.match_date,
-          players: []
-        });
-      }
-      gdMap.get(row.gameday_id).players.push({
-        first_name: row.first_name,
-        last_name: row.last_name,
-        avg_throw: row.avg_throw,
-        throw_count: row.throw_count,
-        total_pins: row.total_pins
-      });
-    }
-    throwAvgByGameday = Array.from(gdMap.values());
-  }
-
   // Sheep Graveyard — nach Besitzer gruppiert
   const deadSheep = getDeadSheep(200);
   const graveyardStats = getGraveyardStats();
@@ -310,10 +228,8 @@ router.get("/statistik", requireAuth, (req, res) => {
       }
     }
   }
-  // Alle Listen und Einzelobjekte durchlaufen
-  const allThrowPlayers = throwAvgByGameday.flatMap(gd => gd.players || []);
   addDisplayNames(topAttendance, topPayers, topAlle9, topKranz, mostPudel,
-    neunerStats, kraenzeStats, dickstesSchaf, totalPinsPerPlayer, pinDistribution, allThrowPlayers);
+    neunerStats, kraenzeStats, dickstesSchaf);
 
   res.render("statistics", {
     totalGamedays,
@@ -336,13 +252,134 @@ router.get("/statistik", requireAuth, (req, res) => {
     maxKraenze,
     dickstesSchaf,
     hasThrowLogData,
-    totalPinsPerPlayer,
-    pinDistribution,
-    throwAvgByGameday,
     deadSheep,
     graveyardStats,
     stalls
   });
+});
+
+// API: Wurf-Analyse mit Filtern
+const GAME_TYPE_LABELS = { va: "V+A", monte: "Monte", aussteigen: "Aussteigen", sechs_tage: "6-Tage", spiel_2550: "25 / 50" };
+const ALL_GAME_TYPES = Object.keys(GAME_TYPE_LABELS);
+
+router.get("/statistik/wurf-analyse", requireAuth, (req, res) => {
+  // Filter parsen
+  const gameTypes = req.query.gameTypes
+    ? req.query.gameTypes.split(",").filter(t => ALL_GAME_TYPES.includes(t))
+    : ALL_GAME_TYPES;
+  const dateFrom = req.query.dateFrom || null;
+  const dateTo = req.query.dateTo || null;
+
+  if (gameTypes.length === 0) {
+    return res.json({ totalPinsPerPlayer: [], pinDistribution: [], throwAvgByGameday: [], availableGameTypes: [], gamedayDates: [] });
+  }
+
+  // Verfügbare Spieltypen + Spieltag-Daten für Filter-UI
+  const availableGameTypes = db.prepare("SELECT DISTINCT game_type FROM throw_log ORDER BY game_type").all().map(r => ({
+    key: r.game_type,
+    label: GAME_TYPE_LABELS[r.game_type] || r.game_type
+  }));
+  const gamedayDates = db.prepare(
+    "SELECT DISTINCT g.id, g.match_date FROM throw_log tl JOIN gamedays g ON tl.gameday_id = g.id ORDER BY g.match_date"
+  ).all();
+
+  // WHERE-Klausel bauen
+  const placeholders = gameTypes.map(() => "?").join(",");
+  let whereExtra = `AND tl.game_type IN (${placeholders})`;
+  // Nur Würfe "in die Vollen" (9 Pins): Abräumen ausschließen, außer Alle-9
+  whereExtra += ` AND (tl.phase IS NULL OR tl.phase != 'abraeumen' OR tl.marker = 'alle9')`;
+  const params = [...gameTypes];
+
+  if (dateFrom) {
+    whereExtra += " AND g.match_date >= ?";
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    whereExtra += " AND g.match_date <= ?";
+    params.push(dateTo);
+  }
+
+  // Gesamt gefallene Pins pro Spieler
+  const totalPinsPerPlayer = db.prepare(`
+    SELECT tl.user_id, u.first_name, u.last_name,
+      SUM(tl.throw_value) as total_pins,
+      COUNT(tl.id) as total_throws,
+      ROUND(AVG(tl.throw_value * 1.0), 2) as avg_throw
+    FROM throw_log tl
+    JOIN users u ON tl.user_id = u.id
+    JOIN gamedays g ON tl.gameday_id = g.id
+    WHERE 1=1 ${whereExtra}
+    GROUP BY tl.user_id
+    ORDER BY total_pins DESC
+  `).all(...params);
+
+  // Pin-Verteilung
+  const rawPinDist = db.prepare(`
+    SELECT tl.user_id, u.first_name, u.last_name, tl.throw_value, COUNT(*) as count
+    FROM throw_log tl
+    JOIN users u ON tl.user_id = u.id
+    JOIN gamedays g ON tl.gameday_id = g.id
+    WHERE 1=1 ${whereExtra}
+    GROUP BY tl.user_id, tl.throw_value
+    ORDER BY tl.user_id, tl.throw_value
+  `).all(...params);
+
+  const pinMap = new Map();
+  for (const row of rawPinDist) {
+    if (!pinMap.has(row.user_id)) {
+      pinMap.set(row.user_id, {
+        user_id: row.user_id, first_name: row.first_name, last_name: row.last_name,
+        distribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], totalThrows: 0
+      });
+    }
+    const entry = pinMap.get(row.user_id);
+    if (row.throw_value >= 0 && row.throw_value <= 9) {
+      entry.distribution[row.throw_value] = row.count;
+      entry.totalThrows += row.count;
+    }
+  }
+  const pinDistribution = Array.from(pinMap.values()).sort((a, b) => b.totalThrows - a.totalThrows);
+
+  // Wurf-Schnitt pro Spieltag
+  const rawThrowAvg = db.prepare(`
+    SELECT tl.gameday_id, g.match_date, tl.user_id, u.first_name, u.last_name,
+      ROUND(AVG(tl.throw_value * 1.0), 2) as avg_throw,
+      COUNT(tl.id) as throw_count,
+      SUM(tl.throw_value) as total_pins
+    FROM throw_log tl
+    JOIN users u ON tl.user_id = u.id
+    JOIN gamedays g ON tl.gameday_id = g.id
+    WHERE 1=1 ${whereExtra}
+    GROUP BY tl.gameday_id, tl.user_id
+    ORDER BY g.match_date DESC, avg_throw DESC
+  `).all(...params);
+
+  const gdMap = new Map();
+  for (const row of rawThrowAvg) {
+    if (!gdMap.has(row.gameday_id)) {
+      gdMap.set(row.gameday_id, { gameday_id: row.gameday_id, match_date: row.match_date, players: [] });
+    }
+    gdMap.get(row.gameday_id).players.push({
+      first_name: row.first_name, last_name: row.last_name,
+      avg_throw: row.avg_throw, throw_count: row.throw_count, total_pins: row.total_pins
+    });
+  }
+  const throwAvgByGameday = Array.from(gdMap.values());
+
+  // display_name Logik
+  const allItems = [...totalPinsPerPlayer, ...pinDistribution, ...throwAvgByGameday.flatMap(gd => gd.players)];
+  const firstNameCounts = {};
+  for (const item of allItems) {
+    if (item.first_name) firstNameCounts[item.first_name] = (firstNameCounts[item.first_name] || 0) + 1;
+  }
+  for (const item of allItems) {
+    if (!item.first_name) continue;
+    item.display_name = firstNameCounts[item.first_name] > 1 && item.last_name
+      ? item.first_name + " " + item.last_name.charAt(0) + "."
+      : item.first_name;
+  }
+
+  res.json({ totalPinsPerPlayer, pinDistribution, throwAvgByGameday, availableGameTypes, gamedayDates });
 });
 
 module.exports = router;

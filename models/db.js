@@ -394,6 +394,34 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_pin_messages_created ON pin_messages(created_at DESC);
 `);
 
+// Migration: Bestehende Monte- und 2550-Würfe in throw_log backfüllen
+const throwLogBackfill = db.prepare("SELECT 1 FROM migrations WHERE name = 'throw_log_monte_2550'").get();
+if (!throwLogBackfill) {
+  db.transaction(() => {
+    // Monte: monte_rounds → throw_log
+    const monteRounds = db.prepare("SELECT gameday_id, user_id, round_number, roll_value FROM monte_rounds WHERE roll_value IS NOT NULL ORDER BY gameday_id, user_id, round_number").all();
+    for (const r of monteRounds) {
+      db.prepare(
+        `INSERT OR IGNORE INTO throw_log (gameday_id, user_id, game_type, phase, round_num, throw_num, throw_value, marker, fallen_pins)
+         VALUES (?, ?, 'monte', NULL, ?, ?, ?, NULL, NULL)`
+      ).run(r.gameday_id, r.user_id, r.round_number, r.round_number, r.roll_value);
+    }
+    // 25/50: game_2550.throws JSON → throw_log
+    const games2550 = db.prepare("SELECT gameday_id, throws FROM game_2550 WHERE throws != '[]'").all();
+    for (const g of games2550) {
+      const throws = JSON.parse(g.throws);
+      throws.forEach((t, i) => {
+        db.prepare(
+          `INSERT OR IGNORE INTO throw_log (gameday_id, user_id, game_type, phase, round_num, throw_num, throw_value, marker, fallen_pins)
+           VALUES (?, ?, 'spiel_2550', NULL, NULL, ?, ?, ?, NULL)`
+        ).run(g.gameday_id, t.playerId, i + 1, t.value, t.isPudel ? "pudel" : null);
+      });
+    }
+    db.prepare("INSERT INTO migrations (name) VALUES ('throw_log_monte_2550')").run();
+  })();
+  console.log("[DB] Migration: Monte + 2550 throw_log backfill complete.");
+}
+
 // Encryption functions
 function getEncryptionKey() {
   if (process.env.FIELD_ENCRYPTION_KEY) {
@@ -816,6 +844,12 @@ function getThrowLog(gamedayId, gameType) {
   return db.prepare("SELECT * FROM throw_log WHERE gameday_id = ? AND game_type = ? ORDER BY user_id, throw_num").all(gamedayId, gameType);
 }
 
+// Throw-Log komplett löschen für einen Spieltag + Spieltyp
+const throwLogDelAll = db.prepare("DELETE FROM throw_log WHERE gameday_id = ? AND game_type = ?");
+function deleteThrowLog(gamedayId, gameType) {
+  throwLogDelAll.run(gamedayId, gameType);
+}
+
 // Sheep Graveyard
 function addDeadSheep(data) {
   return db.prepare(`
@@ -937,6 +971,7 @@ module.exports = {
   backupDir,
   saveThrowLog,
   getThrowLog,
+  deleteThrowLog,
   addDeadSheep,
   getDeadSheep,
   getDeadSheepById,

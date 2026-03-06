@@ -105,102 +105,24 @@
       </div>
     <% } else { %>
 
-      <!-- Gesamt gefallene Pins -->
-      <div class="nk-section">
-        <div class="nk-section-header">
-          <span class="nk-section-icon">&#127935;</span>
-          <h2>Gesamt gefallene Pins</h2>
+      <!-- Filter -->
+      <div class="wa-filter-bar">
+        <div class="wa-filter-row">
+          <span class="wa-filter-label">Spiele:</span>
+          <div class="wa-chips" id="waGameTypeChips"></div>
         </div>
-        <% if (totalPinsPerPlayer.length > 0) { %>
-          <%
-            const maxPins = totalPinsPerPlayer[0].total_pins;
-          %>
-          <div class="hbar-chart">
-            <% totalPinsPerPlayer.forEach((item, i) => {
-              const pct = maxPins > 0 ? Math.max((item.total_pins / maxPins) * 100, 3) : 3;
-              const rankClass = i === 0 ? 'hbar-rank-gold' : i === 1 ? 'hbar-rank-silver' : i === 2 ? 'hbar-rank-bronze' : '';
-            %>
-              <div class="hbar-row">
-                <div class="hbar-label">
-                  <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
-                  <span class="hbar-name"><%= item.display_name || item.first_name %></span>
-                </div>
-                <div class="hbar-track">
-                  <div class="hbar-fill" style="width: <%= pct %>%;">
-                    <div class="hbar-seg hbar-teal" style="flex: 1;"></div>
-                  </div>
-                </div>
-                <span class="hbar-inline-value"><%= item.total_pins %></span>
-              </div>
-            <% }) %>
-          </div>
-        <% } %>
+        <div class="wa-filter-row">
+          <span class="wa-filter-label">Zeitraum:</span>
+          <input type="date" id="waDateFrom" class="wa-date-input" title="Von">
+          <span class="wa-date-sep">&ndash;</span>
+          <input type="date" id="waDateTo" class="wa-date-input" title="Bis">
+          <button type="button" class="wa-reset-btn" id="waResetFilters" title="Filter zurücksetzen">&#10005;</button>
+        </div>
       </div>
 
-      <!-- Pin-Verteilung -->
-      <div class="nk-section">
-        <div class="nk-section-header">
-          <span class="nk-section-icon">&#128200;</span>
-          <h2>Pin-Verteilung</h2>
-        </div>
-        <% if (pinDistribution.length > 0) { %>
-          <div class="pin-dist-grid">
-            <% pinDistribution.forEach((player) => {
-              const maxCount = Math.max(...player.distribution, 1);
-            %>
-              <div class="pin-dist-card">
-                <div class="pin-dist-header">
-                  <span class="pin-dist-name"><%= player.display_name || player.first_name %></span>
-                  <span class="pin-dist-total"><%= player.totalThrows %> Würfe</span>
-                </div>
-                <div class="pin-dist-bars">
-                  <% for (let v = 0; v <= 9; v++) {
-                    const count = player.distribution[v];
-                    const heightPct = (count / maxCount) * 100;
-                  %>
-                    <div class="pin-dist-col">
-                      <span class="pin-dist-count"><%= count > 0 ? count : '' %></span>
-                      <div class="pin-dist-bar pin-dist-v<%= v %>" style="height: <%= heightPct %>%;"></div>
-                      <span class="pin-dist-label"><%= v %></span>
-                    </div>
-                  <% } %>
-                </div>
-              </div>
-            <% }) %>
-          </div>
-        <% } %>
-      </div>
-
-      <!-- Wurf-Schnitt pro Spieltag -->
-      <div class="nk-section">
-        <div class="nk-section-header">
-          <span class="nk-section-icon">&#128197;</span>
-          <h2>Wurf-Schnitt pro Spieltag</h2>
-        </div>
-        <% throwAvgByGameday.forEach((gd) => { %>
-          <div class="throw-avg-gameday">
-            <div class="throw-avg-date"><%= formatDateDE(gd.match_date) %></div>
-            <div class="hbar-chart hbar-chart-compact">
-              <% gd.players.forEach((p, i) => {
-                const pct = Math.max((p.avg_throw / 9) * 100, 3);
-                const rankClass = i === 0 ? 'hbar-rank-gold' : i === 1 ? 'hbar-rank-silver' : i === 2 ? 'hbar-rank-bronze' : '';
-              %>
-                <div class="hbar-row">
-                  <div class="hbar-label">
-                    <span class="hbar-rank <%= rankClass %>"><%= i + 1 %></span>
-                    <span class="hbar-name"><%= p.display_name || p.first_name %></span>
-                  </div>
-                  <div class="hbar-track">
-                    <div class="hbar-fill" style="width: <%= pct %>%;">
-                      <div class="hbar-seg hbar-base" style="flex: 1;"></div>
-                    </div>
-                  </div>
-                  <span class="hbar-inline-value"><%= p.avg_throw.toFixed(2) %></span>
-                </div>
-              <% }) %>
-            </div>
-          </div>
-        <% }) %>
+      <!-- Inhalte (werden per JS gefüllt) -->
+      <div id="waContent">
+        <div class="wa-loading">Lade Daten&hellip;</div>
       </div>
 
     <% } %>
@@ -403,4 +325,183 @@
     <% } %>
   </div>
 </section>
+<% if (hasThrowLogData) { %>
+<script>
+(function() {
+  var waContent = document.getElementById("waContent");
+  var chipsEl = document.getElementById("waGameTypeChips");
+  var dateFromEl = document.getElementById("waDateFrom");
+  var dateToEl = document.getElementById("waDateTo");
+  var resetBtn = document.getElementById("waResetFilters");
+  if (!waContent || !chipsEl) return;
+
+  var ALL_TYPES = [
+    { key: "va", label: "V+A" },
+    { key: "monte", label: "Monte" },
+    { key: "aussteigen", label: "Aussteigen" },
+    { key: "sechs_tage", label: "6-Tage" },
+    { key: "spiel_2550", label: "25 / 50" }
+  ];
+  var activeTypes = {};
+  ALL_TYPES.forEach(function(t) { activeTypes[t.key] = true; });
+
+  // Chips rendern
+  function renderChips(available) {
+    chipsEl.innerHTML = "";
+    ALL_TYPES.forEach(function(t) {
+      var has = available.indexOf(t.key) !== -1;
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "wa-chip" + (activeTypes[t.key] ? " active" : "") + (!has ? " wa-chip-empty" : "");
+      chip.dataset.type = t.key;
+      chip.textContent = t.label;
+      if (!has) { chip.disabled = true; chip.title = "Keine Daten"; }
+      chip.addEventListener("click", function() {
+        activeTypes[t.key] = !activeTypes[t.key];
+        chip.classList.toggle("active", activeTypes[t.key]);
+        fetchData();
+      });
+      chipsEl.appendChild(chip);
+    });
+  }
+
+  // Initiale Chips (alle aktiv)
+  renderChips(ALL_TYPES.map(function(t) { return t.key; }));
+
+  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  function formatDateDE(d) {
+    if (!d) return "";
+    var p = d.split("-");
+    return p.length === 3 ? p[2] + "." + p[1] + "." + p[0] : d;
+  }
+
+  function rankClass(i) {
+    return i === 0 ? "hbar-rank-gold" : i === 1 ? "hbar-rank-silver" : i === 2 ? "hbar-rank-bronze" : "";
+  }
+
+  function renderResults(data) {
+    if (!data.totalPinsPerPlayer.length && !data.pinDistribution.length && !data.throwAvgByGameday.length) {
+      waContent.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128202;</div><p>Keine Daten f\u00fcr diese Filterauswahl.</p></div>';
+      return;
+    }
+    var html = "";
+
+    // Gesamt gefallene Pins
+    if (data.totalPinsPerPlayer.length > 0) {
+      var maxPins = data.totalPinsPerPlayer[0].total_pins;
+      html += '<div class="nk-section"><div class="nk-section-header"><span class="nk-section-icon">&#127935;</span><h2>Gesamt gefallene Pins</h2></div>';
+      html += '<div class="hbar-chart">';
+      data.totalPinsPerPlayer.forEach(function(item, i) {
+        var pct = maxPins > 0 ? Math.max((item.total_pins / maxPins) * 100, 3) : 3;
+        var name = esc(item.display_name || item.first_name);
+        html += '<div class="hbar-row"><div class="hbar-label"><span class="hbar-rank ' + rankClass(i) + '">' + (i+1) + '</span><span class="hbar-name">' + name + '</span></div>';
+        html += '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%"><div class="hbar-seg hbar-teal" style="flex:1"></div></div></div>';
+        html += '<span class="hbar-inline-value">' + item.total_pins + ' <small>(' + item.avg_throw.toFixed(2) + ' \u00d8)</small></span></div>';
+      });
+      html += '</div></div>';
+    }
+
+    // Pin-Verteilung
+    if (data.pinDistribution.length > 0) {
+      html += '<div class="nk-section"><div class="nk-section-header"><span class="nk-section-icon">&#128200;</span><h2>Pin-Verteilung</h2></div>';
+      html += '<div class="pin-dist-grid">';
+      data.pinDistribution.forEach(function(player) {
+        var maxCount = Math.max.apply(null, player.distribution.concat([1]));
+        var name = esc(player.display_name || player.first_name);
+        html += '<div class="pin-dist-card"><div class="pin-dist-header"><span class="pin-dist-name">' + name + '</span><span class="pin-dist-total">' + player.totalThrows + ' W\u00fcrfe</span></div>';
+        html += '<div class="pin-dist-bars">';
+        for (var v = 0; v <= 9; v++) {
+          var count = player.distribution[v];
+          var hPct = (count / maxCount) * 100;
+          html += '<div class="pin-dist-col"><span class="pin-dist-count">' + (count > 0 ? count : "") + '</span><div class="pin-dist-bar pin-dist-v' + v + '" style="height:' + hPct + '%"></div><span class="pin-dist-label">' + v + '</span></div>';
+        }
+        html += '</div></div>';
+      });
+      html += '</div></div>';
+    }
+
+    // Wurf-Schnitt pro Spieltag
+    if (data.throwAvgByGameday.length > 0) {
+      html += '<div class="nk-section"><div class="nk-section-header"><span class="nk-section-icon">&#128197;</span><h2>Wurf-Schnitt pro Spieltag</h2></div>';
+      data.throwAvgByGameday.forEach(function(gd) {
+        html += '<div class="throw-avg-gameday"><div class="throw-avg-date">' + esc(formatDateDE(gd.match_date)) + '</div>';
+        html += '<div class="hbar-chart hbar-chart-compact">';
+        gd.players.forEach(function(p, i) {
+          var pct = Math.max((p.avg_throw / 9) * 100, 3);
+          var name = esc(p.display_name || p.first_name);
+          html += '<div class="hbar-row"><div class="hbar-label"><span class="hbar-rank ' + rankClass(i) + '">' + (i+1) + '</span><span class="hbar-name">' + name + '</span></div>';
+          html += '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%"><div class="hbar-seg hbar-base" style="flex:1"></div></div></div>';
+          html += '<span class="hbar-inline-value">' + p.avg_throw.toFixed(2) + '</span></div>';
+        });
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
+
+    waContent.innerHTML = html;
+  }
+
+  var fetchTimer = null;
+  function fetchData() {
+    clearTimeout(fetchTimer);
+    fetchTimer = setTimeout(doFetch, 150);
+  }
+
+  function doFetch() {
+    var types = [];
+    for (var k in activeTypes) { if (activeTypes[k]) types.push(k); }
+    var params = new URLSearchParams();
+    if (types.length < ALL_TYPES.length) params.set("gameTypes", types.join(","));
+    if (dateFromEl.value) params.set("dateFrom", dateFromEl.value);
+    if (dateToEl.value) params.set("dateTo", dateToEl.value);
+
+    var url = "/statistik/wurf-analyse" + (params.toString() ? "?" + params.toString() : "");
+    waContent.innerHTML = '<div class="wa-loading">Lade Daten\u2026</div>';
+
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        // Update chips: markiere welche Spieltypen verfügbar sind
+        var available = (data.availableGameTypes || []).map(function(t) { return t.key; });
+        renderChips(available);
+        // Datum-Grenzen setzen
+        if (data.gamedayDates && data.gamedayDates.length > 0) {
+          var minDate = data.gamedayDates[0].match_date;
+          var maxDate = data.gamedayDates[data.gamedayDates.length - 1].match_date;
+          dateFromEl.min = minDate;
+          dateFromEl.max = maxDate;
+          dateToEl.min = minDate;
+          dateToEl.max = maxDate;
+        }
+        renderResults(data);
+      })
+      .catch(function() {
+        waContent.innerHTML = '<div class="empty-state"><p>Fehler beim Laden der Daten.</p></div>';
+      });
+  }
+
+  dateFromEl.addEventListener("change", fetchData);
+  dateToEl.addEventListener("change", fetchData);
+  resetBtn.addEventListener("click", function() {
+    ALL_TYPES.forEach(function(t) { activeTypes[t.key] = true; });
+    dateFromEl.value = "";
+    dateToEl.value = "";
+    fetchData();
+  });
+
+  // Tab-Klick: beim ersten Öffnen laden
+  var loaded = false;
+  var tabBtn = document.querySelector('.tab-btn[data-tab="wurf-analyse"]');
+  if (tabBtn) {
+    tabBtn.addEventListener("click", function() {
+      if (!loaded) { loaded = true; fetchData(); }
+    });
+  }
+  // Falls Tab schon aktiv (z.B. über URL-Hash)
+  var panel = document.getElementById("tab-wurf-analyse");
+  if (panel && panel.classList.contains("active") && !loaded) { loaded = true; fetchData(); }
+})();
+</script>
+<% } %>
 <%- include("partials/bottom") %>

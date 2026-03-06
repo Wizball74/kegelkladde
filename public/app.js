@@ -3618,9 +3618,10 @@ function initMemberDragDrop() {
         html += '<div class="va-abraeumen-throw-num">Wurf ' + (opts.throwNum || 1) + '<span class="va-abraeumen-throw-total"> / 5</span></div>';
       }
       html += renderPinDiamond();
-      html += '<div class="va-abraeumen-actions">';
       html += '<span class="va-fallen-count" id="vaFallenCount">Getroffen: ' + (opts.fallenCount || 0) + '</span>';
-      html += '<button type="button" class="va-invert-btn" id="vaInvertBtn"' + (opts.canInvert ? '' : ' disabled') + '>Invertieren \u21C4</button>';
+      html += '<div class="va-abraeumen-actions">';
+      html += '<button type="button" class="va-invert-btn" id="vaInvertBtn"' + (opts.canInvert ? '' : ' disabled') + ' title="Invertieren"><img src="/img/invert-selection.png" alt="Invertieren" class="va-invert-icon"></button>';
+      html += '<button type="button" class="va-pudel-btn" id="vaAbrPudel">Pudel</button>';
       html += '<button type="button" class="va-confirm-throw" id="vaConfirmThrow">Wurf best\u00e4tigen \u2713</button>';
       html += '</div>';
       html += '<div class="va-actions-row">';
@@ -3733,6 +3734,14 @@ function initMemberDragDrop() {
         });
       }
 
+      // Pudel button (0 pins fallen)
+      var pudelBtn = document.getElementById("vaAbrPudel");
+      if (pudelBtn) {
+        pudelBtn.addEventListener("click", function() {
+          if (self.opts.onConfirm) self.opts.onConfirm([]);
+        });
+      }
+
       // Undo button
       var undoBtn = document.getElementById("liveCtrlUndo");
       if (undoBtn) undoBtn.addEventListener("click", function() {
@@ -3828,12 +3837,14 @@ function initMemberDragDrop() {
       headers: { "Content-Type": "application/json", "X-CSRF-Token": kladdeData.dataset.csrf },
       body: JSON.stringify({
         csrfToken: kladdeData.dataset.csrf,
-        gamedayId: kladdeData.dataset.gamedayId,
+        gamedayId: Number(kladdeData.dataset.gamedayId),
         gameType: gameType,
         throws: throws
       }),
       keepalive: true
-    }).catch(function() {});
+    }).then(function(r) {
+      if (!r.ok) r.json().then(function(d) { console.warn("[throw-log]", gameType, r.status, d); });
+    }).catch(function(e) { console.warn("[throw-log] error", gameType, e); });
   }
 
   // --- Live State Persistence (sessionStorage) ---
@@ -5301,10 +5312,6 @@ function initMemberDragDrop() {
         vaState.results[playerId].abraeumen = newVal;
       }
       vaState.results[playerId].total = vaState.results[playerId].volle + vaState.results[playerId].abraeumen;
-      var player = gameOrder.find(function(p) { return p.id === playerId; });
-      if (player && vaState.results[playerId].abraeumen > 0) {
-        syncVAPlayerToKladde(player, vaState.results[playerId].total);
-      }
       updateShuffleScores();
       saveLiveState();
     }
@@ -5581,13 +5588,20 @@ function initMemberDragDrop() {
         sumHtml += '<div class="va-throw-slot filled"><div class="va-throw-val">' + sv + '</div></div>';
       }
       sumHtml += '<div class="va-throw-sum">= ' + volleSum + '</div></div>';
-      sumHtml += '<div class="va-turn-pause">Weiter in K\u00fcrze\u2026</div></div>';
+      sumHtml += '<div class="va-turn-pause">Weiter in K\u00fcrze\u2026 <small>(Klick zum \u00dcberspringen)</small></div></div>';
       liveControls._removeKeyHandler();
       liveControls.mode = null;
       liveControls.opts = null;
       shuffleArea.innerHTML = sumHtml;
       saveLiveState();
-      setTimeout(function() { currentTurnIdx++; renderVATurn(); }, 3500);
+      var vollePauseTimer = setTimeout(function() { currentTurnIdx++; renderVATurn(); }, 3500);
+      setTimeout(function() {
+        shuffleArea.addEventListener("click", function() {
+          clearTimeout(vollePauseTimer);
+          currentTurnIdx++;
+          renderVATurn();
+        }, { once: true });
+      }, 300);
       return;
     }
     renderVAPlayerUI();
@@ -5657,6 +5671,8 @@ function initMemberDragDrop() {
           window.flyingSheep.spawn(rect.left + rect.width / 2, rect.top, p.id, p.name.charAt(0).toUpperCase(), p.name, { scoreType: 'kranz' });
         }
       }
+    } else if (count === 0) {
+      triggerAutoMarker(gameOrder[currentTurnIdx], "pudel", 1);
     } else if (count > 0 && confirmBtn) {
       liveFx.explosion(confirmBtn, "accent", count * 5);
     }
@@ -5683,6 +5699,7 @@ function initMemberDragDrop() {
       vaState.standingPins = lastThrow.standingPinsBefore;
       if (lastThrow.wasAlle9 && lastThrow.fromFull) triggerAutoMarker(gameOrder[currentTurnIdx], "alle9", -1);
       if (lastThrow.wasKranz && lastThrow.fromFull) triggerAutoMarker(gameOrder[currentTurnIdx], "kranz", -1);
+      if (lastThrow.count === 0) triggerAutoMarker(gameOrder[currentTurnIdx], "pudel", -1);
     }
     renderVAPlayerUI();
   }
@@ -5700,7 +5717,7 @@ function initMemberDragDrop() {
     updateFallenCount();
   }
 
-  function renderPinDiamond() {
+  function renderPinDiamond(showSideButtons) {
     // Kegel-Aufstellung (Raute von oben gesehen):
     //     1
     //    2 3
@@ -5763,26 +5780,27 @@ function initMemberDragDrop() {
       return { fallen: t.fallen.slice(), count: t.count, standingPinsBefore: t.standingPinsBefore ? t.standingPinsBefore.slice() : [], wasAlle9: !!t.wasAlle9 };
     });
 
-    // Write to Kladde
-    syncVAPlayerToKladde(player, vaState.results[player.id].total);
-
     // Show result summary before advancing
     var sumHtml = '<div class="va-phase-container">';
     sumHtml += '<div class="va-phase-title">Abr\u00e4umen fertig!</div>';
     sumHtml += '<div class="va-turn-summary-table">';
     sumHtml += '<div class="va-turn-summary-row va-turn-summary-total"><span>Abr\u00e4umen</span><strong>' + abraeumenSum + '</strong></div>';
     sumHtml += '</div>';
-    sumHtml += '<div class="va-turn-pause">Weiter in K\u00fcrze\u2026</div></div>';
+    sumHtml += '<div class="va-turn-pause">Weiter in K\u00fcrze\u2026 <small>(Klick zum \u00dcberspringen)</small></div></div>';
     liveControls._removeKeyHandler();
     liveControls.mode = null;
     liveControls.opts = null;
     shuffleArea.innerHTML = sumHtml;
     saveLiveState();
 
+    var abraeumenPauseTimer = setTimeout(function() { currentTurnIdx++; renderVATurn(); }, 3500);
     setTimeout(function() {
-      currentTurnIdx++;
-      renderVATurn();
-    }, 3500);
+      shuffleArea.addEventListener("click", function() {
+        clearTimeout(abraeumenPauseTimer);
+        currentTurnIdx++;
+        renderVATurn();
+      }, { once: true });
+    }, 300);
   }
 
   function syncVAPlayerToKladde(player, total) {
@@ -5952,8 +5970,8 @@ function initMemberDragDrop() {
 
   function syncVACostsToKladde() {
     gameOrder.forEach(function(p) {
-      var total = vaState.results[p.id] ? vaState.results[p.id].total : 0;
-      syncVAPlayerToKladde(p, total);
+      var cost = vaState.costs && vaState.costs[p.id] ? vaState.costs[p.id] : 0;
+      syncVAPlayerToKladde(p, cost);
     });
     recalcCosts();
   }

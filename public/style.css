@@ -400,6 +400,44 @@ button:disabled {
   padding: 1.2rem;
 }
 
+/* Sparkler behind sheep */
+.login-sparkler {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  z-index: 0;
+  pointer-events: none;
+  box-shadow: 0 0 80px 80px rgba(246, 213, 143, 0.25);
+  border-radius: 50%;
+}
+.login-sparkler .sparkler__spark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 12px 3px var(--shadow);
+  opacity: 0;
+  transform: rotate(calc(var(--rotation) * 1deg)) translate(-2px, 0);
+  animation: login-spark calc(var(--speed) * 4s) calc(var(--delay) * 2s) infinite ease-out;
+}
+@keyframes login-spark {
+  0% { opacity: 1; transform: rotate(calc(var(--rotation) * 1deg)) translate(-2px, 0); }
+  100% { opacity: 0; transform: rotate(calc(var(--rotation) * 1deg)) translate(-2px, calc(var(--travel) * 0.75px)); }
+}
+.login-sheep-wrap .login-sheep--normal {
+  position: relative;
+  z-index: 1;
+}
+.login-sheep-wrap .login-sheep--pw {
+  z-index: 1;
+}
+
 .login-sheep {
   width: 160px;
   height: auto;
@@ -3178,6 +3216,73 @@ tr.row-locked td.name-col {
   border-bottom: 1px dashed var(--line);
   margin-bottom: 0.5rem;
 }
+
+/* Wurf-Analyse Filter */
+.wa-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.wa-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.wa-filter-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 4.5em;
+  flex-shrink: 0;
+}
+.wa-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.wa-chip {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--muted);
+  font-family: inherit;
+}
+.wa-chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.wa-chip:hover:not(:disabled) { border-color: var(--accent); }
+.wa-chip-empty { opacity: 0.35; }
+.wa-date-input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--ink);
+  max-width: 140px;
+}
+.wa-date-sep { color: var(--muted); font-size: 0.9rem; }
+.wa-reset-btn {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+.wa-reset-btn:hover { color: var(--danger, #c00); background: rgba(200,0,0,0.06); }
+.wa-loading { text-align: center; padding: 2rem; color: var(--muted); }
 
 /* ═══ Ahnengalerie — Spieler-Ställe ═══ */
 .stall-grid {
@@ -6930,20 +7035,21 @@ tr.row-locked td.name-col {
 }
 
 .va-invert-btn {
-  background: var(--panel);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0.2rem;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: background var(--transition), color var(--transition);
+  line-height: 0;
+  transition: opacity var(--transition);
 }
-
 .va-invert-btn:hover {
-  background: var(--accent-light);
-  color: var(--accent-strong);
+  opacity: 0.7;
+}
+.va-invert-btn:disabled { opacity: 0.4; cursor: default; }
+.va-invert-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 .va-confirm-throw {
@@ -7016,6 +7122,22 @@ tr.row-locked td.name-col {
 .va-actions-undo:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.va-pudel-btn {
+  padding: 0.35rem 1rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+  color: var(--error, #c00);
+  font-weight: 600;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.va-pudel-btn:hover {
+  background: var(--error-bg);
+  border-color: var(--error, #c00);
 }
 
 .va-direct-btn {

@@ -3495,9 +3495,15 @@
       /* Vanilla-Modus: Schaf ohne jedes Accessoire, Standard-Propeller */
       if (opts.vanilla) {
         var tr = generateTraits();
+        tr.isBlack = false;
+        tr.woolColor = 'white';
+        tr.borderColor = '#444';
+        tr.skinColor = '#444';
         tr.spriteHat = -1;
         tr.spriteGlasses = -1;
         tr.spriteStache = -1;
+        tr.spriteBody = -1;
+        tr.spriteTail = -1;
         tr.headMul = 1.0;
         tr.propBladeCount = 2;
         tr.propBladeColor = '#ffd740';
@@ -3513,7 +3519,7 @@
       sh.stTimer = 0;
       sh.stDur = 3000 + Math.random() * 2000;
       sh.showNameTimer = 10000;
-      if (typeof gagConfetti === 'function' && sh.dom && sh.dom.wrap) gagConfetti(sh.dom.wrap);
+      if (!opts.vanilla && typeof gagConfetti === 'function' && sh.dom && sh.dom.wrap) gagConfetti(sh.dom.wrap);
       /* Alle anderen Schafe kommen begruessen */
       for (var gi = 0; gi < flock.length; gi++) {
         var o = flock[gi];

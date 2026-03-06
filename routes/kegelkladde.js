@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog, deleteDeadSheepByDate, getCumulativeCount, checkEpicMilestone } = require("../models/db");
+const { db, getOrderedMembers, withDisplayNames, logAudit, getKassenstand, getKassenstandForGameday, calculateMonteTotals, createBackup, rotateBackups, saveThrowLog, deleteThrowLog, deleteDeadSheepByDate, getCumulativeCount, checkEpicMilestone } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 const { sanitize } = require("../utils/helpers");
 
@@ -1100,6 +1100,25 @@ router.get("/kegelkladde/monte-standings", requireAuth, (req, res) => {
   res.json({ standings });
 });
 
+// Monte-Runden → throw_log synchronisieren
+function syncMonteThrowLog(gamedayId) {
+  const rounds = db.prepare("SELECT user_id, round_number, roll_value FROM monte_rounds WHERE gameday_id = ? ORDER BY user_id, round_number").all(gamedayId);
+  if (rounds.length === 0) {
+    deleteThrowLog(gamedayId, "monte");
+    return;
+  }
+  const throws = rounds.map(r => ({
+    userId: r.user_id,
+    phase: null,
+    roundNum: r.round_number,
+    throwNum: r.round_number,
+    throwValue: r.roll_value,
+    marker: null,
+    fallenPins: null
+  }));
+  saveThrowLog(gamedayId, "monte", throws);
+}
+
 router.get("/kegelkladde/monte-rounds", requireAuth, (req, res) => {
   const gamedayId = Number.parseInt(req.query.gamedayId, 10);
   if (!Number.isInteger(gamedayId)) {
@@ -1147,6 +1166,9 @@ router.post("/kegelkladde/monte-round", requireAuth, verifyCsrf, (req, res) => {
     ).run(gamedayId, memberId, roundNumber, rollValue);
   }
 
+  // Monte-Würfe in throw_log synchronisieren
+  syncMonteThrowLog(gamedayId);
+
   const { totals, extraWinnerId, complete } = calculateMonteTotals(gamedayId);
   res.json({ ok: true, totals, extraWinnerId, complete });
 });
@@ -1188,7 +1210,7 @@ router.post("/kegelkladde/throw-log", requireAuth, verifyCsrf, (req, res) => {
     return res.status(400).json({ error: "Ungültige Parameter." });
   }
 
-  const validGameTypes = ["va", "aussteigen", "sechs_tage"];
+  const validGameTypes = ["va", "aussteigen", "sechs_tage", "monte", "spiel_2550"];
   if (!validGameTypes.includes(gameType)) {
     return res.status(400).json({ error: "Ungültiger Spieltyp." });
   }
@@ -1198,8 +1220,11 @@ router.post("/kegelkladde/throw-log", requireAuth, verifyCsrf, (req, res) => {
     return res.status(400).json({ error: "Spieltag nicht gefunden." });
   }
 
-  // Validierung der einzelnen Würfe
+  // Validierung + Normalisierung der einzelnen Würfe
   for (const t of throws) {
+    t.userId = Number(t.userId);
+    t.throwNum = Number(t.throwNum);
+    t.throwValue = Number(t.throwValue);
     if (!Number.isInteger(t.userId) || !Number.isInteger(t.throwNum) || !Number.isInteger(t.throwValue)) {
       return res.status(400).json({ error: "Ungültige Wurf-Daten." });
     }

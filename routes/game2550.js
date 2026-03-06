@@ -1,5 +1,5 @@
 const express = require("express");
-const { db, withDisplayNames } = require("../models/db");
+const { db, withDisplayNames, saveThrowLog, deleteThrowLog } = require("../models/db");
 const { requireAuth, requireAdmin, verifyCsrf } = require("../middleware/auth");
 
 const router = express.Router();
@@ -27,6 +27,24 @@ function getZonePenalty(cumulative) {
 function getPudelPenalty(cumulative) {
   const nextZone = (Math.floor(cumulative / 25) + 1) * 25;
   return Math.min(nextZone / 100, 2.00);
+}
+
+// 2550-Würfe → throw_log synchronisieren
+function sync2550ThrowLog(gamedayId, throws) {
+  if (!throws || throws.length === 0) {
+    deleteThrowLog(gamedayId, "spiel_2550");
+    return;
+  }
+  const entries = throws.map((t, i) => ({
+    userId: t.playerId,
+    phase: null,
+    roundNum: null,
+    throwNum: i + 1,
+    throwValue: t.value,
+    marker: t.isPudel ? "pudel" : null,
+    fallenPins: null
+  }));
+  saveThrowLog(gamedayId, "spiel_2550", entries);
 }
 
 // Spielstand laden
@@ -177,6 +195,8 @@ router.post("/kegelkladde/2550/throw", requireAuth, requireAdmin, verifyCsrf, (r
   db.prepare("UPDATE game_2550 SET throws = ?, finished = ? WHERE gameday_id = ?")
     .run(JSON.stringify(throws), finished, gamedayId);
 
+  sync2550ThrowLog(gamedayId, throws);
+
   // Spieler-Namen laden
   const players = loadPlayers(playerOrder);
 
@@ -208,6 +228,8 @@ router.post("/kegelkladde/2550/undo", requireAuth, requireAdmin, verifyCsrf, (re
 
   db.prepare("UPDATE game_2550 SET throws = ?, finished = 0 WHERE gameday_id = ?")
     .run(JSON.stringify(throws), gamedayId);
+
+  sync2550ThrowLog(gamedayId, throws);
 
   const players = loadPlayers(playerOrder);
 
@@ -252,6 +274,7 @@ router.post("/kegelkladde/2550/reset", requireAuth, requireAdmin, verifyCsrf, (r
 
   db.prepare("DELETE FROM game_2550 WHERE gameday_id = ?").run(gamedayId);
   db.prepare("UPDATE attendance SET spiel_2550 = 0 WHERE gameday_id = ?").run(gamedayId);
+  deleteThrowLog(gamedayId, "spiel_2550");
 
   res.json({ ok: true });
 });
